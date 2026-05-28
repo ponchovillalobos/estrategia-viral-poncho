@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCcw, FileVideo, CheckCircle2, Circle, Pencil, Archive, ArchiveRestore, Upload, Loader2 } from "lucide-react";
 import { RenameDialog } from "@/components/editor/rename-dialog";
+import { HelpHint } from "@/components/ui/help-hint";
 import { toast } from "sonner";
 
 interface VideoEntry {
@@ -120,6 +121,14 @@ export function VideoList() {
           <span className="font-mono-tab text-xs text-muted-foreground">
             {activeCount} activos
             {archivedCount > 0 && ` · ${archivedCount} usados`}
+          </span>
+          <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
+            ¿Qué significan las etiquetas?
+            <HelpHint label="Qué significan las etiquetas de cada video" width="w-72">
+              Cada video muestra su progreso: <strong>Subtítulos</strong> = ya le sacamos el
+              texto de lo que se dice; <strong>Cortes</strong> = le quitamos los silencios;{" "}
+              <strong>Listo</strong> = ya tiene un video final generado.
+            </HelpHint>
           </span>
           {archivedCount > 0 && (
             <button
