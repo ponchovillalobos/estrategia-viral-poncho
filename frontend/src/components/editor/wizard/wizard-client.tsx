@@ -6,9 +6,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileVideo, Mic, Sparkles, Music2, Camera, Briefcase, Users } from "lucide-react";
+import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileVideo, Mic, Sparkles, Music2, Camera, Briefcase, Users, Send } from "lucide-react";
 import { toast } from "sonner";
 import { CinematicStep } from "@/components/editor/wizard/cinematic-step";
+import { HelpHint } from "@/components/ui/help-hint";
 
 type StyleId = "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme" | "broll_full" | "broll_pip";
 type PlatformId = "tiktok" | "instagram" | "linkedin" | "facebook";
@@ -39,16 +40,24 @@ const PLATFORMS_META: { id: PlatformId; label: string; icon: typeof Music2; colo
 
 const TOTAL_STEPS = 5;
 
-const STYLES: { id: StyleId; name: string; tagline: string; emoji: string }[] = [
-  { id: "silent", name: "Silent", tagline: "Limpio, sin distracciones", emoji: "🤍" },
-  { id: "punch", name: "Punch", tagline: "Impacto en momentos clave", emoji: "🥊" },
-  { id: "hype", name: "Hype", tagline: "Estilo MrBeast viral", emoji: "🔥" },
-  { id: "hype_max", name: "Hype Max", tagline: "+ jump cuts + reaction zooms", emoji: "⚡" },
-  { id: "hype_max_sfx", name: "Hype Max SFX", tagline: "Premium con sonidos", emoji: "🎵" },
-  { id: "supreme", name: "Supreme", tagline: "Full stack premium (default largos)", emoji: "👑" },
-  { id: "broll_full", name: "B-roll Full", tagline: "Pexels fullscreen, auto por transcripción", emoji: "🎞️" },
-  { id: "broll_pip", name: "B-roll PIP", tagline: "Pexels pequeñito sobre tu video, auto", emoji: "🖼️" },
+// Nombres en lenguaje de principiante (no los codenames internos). `recommended` marca
+// el más fácil/rápido para un primer video. Orden: el recomendado primero.
+const STYLES: { id: StyleId; name: string; tagline: string; emoji: string; recommended?: boolean }[] = [
+  { id: "hype", name: "Viral", tagline: "Subtítulos grandes y dinámicos, estilo videos de YouTube. La mejor opción para empezar.", emoji: "🔥", recommended: true },
+  { id: "punch", name: "Impacto", tagline: "Resalta las frases clave en los momentos importantes.", emoji: "🥊" },
+  { id: "hype_max", name: "Viral intenso", tagline: "Suma cortes rápidos y zooms de reacción. Más energía.", emoji: "⚡" },
+  { id: "hype_max_sfx", name: "Viral con sonidos", tagline: "Lo más llamativo: agrega efectos de sonido en los momentos clave.", emoji: "🎵" },
+  { id: "supreme", name: "Premium", tagline: "Todo activado, la máxima calidad. Tarda un poco más.", emoji: "👑" },
+  { id: "silent", name: "Limpio", tagline: "Solo subtítulos, sin efectos. Sobrio y profesional.", emoji: "🤍" },
+  { id: "broll_full", name: "Con videos de apoyo", tagline: "Agrega clips de archivo a pantalla completa según lo que decís.", emoji: "🎞️" },
+  { id: "broll_pip", name: "Videos de apoyo (chico)", tagline: "Muestra clips de archivo en pequeño sobre tu video.", emoji: "🖼️" },
 ];
+
+// Nombre humano de un estilo a partir de su id (acepta "videoId::style" del progreso).
+function humanStyleName(rawId: string): string {
+  const id = rawId.includes("::") ? rawId.split("::").pop()! : rawId;
+  return STYLES.find((s) => s.id === id)?.name ?? id;
+}
 
 const PALETTE = [
   { name: "rosa coral", value: "#fb7185", mood: "urgencia" },
@@ -70,9 +79,9 @@ export function WizardClient() {
   // Multi-select: el wizard procesa N videos a la vez (todos con la misma config).
   // Si seleccionás 3 videos × 2 estilos, se encolan 3 jobs (cola serial: 1 a la vez).
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
-  const [selectedStyles, setSelectedStyles] = useState<StyleId[]>(["hype_max_sfx"]);
+  const [selectedStyles, setSelectedStyles] = useState<StyleId[]>(["hype"]);
   const [accent, setAccent] = useState<string>("#fb7185");
-  const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["tiktok", "instagram"]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["instagram", "linkedin"]);
   // Aspect ratio del output. 9:16 vertical (TikTok/Reels) default, 16:9 horizontal (LinkedIn/YouTube).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
   const [day, setDay] = useState<string>("");
@@ -349,27 +358,32 @@ export function WizardClient() {
 
   return (
     <div className="space-y-6">
-      {/* Stepper visual */}
-      <div className="flex items-center gap-2 text-xs">
-        {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
-          <div key={n} className="flex items-center gap-2">
-            <div
-              className={`flex h-7 w-7 items-center justify-center rounded-full border ${
-                step >= n
-                  ? "border-emerald-400 bg-emerald-500/20 text-emerald-400"
-                  : "border-border bg-card text-muted-foreground"
-              }`}
-            >
-              {step > n ? <CheckCircle2 className="h-3.5 w-3.5" /> : n}
+      {/* Stepper visual — muestra el recorrido completo para que el usuario sepa dónde está */}
+      <div className="flex items-start gap-1 text-xs sm:gap-2">
+        {["Video", "Estilo", "Color", "Redes", "Generar"].map((label, i) => {
+          const n = i + 1;
+          return (
+            <div key={n} className="flex items-start gap-1 sm:gap-2">
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className={`flex h-7 w-7 items-center justify-center rounded-full border ${
+                    step >= n
+                      ? "border-primary bg-primary/20 text-primary"
+                      : "border-border bg-card text-muted-foreground"
+                  }`}
+                >
+                  {step > n ? <CheckCircle2 className="h-3.5 w-3.5" /> : n}
+                </div>
+                <span className={`text-[10px] ${step >= n ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+                  {label}
+                </span>
+              </div>
+              {n < TOTAL_STEPS && (
+                <div className={`mt-3.5 h-px w-5 sm:w-8 ${step > n ? "bg-primary" : "bg-border"}`} />
+              )}
             </div>
-            {n < TOTAL_STEPS && (
-              <div className={`h-px w-8 ${step > n ? "bg-emerald-400" : "bg-border"}`} />
-            )}
-          </div>
-        ))}
-        <span className="ml-3 text-muted-foreground">
-          Paso {Math.min(step, TOTAL_STEPS)} de {TOTAL_STEPS}
-        </span>
+          );
+        })}
       </div>
 
       {/* STEP 1: videos (multi-select) */}
@@ -545,8 +559,9 @@ export function WizardClient() {
             </div>
           </div>
 
-          <p className="mb-4 text-xs text-muted-foreground">
-            Podés seleccionar varios estilos — el sistema genera un MP4 por estilo para comparar.
+          <p className="mb-4 text-sm text-muted-foreground">
+            Para tu primer video, dejá el <strong className="text-foreground">Recomendado</strong>.
+            Podés elegir varios para comparar — se genera uno por cada estilo (cada uno tarda unos minutos).
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {STYLES.map((s) => {
@@ -556,17 +571,22 @@ export function WizardClient() {
                   key={s.id}
                   type="button"
                   onClick={() => toggleStyle(s.id)}
-                  className={`flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all ${
+                  className={`relative flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all ${
                     selected
-                      ? "border-emerald-400 ring-1 ring-emerald-400 bg-emerald-500/5"
+                      ? "border-primary ring-1 ring-primary bg-primary/5"
                       : "border-border hover:border-foreground/30"
                   }`}
                 >
+                  {s.recommended && (
+                    <span className="absolute -top-2 left-3 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                      Recomendado
+                    </span>
+                  )}
                   <div className="text-3xl">{s.emoji}</div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{s.name}</span>
-                      {selected && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+                      {selected && <CheckCircle2 className="h-4 w-4 text-primary" />}
                     </div>
                     <p className="text-xs text-muted-foreground">{s.tagline}</p>
                   </div>
@@ -576,8 +596,8 @@ export function WizardClient() {
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
             {selectedStyles.length === 0
-              ? "Seleccioná al menos uno"
-              : `${selectedStyles.length} estilo${selectedStyles.length === 1 ? "" : "s"} seleccionado${selectedStyles.length === 1 ? "" : "s"}`}
+              ? "Elegí al menos un estilo"
+              : `${selectedStyles.length} estilo${selectedStyles.length === 1 ? "" : "s"} elegido${selectedStyles.length === 1 ? "" : "s"}`}
           </p>
         </Card>
       )}
@@ -586,8 +606,9 @@ export function WizardClient() {
       {step === 3 && (
         <Card className="border-border bg-card p-6">
           <h2 className="mb-2 text-lg font-medium">3. Elegí el color principal</h2>
-          <p className="mb-4 text-xs text-muted-foreground">
-            Un solo color para todo el video (subtítulos highlight, stickers, vignette glow, border).
+          <p className="mb-4 text-sm text-muted-foreground">
+            Este color se usa en todo el video: el resaltado de los subtítulos, los stickers y
+            los detalles. Elegí el que mejor vaya con tu marca o tu mensaje.
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {PALETTE.map((c) => {
@@ -617,11 +638,10 @@ export function WizardClient() {
       {/* STEP 4: plataformas destino */}
       {step === 4 && (
         <Card className="border-border bg-card p-6">
-          <h2 className="mb-2 text-lg font-medium">4. Plataformas destino</h2>
-          <p className="mb-4 text-xs text-muted-foreground">
-            El caption viral se adapta a la primera red seleccionada (LinkedIn usa
-            <span className="font-mono-tab"> caption_long</span>, el resto usan
-            <span className="font-mono-tab"> caption_short</span>). Podés cambiarlo después.
+          <h2 className="mb-2 text-lg font-medium">4. ¿En qué redes lo vas a publicar?</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            La descripción se adapta a la primera red que elijas: en LinkedIn va una versión
+            más larga, y en Instagram una más corta. Siempre podés editarla después.
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {PLATFORMS_META.map((p) => {
@@ -658,39 +678,51 @@ export function WizardClient() {
       {/* STEP 5: meta + confirmar + caption IA */}
       {step === 5 && (
         <Card className="border-border bg-card p-6">
-          <h2 className="mb-4 text-lg font-medium">5. Metadata y confirmación</h2>
+          <h2 className="mb-4 text-lg font-medium">5. Revisá y generá tu video</h2>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Día calendario (opcional, 1-30)</Label>
+                <Label className="flex items-center gap-1.5">
+                  Día del plan (opcional)
+                  <HelpHint label="Para qué sirve el día del plan">
+                    Si seguís el plan de 30 días, podés anotar a qué día corresponde este
+                    video para organizarte. Es opcional: dejalo vacío si no lo usás.
+                  </HelpHint>
+                </Label>
                 <Input type="number" min={1} max={30} value={day} onChange={(e) => setDay(e.target.value)} />
               </div>
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label>Caption viral</Label>
+                <Label className="flex items-center gap-1.5">
+                  Descripción para tus redes
+                  <HelpHint label="Qué es la descripción">
+                    Es el texto que acompaña al video cuando lo publicás (lo que la gente lee
+                    arriba del video, con hashtags). Podés escribirlo o que la IA lo genere por vos.
+                  </HelpHint>
+                </Label>
                 <Button
                   variant="outline"
                   size="sm"
                   type="button"
                   onClick={generateCaptionAI}
                   disabled={generatingCaption || selectedVideos.size === 0}
-                  title="Genera caption + hashtags del PRIMER video con Claude Opus. Los demás se autogeneran al renderizar."
+                  title="Genera una descripción con hashtags a partir de lo que dice tu video, usando IA."
                 >
                   {generatingCaption ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  {generatingCaption ? "Generando…" : "Generar con IA (Opus)"}
+                  {generatingCaption ? "Generando…" : "✨ Generar con IA"}
                 </Button>
               </div>
               <textarea
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 rows={6}
-                className="w-full rounded-md border border-border bg-muted/30 p-2 text-sm font-mono-tab"
-                placeholder="Click ✨ para generar copy viral, o escribilo a mano. Si lo dejás vacío, se autogenera al renderizar."
+                className="w-full rounded-md border border-border bg-muted/30 p-2 text-sm"
+                placeholder="Tocá ✨ Generar con IA para crear la descripción a partir de tu video, o escribila a mano. Si la dejás vacía, se genera sola al crear el video."
               />
               {captionMeta?._provider && (
                 <p className="font-mono-tab text-[10px] text-muted-foreground">
@@ -701,21 +733,27 @@ export function WizardClient() {
             </div>
           </div>
 
-          {/* Modo cinematográfico (opcional) — toggle + upload de imágenes + asamblea IA */}
+          {/* Modo cinematográfico = opción avanzada. Plegada por defecto para no abrumar
+              a un principiante; quien la necesita la despliega. */}
           {firstSelected && (
-            <div className="mt-6">
-              <CinematicStep
-                videoId={firstSelected.id}
-                transcriptPath={
-                  firstSelected.status.transcribed
-                    ? `${rawDir.replace(/[/\\]raw[/\\]?$/, "")}/transcripts/${firstSelected.id}.json`
-                    : null
-                }
-                videoDurationSec={firstSelected.durationSec ?? undefined}
-                value={cinematicConfig}
-                onChange={setCinematicConfig}
-              />
-            </div>
+            <details className="mt-6 rounded-md border border-border bg-muted/20">
+              <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground">
+                Opciones avanzadas (opcional) — modo cinematográfico
+              </summary>
+              <div className="border-t border-border p-4">
+                <CinematicStep
+                  videoId={firstSelected.id}
+                  transcriptPath={
+                    firstSelected.status.transcribed
+                      ? `${rawDir.replace(/[/\\]raw[/\\]?$/, "")}/transcripts/${firstSelected.id}.json`
+                      : null
+                  }
+                  videoDurationSec={firstSelected.durationSec ?? undefined}
+                  value={cinematicConfig}
+                  onChange={setCinematicConfig}
+                />
+              </div>
+            </details>
           )}
 
           <div className="mt-6 rounded-md border border-border bg-muted/30 p-4 text-sm">
@@ -730,7 +768,7 @@ export function WizardClient() {
               </li>
               <li>
                 · Estilo{selectedStyles.length === 1 ? "" : "s"}:{" "}
-                <span className="text-foreground">{selectedStyles.join(", ")}</span>
+                <span className="text-foreground">{selectedStyles.map(humanStyleName).join(", ")}</span>
               </li>
               <li>
                 · Formato:{" "}
@@ -748,15 +786,17 @@ export function WizardClient() {
               </li>
               <li>· Día: {day || "—"}</li>
               <li>
-                · Renders a generar:{" "}
+                · Vas a generar{" "}
                 <span className="text-foreground">
-                  {selectedVideos.size * selectedStyles.length}
-                </span>{" "}
-                ({selectedVideos.size} video{selectedVideos.size === 1 ? "" : "s"} × {selectedStyles.length} estilo{selectedStyles.length === 1 ? "" : "s"})
+                  {selectedVideos.size * selectedStyles.length} video
+                  {selectedVideos.size * selectedStyles.length === 1 ? "" : "s"}
+                </span>
+                {selectedStyles.length > 1 &&
+                  ` (${selectedVideos.size} video${selectedVideos.size === 1 ? "" : "s"} en ${selectedStyles.length} estilos)`}
               </li>
               <li className="text-amber-400">
-                Estimado: ~{4 * selectedVideos.size * selectedStyles.length} min total
-                (cola serial: 1 a la vez, ~4 min por estilo)
+                ⏱️ Va a tardar alrededor de {4 * selectedVideos.size * selectedStyles.length} minutos.
+                Se generan de a uno — podés seguir usando la app mientras tanto.
               </li>
               {cinematicConfig.enabled && (
                 <li className="text-violet-300">
@@ -791,10 +831,10 @@ export function WizardClient() {
               {/* Barra global */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-mono-tab text-muted-foreground">
-                    Progreso total
+                  <span className="text-muted-foreground">
+                    Generando tus videos…
                   </span>
-                  <span className="font-mono-tab text-emerald-400">
+                  <span className="font-mono-tab text-primary">
                     {jobProgress.overallProgress}%
                   </span>
                 </div>
@@ -821,18 +861,21 @@ export function WizardClient() {
                         ) : (
                           <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground" />
                         )}
-                        <span className="font-medium">{step.styleId}</span>
+                        <span className="font-medium">{humanStyleName(step.styleId)}</span>
                         <span className="text-muted-foreground">
-                          ({step.status})
+                          {step.status === "ok"
+                            ? "· listo"
+                            : step.status === "fail"
+                              ? "· falló"
+                              : step.status === "building"
+                                ? "· preparando…"
+                                : step.status === "rendering"
+                                  ? "· generando…"
+                                  : "· en espera"}
                         </span>
                       </div>
                       <span className="font-mono-tab text-muted-foreground">
                         {step.progress}%
-                        {step.currentFrame && step.totalFrames && (
-                          <span className="ml-2 text-[10px]">
-                            frame {step.currentFrame}/{step.totalFrames}
-                          </span>
-                        )}
                       </span>
                     </div>
                     <div className="h-1 overflow-hidden rounded-full bg-muted">
@@ -855,54 +898,75 @@ export function WizardClient() {
         </Card>
       )}
 
-      {/* STEP 6: resultados */}
+      {/* STEP 6: resultados — cierre celebratorio */}
       {step === 6 && (
         <Card className="border-border bg-card p-6">
-          <h2 className="mb-4 text-lg font-medium">Renders generados</h2>
+          {(() => {
+            const okCount = results.filter((r) => r.ok).length;
+            const allOk = okCount === results.length && okCount > 0;
+            return (
+              <div className="mb-5 text-center">
+                <div className="mx-auto mb-2 text-4xl">{allOk ? "🎉" : okCount > 0 ? "✅" : "⚠️"}</div>
+                <h2 className="text-2xl font-semibold">
+                  {okCount === 0
+                    ? "No se pudo generar el video"
+                    : okCount === 1
+                      ? "¡Tu video está listo!"
+                      : `¡Listo! Se generaron ${okCount} videos`}
+                </h2>
+                {okCount > 0 && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Ya podés verlo y publicarlo en tus redes.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           <ul className="space-y-2">
             {results.map((r, i) => (
               <li
                 key={i}
                 className={`flex items-center gap-3 rounded-md border p-3 text-sm ${
-                  r.ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-red-500/40 bg-red-500/5"
+                  r.ok ? "border-primary/40 bg-primary/5" : "border-red-500/40 bg-red-500/5"
                 }`}
               >
                 {r.ok ? (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
                 ) : (
                   <span className="h-4 w-4 text-red-400">✗</span>
                 )}
                 <div className="flex-1">
-                  <p className="font-medium">{r.styleId}</p>
-                  {r.output && (
-                    <p className="font-mono-tab text-[10px] text-muted-foreground">{r.output}</p>
-                  )}
+                  <p className="font-medium">
+                    {humanStyleName(r.styleId)} {r.ok ? "· listo" : "· falló"}
+                  </p>
                   {r.error && <p className="text-[10px] text-red-400">{r.error.slice(0, 200)}</p>}
                 </div>
               </li>
             ))}
           </ul>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
             <Link
               href="/produccion"
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-4 text-sm font-medium hover:bg-muted"
+              className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Ver en Producción
+              <Send className="h-4 w-4" />
+              Ver mis videos y publicar
             </Link>
             <Button
+              variant="outline"
+              className="h-11"
               onClick={() => {
                 setStep(1);
                 setResults([]);
                 setSelectedVideos(new Set());
                 setCaption("");
                 setCaptionMeta(null);
-                setSelectedPlatforms(["tiktok", "instagram"]);
+                setSelectedPlatforms(["instagram", "linkedin"]);
                 setJobProgress(null);
               }}
             >
-              <FileVideo className="mr-1.5 h-3.5 w-3.5" />
-              Editar otro video
+              <FileVideo className="mr-1.5 h-4 w-4" />
+              Crear otro video
             </Button>
           </div>
         </Card>

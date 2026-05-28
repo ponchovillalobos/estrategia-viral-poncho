@@ -921,14 +921,14 @@ export function LongFormWizard() {
 function WizardHeader() {
   return (
     <header className="space-y-2">
-      <p className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
-        wizard · videos largos → clips icónicos
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">
+        Videos largos → clips cortos
       </p>
-      <h1 className="text-3xl font-semibold tracking-tight">De video largo a clips virales</h1>
+      <h1 className="text-3xl font-semibold tracking-tight">De un video largo a varios clips virales</h1>
       <p className="max-w-3xl text-muted-foreground">
-        Pegá un video largo (curso, charla, entrevista) y el pipeline lo transcribe, recorta silencios,
-        identifica los <strong className="text-foreground">5-7 momentos más icónicos</strong> y recorta
-        clips de 30-60 segundos con el estilo viral que elijas.
+        Subí un video largo (un curso, charla o entrevista) y el sistema encuentra los{" "}
+        <strong className="text-foreground">5 a 7 mejores momentos</strong> y los recorta en
+        clips de 30 a 60 segundos, con el estilo que elijas.
       </p>
     </header>
   );

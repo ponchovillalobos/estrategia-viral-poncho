@@ -165,6 +165,7 @@ Datos del usuario (separados del repo, en `C:\hermes-data\videos\` por default):
 - [PREREQUISITES.md](./PREREQUISITES.md) — qué instalar y descargar
 - [docs/SETUP.md](./docs/SETUP.md) — instalación detallada
 - [docs/USAGE.md](./docs/USAGE.md) — tutorial de uso
+- [docs/UI.md](./docs/UI.md) — **diseño de la interfaz (pensada para principiantes) + convenciones**
 - [docs/EFFECTS.md](./docs/EFFECTS.md) — **estilos + sistema de efectos (CapCut FX, beat-sync, tracking, quitar fondo)**
 - [docs/SOCIAL_PUBLISHING.md](./docs/SOCIAL_PUBLISHING.md) — **conectar y publicar en LinkedIn / Instagram**
 - [docs/STYLES.md](./docs/STYLES.md) — estilos base
