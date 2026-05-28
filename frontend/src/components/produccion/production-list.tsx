@@ -413,9 +413,19 @@ export function ProductionList() {
       </div>
 
       {projects.length === 0 && !loading && (
-        <Card className="border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          <FileVideo className="mx-auto mb-3 h-8 w-8 opacity-50" />
-          Sin proyectos. Abrí un video en el Editor para crear uno.
+        <Card className="border-dashed border-border bg-card p-10 text-center">
+          <FileVideo className="mx-auto mb-3 h-10 w-10 text-muted-foreground opacity-60" />
+          <p className="text-base font-medium text-foreground">Todavía no tenés videos generados</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+            Acá van a aparecer tus shorts ya editados, listos para publicar. Creá el primero
+            eligiendo un video y un estilo.
+          </p>
+          <Link
+            href="/editor"
+            className="mt-4 inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+          >
+            Crear mi primer video
+          </Link>
         </Card>
       )}
 
@@ -564,7 +574,7 @@ export function ProductionList() {
                     </pre>
                   ) : (
                     <p className="text-[11px] text-muted-foreground italic">
-                      Sin caption. Click ✨ para generar con IA.
+                      Todavía no tiene descripción. Tocá el botón ✨ Generar para crearla con IA.
                     </p>
                   )}
                 </div>
@@ -624,7 +634,7 @@ export function ProductionList() {
                       ) : (
                         <Camera className="h-2.5 w-2.5" />
                       )}
-                      IG
+                      Instagram
                       <ScheduleStatusBadge state={scheduledByProjectId[p.id]?.instagram_bridge} />
                     </button>
                     <button
@@ -645,7 +655,7 @@ export function ProductionList() {
                       ) : (
                         <ExternalLink className="h-2.5 w-2.5" />
                       )}
-                      LI
+                      LinkedIn
                       <ScheduleStatusBadge state={scheduledByProjectId[p.id]?.linkedin} />
                     </button>
                   </div>

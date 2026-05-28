@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCcw, FileVideo, CheckCircle2, Circle, Pencil, Archive, ArchiveRestore } from "lucide-react";
+import { RefreshCcw, FileVideo, CheckCircle2, Circle, Pencil, Archive, ArchiveRestore, Upload, Loader2 } from "lucide-react";
 import { RenameDialog } from "@/components/editor/rename-dialog";
 import { toast } from "sonner";
 
@@ -38,6 +38,33 @@ export function VideoList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sube videos desde la compu del usuario (multipart) → /api/videos/import → RAW_DIR.
+  // Misma lógica que el wizard, para que el editor también sea un punto de entrada claro.
+  async function importVideos(files: FileList | File[]) {
+    setImporting(true);
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const file of Array.from(files)) {
+        const form = new FormData();
+        form.append("file", file);
+        const r = await fetch("/api/videos/import", { method: "POST", body: form });
+        if (r.ok) ok++;
+        else fail++;
+      }
+      if (ok > 0) toast.success(`${ok} video(s) subido(s) ✓`);
+      if (fail > 0) toast.error(`${fail} no se pudieron subir`);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -104,10 +131,33 @@ export function VideoList() {
             </button>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
-          <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
-          Recargar
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/mp4,video/quicktime,.mp4,.mov"
+            multiple
+            className="hidden"
+            onChange={(e) => e.target.files && e.target.files.length > 0 && importVideos(e.target.files)}
+          />
+          <Button
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            title="Subir uno o más videos desde tu computadora"
+          >
+            {importing ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Upload className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Subir desde mi compu
+          </Button>
+          <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
+            <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+            Recargar
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -117,9 +167,24 @@ export function VideoList() {
       )}
 
       {!loading && videos.length === 0 && !error && (
-        <Card className="border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          <FileVideo className="mx-auto mb-3 h-8 w-8 opacity-50" />
-          No hay videos en raw/. Copiá un MP4 ahí y dale "Recargar".
+        <Card className="border-dashed border-border bg-card p-10 text-center">
+          <FileVideo className="mx-auto mb-3 h-10 w-10 text-muted-foreground opacity-60" />
+          <p className="text-base font-medium text-foreground">Todavía no tenés videos</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+            Subí tu primer video desde la computadora para empezar a crear tu short viral.
+          </p>
+          <Button
+            className="mt-4"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            {importing ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="mr-1.5 h-4 w-4" />
+            )}
+            Subir mi primer video
+          </Button>
         </Card>
       )}
 
@@ -192,9 +257,9 @@ export function VideoList() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-1.5 text-[10px]">
-                <StatusBadge label="Transcrito" on={v.status.transcribed} />
+                <StatusBadge label="Subtítulos" on={v.status.transcribed} />
                 <StatusBadge label="Cortes" on={v.status.cuts} />
-                <StatusBadge label="Renderizado" on={v.status.rendered} />
+                <StatusBadge label="Listo" on={v.status.rendered} />
               </div>
               <p className="font-mono-tab text-[10px] text-muted-foreground">
                 {v.sizeMb} MB · {new Date(v.modified).toLocaleString("es")}

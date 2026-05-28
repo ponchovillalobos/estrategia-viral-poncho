@@ -115,8 +115,10 @@ body {
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  /* Color de marca (emerald, igual que el punto del logo) para la ACCIÓN PRINCIPAL.
+     Antes era gris claro y no resaltaba; ahora el botón primario "salta a la vista". */
+  --primary: oklch(0.78 0.15 162);
+  --primary-foreground: oklch(0.18 0.02 160);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);

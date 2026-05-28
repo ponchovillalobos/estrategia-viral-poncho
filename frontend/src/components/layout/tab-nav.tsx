@@ -28,19 +28,21 @@ export function TabNav() {
       .catch(() => {});
   }, []);
 
+  // Orden por el flujo real de un principiante: empezar → crear → ver lo creado → resultados,
+  // y al final lo de referencia (videos largos, inspiración, planes por red).
   const links = [
-    { href: "/master", label: "Master Plan", icon: LayoutDashboard, color: "var(--foreground)" },
+    { href: "/", label: "Inicio", icon: LayoutDashboard, color: "var(--accent-emerald)" },
+    { href: "/editor", label: "Crear video", icon: Scissors, color: "var(--accent-emerald)" },
+    { href: "/produccion", label: "Mis videos", icon: FolderKanban, color: "var(--phase-amplificacion)" },
+    { href: "/metricas", label: "Resultados", icon: LineChart, color: "var(--accent-emerald)" },
+    { href: "/largos", label: "Videos largos", icon: Film, color: "var(--accent-violet, #a78bfa)" },
+    { href: "/research", label: "Inspiración", icon: Telescope, color: "var(--accent-cyan, #06b6d4)" },
     ...PLATFORM_ORDER.map((p) => ({
       href: `/${p}`,
       label: PLATFORMS[p].label,
       icon: ICONS[p],
       color: PLATFORMS[p].color,
     })),
-    { href: "/editor", label: "Editor", icon: Scissors, color: "var(--phase-doble-down)" },
-    { href: "/largos", label: "Largos", icon: Film, color: "var(--accent-violet, #a78bfa)" },
-    { href: "/research", label: "Research", icon: Telescope, color: "var(--accent-cyan, #06b6d4)" },
-    { href: "/produccion", label: "Producción", icon: FolderKanban, color: "var(--phase-amplificacion)" },
-    { href: "/metricas", label: "Mis métricas", icon: LineChart, color: "var(--accent-emerald)" },
   ];
 
   return (

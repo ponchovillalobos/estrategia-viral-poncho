@@ -4,13 +4,10 @@ export default function ProduccionPage() {
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <p className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
-          Producción · proyectos editoriales
-        </p>
-        <h1 className="text-4xl font-semibold tracking-tight">Producción</h1>
+        <h1 className="text-4xl font-semibold tracking-tight">Mis videos</h1>
         <p className="max-w-2xl text-muted-foreground">
-          Cada proyecto del editor aparece acá. Asigná el día del calendario, las
-          plataformas destino y el estado.
+          Acá están todos tus videos ya editados. Desde cada uno podés generar su
+          descripción, elegir en qué redes va y publicarlo.
         </p>
       </header>
 
