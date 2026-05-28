@@ -207,17 +207,17 @@ export function ResearchWorkspace() {
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <p className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
-          research lab · biblioteca de virales
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          Inspiración · ideas que ya funcionaron
         </p>
         <h1 className="text-3xl font-semibold tracking-tight">
-          De viral ajeno a guión propio
+          De un viral ajeno a tu propio guión
         </h1>
         <p className="max-w-3xl text-muted-foreground">
-          Pegá URL de TikTok, Instagram Reels o YouTube Shorts. El sistema descarga el video,
-          transcribe el audio, extrae hashtags y comentarios. Después{" "}
-          <strong className="text-foreground">click ✨ Adaptar con Claude</strong> y te genera
-          una versión adaptada a tu voz para regrabar.
+          Pegá el link de un video de TikTok, Instagram Reels o YouTube Shorts. El sistema lo
+          descarga, saca el texto de lo que dice y los hashtags. Después, con{" "}
+          <strong className="text-foreground">✨ Adaptar con IA</strong>, te genera una versión
+          con tu propia voz para que la regrabes.
         </p>
       </header>
 

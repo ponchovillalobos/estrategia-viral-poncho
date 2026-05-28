@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PLATFORMS, PLATFORM_ORDER } from "@/lib/platforms";
-import { LayoutDashboard, Music2, Camera, Briefcase, Users, LineChart, Scissors, FolderKanban, Settings, Film, Telescope } from "lucide-react";
+import { LayoutDashboard, Music2, Camera, Briefcase, Users, LineChart, Scissors, FolderKanban, Settings, Film, Telescope, Menu, X } from "lucide-react";
 import { SettingsDialog } from "@/components/layout/settings-dialog";
 
 const ICONS = {
@@ -18,15 +18,12 @@ const ICONS = {
 export function TabNav() {
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [tiktokHandle, setTiktokHandle] = useState<string>("");
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // Cargar handle de TikTok para mostrarlo en la nav
+  // Cerrar el menú móvil al navegar
   useEffect(() => {
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then((d) => setTiktokHandle(d.handles?.tiktok ?? ""))
-      .catch(() => {});
-  }, []);
+    setMenuOpen(false);
+  }, [pathname]);
 
   // Orden por el flujo real de un principiante: empezar → crear → ver lo creado → resultados,
   // y al final lo de referencia (videos largos, inspiración, planes por red).
@@ -47,40 +44,35 @@ export function TabNav() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
-      <nav className="mx-auto flex w-full max-w-7xl items-center gap-1 px-6 py-3">
-        <div className="mr-4 flex items-center gap-2">
+      <nav className="mx-auto flex w-full max-w-7xl items-center gap-1 px-4 py-3 sm:px-6">
+        <Link href="/" className="mr-2 flex items-center gap-2 sm:mr-4">
           <div className="h-6 w-6 rounded-full bg-emerald-400" />
-          <span className="font-mono-tab text-sm tracking-tight">estrategia.viral.poncho</span>
+          <span className="text-sm font-semibold tracking-tight">Estrategia Viral</span>
+        </Link>
+
+        {/* Links inline (desktop) */}
+        <div className="hidden items-center gap-1 lg:flex">
+          {links.map(({ href, label, icon: Icon, color }) => {
+            const active = pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors",
+                  active
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}
+              >
+                <Icon className="h-4 w-4" style={{ color: active ? color : undefined }} />
+                <span>{label}</span>
+              </Link>
+            );
+          })}
         </div>
-        {links.map(({ href, label, icon: Icon, color }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors",
-                active
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              )}
-            >
-              <Icon className="h-4 w-4" style={{ color: active ? color : undefined }} />
-              <span>{label}</span>
-            </Link>
-          );
-        })}
 
         <div className="ml-auto flex items-center gap-2">
-          {tiktokHandle && (
-            <span
-              className="hidden items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1 font-mono-tab text-[10px] text-muted-foreground sm:flex"
-              title="Cuenta de TikTok conectada (configurable en ajustes)"
-            >
-              <Music2 className="h-3 w-3 text-pink-400" />
-              {tiktokHandle}
-            </span>
-          )}
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -90,14 +82,46 @@ export function TabNav() {
           >
             <Settings className="h-4 w-4" />
           </button>
+          {/* Hamburguesa (móvil/tablet) */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground lg:hidden"
+            aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
       </nav>
 
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        onSaved={(h) => setTiktokHandle(h.tiktok)}
-      />
+      {/* Panel de navegación móvil */}
+      {menuOpen && (
+        <div className="border-t border-border bg-background lg:hidden">
+          <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-1 px-4 py-3 sm:grid-cols-3">
+            {links.map(({ href, label, icon: Icon, color }) => {
+              const active = pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-3 py-2.5 text-sm transition-colors",
+                    active
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  )}
+                >
+                  <Icon className="h-4 w-4" style={{ color: active ? color : undefined }} />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </header>
   );
 }
