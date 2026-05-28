@@ -1,0 +1,301 @@
+# Troubleshooting
+
+Errores comunes y cómo solucionarlos. Si encuentras uno nuevo, agregalo acá.
+
+## El dashboard no arranca
+
+### `node : El término 'node' no se reconoce`
+
+Node.js no está en el PATH. Soluciones:
+
+```powershell
+# Opción A: agregar al PATH solo para esta sesión
+$env:PATH = "C:\Program Files\nodejs;$env:PATH"
+
+# Opción B: agregar permanentemente
+[Environment]::SetEnvironmentVariable("Path", "$env:PATH;C:\Program Files\nodejs", "User")
+# después abrir terminal nueva
+```
+
+### `npm install` falla
+
+```
+npm error peer zod@"4.x" from @remotion/zod-types@4.0.x
+```
+
+Es un conflict de peer dependency. Solución:
+
+```powershell
+npm install --legacy-peer-deps
+```
+
+O actualizar `zod` a v4 en `package.json`:
+
+```json
+{
+  "dependencies": {
+    "zod": "^4.0.0"
+  }
+}
+```
+
+### Hot reload no funciona
+
+Si el proyecto está dentro de OneDrive, el file watcher puede no detectar cambios. Solución:
+
+En `frontend/next.config.ts`:
+
+```typescript
+const nextConfig: NextConfig = {
+  experimental: {
+    // En Next 16 esto NO existe; comentar si te lo pide
+    // watchOptions: { pollIntervalMs: 1000 }
+  },
+};
+```
+
+Alternativa: mover el proyecto a `C:\Code\Estrategia_Viral_Poncho\` (fuera de OneDrive).
+
+## El editor falla
+
+### `<button> dentro de <button>` (hydration error)
+
+Solucionado en commit reciente. Si lo ves de nuevo, asegurar que `day-card.tsx` usa `<div role="button">` y NO `<button>` envolviendo a `<CopyButton>`.
+
+### `Export Facebook doesn't exist in lucide-react`
+
+Lucide-react quitó los íconos de marca en versiones recientes. Usar iconos genéricos:
+
+```typescript
+import { Music2, Camera, Briefcase, Users } from "lucide-react";
+// NO importar: Facebook, Instagram, Linkedin (no existen)
+```
+
+### `Type error: ValueType | undefined no es asignable a number`
+
+En el tooltip de Recharts. Cambiar:
+
+```typescript
+formatter={(v: number) => [v.toLocaleString("es"), "views"]}
+// →
+formatter={(v) => [Number(v).toLocaleString("es"), "views"]}
+```
+
+## Python falla
+
+### `RuntimeError: sox extension is not supported on Windows`
+
+silero-vad intenta usar torchaudio.sox que no funciona en Windows. Solución: el script `detect_silences.py` ya está adaptado para leer WAV con `wave` + numpy. Si tu copia es vieja, actualizar.
+
+### `Could not load libtorchcodec`
+
+Warning de pyannote/whisperx. Es **ignorable** — Whisper usa otro backend internamente y funciona igual.
+
+### `FileNotFoundError: WinError 206 (filename or extension too long)`
+
+ffmpeg con muchos segmentos para cortar (>200). El script `cut_silences.py` ya tiene fallback automático: si >100 segmentos, usa concat demuxer en vez de filter_complex. Si lo ves de nuevo, verificar que tu copia es la actualizada.
+
+### `whisperx no se encuentra`
+
+El venv no está activado. Verificar:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+# El prompt debe mostrar (venv)
+```
+
+Si Activate.ps1 da error de "execution policy":
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+# Y volver a intentar
+```
+
+### Whisper transcribe MUY mal
+
+Si el video tiene mucho ruido o el speaker no es claro, modelo `small` puede confundir palabras. Soluciones:
+
+```powershell
+# A. Usar modelo medium (mejor calidad, más lento)
+# Editar python/config.py:
+WHISPER_MODEL = "medium"
+
+# B. Editar manualmente el transcript en el dashboard tab Subtítulos antes de renderizar
+```
+
+## Remotion falla al renderizar
+
+### `Bundling 6%` se queda colgado
+
+A veces Remotion tarda en bundlear cuando hay deps nuevas. Esperar 1-2 min. Si pasa de 3 min, matar el proceso y relanzar.
+
+### `Chrome Headless Shell download fail`
+
+La primera vez Remotion baja Chrome Headless (~113 MB). Si falla por red, reintentar con conexión estable. Una vez bajado, no se vuelve a bajar.
+
+### Render produce video corrupto o pantalla negra
+
+Verificar:
+
+1. **dev server está corriendo**: Remotion necesita que `localhost:3000` responda para servir el video raw y SFX vía API
+2. **El rawVideoUrl es correcto**: revisar `remotion/props.json` — debe apuntar a `http://localhost:3000/api/...`
+3. **El video raw existe**: en `C:\viral-data\videos\raw\<id>.mp4`
+
+### `--props` is too long
+
+Mismo error de comandos largos. Solución (ya implementada): el JSON se escribe a `remotion/props.json` y se pasa como `--props=props.json` (referenciando archivo, no inline).
+
+## Pipeline long_form falla
+
+### Ollama devuelve `{"clips": []}`
+
+El transcript es muy largo y satura el contexto del modelo. Soluciones:
+
+1. **Usar chunking** (ya implementado): `analyze_clips.py` divide automáticamente videos >15 min en chunks de 12 min
+2. **Usar modelo más grande**:
+   ```powershell
+   .\venv\Scripts\python.exe long_form_pipeline.py D13_curso --render --model gemma4:26b
+   ```
+3. **Borrar proposal vacío y reintentar**:
+   ```powershell
+   Remove-Item "C:\viral-data\videos\long_form\proposals\D13_curso.json"
+   .\venv\Scripts\python.exe long_form_pipeline.py D13_curso --render
+   ```
+
+### Ollama no responde
+
+Verificar:
+
+```powershell
+curl http://localhost:11434/api/tags
+```
+
+Si no responde:
+- Reiniciar Ollama desde el system tray
+- Verificar que el modelo está instalado: `ollama list`
+- Pull de nuevo: `ollama pull qwen3:1.7b`
+
+### Extract clips produce MP4 muy chico (1-2 KB)
+
+ffmpeg falló al extraer el rango. Posibles causas:
+
+- El timestamp del clip está fuera del video CLEAN (verificar duraciones)
+- Codec issue (HEVC source → forzar h264)
+
+Solución: borrar el clip JSON específico, ajustar el rango, re-correr extract_clips.
+
+### Re-transcribir tarda demasiado
+
+Para video de 1h tarda 15-25 min. Si quieres skipear esa parte en futuros runs, el marker `.from_clean` se crea automáticamente. Para forzar re-transcribe:
+
+```powershell
+Remove-Item "C:\viral-data\videos\long_form\transcripts\D13_curso.from_clean"
+```
+
+## Pexels no devuelve resultados
+
+### API key inválida
+
+Verificar que `frontend/.env.local` tiene `PEXELS_API_KEY=<tu-key>` sin espacios. Reiniciar el dev server después de cambiarla.
+
+### Rate limit (200 req/h)
+
+Si saturás el límite (raro), esperar 1 hora o cachear búsquedas comunes. El error responde con HTTP 429.
+
+## El video PiP se ve mal
+
+### B-roll cortado en el PiP
+
+Solucionado en commit reciente: cuadro 540×720 vertical con `objectFit: contain`. Si lo ves cortado, verificar `ViralVideo.tsx` línea de `PipBRollLayer`.
+
+### Letterbox feo en video horizontal source
+
+El composition usa `objectFit: cover` por defecto para center-crop horizontal → 9:16. Si querés mantener todo el frame:
+
+```tsx
+{rawVideoUrl && (
+  <OffthreadVideo
+    src={rawVideoUrl}
+    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+  />
+)}
+```
+
+## El dashboard muestra mock en vez de datos reales
+
+### `/metricas` está vacío
+
+Necesitas agregar entradas manualmente. La primera vez que pegas una entrada para una red, las gráficas de esa red empiezan a mostrar "datos reales" (badge verde).
+
+Si las habías agregado y desaparecieron:
+- Verificar localStorage no se haya borrado por limpieza del navegador
+- Re-importar desde el JSON de backup (Mis métricas → Importar JSON)
+
+### Las stats cards no se actualizan
+
+Hard refresh el navegador (Ctrl+Shift+R). El componente usa estado local + custom event.
+
+## Performance
+
+### Render Remotion muy lento
+
+- Cerrar otras apps pesadas durante el render
+- Usar preset Preview para iteración (540×960, ~4x más rápido)
+- Solo usar Final cuando estás conforme con el resultado
+
+### Transcribir tarda mucho
+
+WhisperX en CPU usa todos los cores. Si tu PC es lenta, considerar:
+- Modelo `tiny` o `base` (más rápido, menos preciso)
+- GPU NVIDIA con CUDA (requiere reinstalar torch con CUDA)
+
+### npm install muy lento
+
+- Verificar que no estás detrás de un proxy corporativo
+- Cambiar registry: `npm config set registry https://registry.npmjs.org/`
+
+## Datos / backup
+
+### Perdí mis renders
+
+Los renders están en `C:\viral-data\videos\renders\` y `long_form/renders/`. Esos archivos NO están en el repo. Hacer backup periódico:
+
+```powershell
+Compress-Archive -Path "C:\viral-data\videos\renders" -DestinationPath "$env:USERPROFILE\Desktop\renders-backup-$(Get-Date -Format yyyy-MM-dd).zip"
+```
+
+### Quiero reset total
+
+```powershell
+# CUIDADO: borra TODO lo procesado
+Remove-Item -Recurse -Force "C:\viral-data\videos\transcripts"
+Remove-Item -Recurse -Force "C:\viral-data\videos\cuts"
+Remove-Item -Recurse -Force "C:\viral-data\videos\renders"
+Remove-Item -Recurse -Force "C:\viral-data\videos\projects"
+Remove-Item -Recurse -Force "C:\viral-data\videos\long_form\clean"
+Remove-Item -Recurse -Force "C:\viral-data\videos\long_form\transcripts"
+Remove-Item -Recurse -Force "C:\viral-data\videos\long_form\cuts"
+Remove-Item -Recurse -Force "C:\viral-data\videos\long_form\proposals"
+Remove-Item -Recurse -Force "C:\viral-data\videos\long_form\clips"
+Remove-Item -Recurse -Force "C:\viral-data\videos\long_form\projects"
+Remove-Item -Recurse -Force "C:\viral-data\videos\long_form\renders"
+# Volver a crear las carpetas (ver SETUP.md)
+```
+
+## Reportar bugs
+
+Si encontrás un error nuevo:
+
+1. Capturar el output completo del comando que falló
+2. Copiar la línea exacta del error
+3. Agregarlo a este archivo con la solución (cuando la encuentres)
+
+Para diagnosticar:
+
+```powershell
+# Ver últimos errores en background tasks
+Get-ChildItem "$env:LOCALAPPDATA\Temp\claude\*\tasks\*.output" -Recurse | Sort-Object LastWriteTime -Descending | Select-Object -First 5
+
+# Ver logs de Next.js
+# (corren en la terminal donde lanzaste npm run dev)
+```

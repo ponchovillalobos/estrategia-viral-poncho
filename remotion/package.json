@@ -1,0 +1,28 @@
+{
+  "name": "remotion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Composiciones Remotion para Estrategia Viral Poncho",
+  "scripts": {
+    "start": "remotion studio --port 3001",
+    "render": "remotion render",
+    "build": "remotion bundle"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.300",
+    "@remotion/google-fonts": "^4.0.300",
+    "@remotion/media-utils": "^4.0.300",
+    "@remotion/motion-blur": "^4.0.465",
+    "@remotion/noise": "^4.0.465",
+    "@remotion/transitions": "^4.0.465",
+    "@remotion/zod-types": "^4.0.300",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.300",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.4.0"
+  }
+}

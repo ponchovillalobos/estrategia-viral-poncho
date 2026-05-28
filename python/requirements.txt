@@ -1,0 +1,28 @@
+# Python deps para transcripción y detección de silencios
+# Instalar dentro del venv local: ./python/venv/
+
+# Torch CPU-only para evitar peso de CUDA
+# (instalar primero con: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu)
+torch>=2.1.0
+torchaudio>=2.1.0
+
+# WhisperX: transcripción + forced alignment para timestamps palabra-a-palabra
+whisperx>=3.1.0
+
+# Voice Activity Detection
+silero-vad>=5.0
+
+# Utilidades
+numpy>=1.24.0
+ffmpeg-python>=0.2.0
+requests>=2.31.0
+Pillow>=10.0.0
+
+# Visión: motion tracking (OpenCV) + quitar fondo con IA (MediaPipe selfie segmenter)
+opencv-python>=4.9.0
+mediapipe>=0.10.0
+onnxruntime>=1.17.0
+
+# Beat-sync: detección de beats de la música para "cortar al ritmo"
+librosa>=0.10.0
+soundfile>=0.12.0

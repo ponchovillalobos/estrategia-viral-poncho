@@ -1,0 +1,292 @@
+import { NextRequest, NextResponse } from "next/server";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import {
+  LF_RAW,
+  PYTHON_EXE,
+  PYTHON_DIR,
+} from "@/lib/paths";
+import {
+  appendLongFormLog,
+  createLongFormJob,
+  setLongFormClipsCount,
+  updateLongFormStep,
+  type LongFormStepKey,
+} from "@/lib/long-form-job-store";
+import { enqueue } from "@/lib/job-queue";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 3600; // 1 hora — pipelines con render pueden tardar
+
+interface ProcessBody {
+  /** Single (legacy). Si viene videoIds[], se ignora. */
+  videoId?: string;
+  /** Multi (preferido). Cada videoId crea un job propio y se encolan serialmente. */
+  videoIds?: string[];
+  model?: string;
+  render?: boolean;
+  maxClips?: number;
+  skipTranscribe?: boolean;
+  /** Si true, salta Ollama y usa clips heurísticos uniformes (rápido, sin curaduría IA) */
+  useHeuristic?: boolean;
+  /** Estilos de render — array de StyleId. Default ["supreme"]. */
+  styles?: string[];
+  /** Color accent en hex. Si se omite, paleta rotativa por clipIndex. */
+  accentColor?: string;
+  /** Plataformas destino (informativo, se persiste en project JSON). */
+  platforms?: string[];
+  /** Aspecto del output. "9:16" vertical (default) o "16:9" horizontal. */
+  aspectRatio?: "9:16" | "16:9";
+  /**
+   * Face tracking al reframear (aplica solo si el aspecto cambia del source).
+   * "off": center crop ciego (default).
+   * "single": detección 1-frame del medio del clip (rápido, ~1s/clip).
+   * "per-frame": preciso (~5-10s/clip).
+   */
+  faceTracking?: "off" | "single" | "per-frame";
+}
+
+/**
+ * Mapeo del header impreso por long_form_pipeline.py al stepKey del store.
+ * El script imprime al stderr: "========== STEP N: <nombre> =========="
+ */
+const STEP_HEADER_PATTERNS: { regex: RegExp; key: LongFormStepKey }[] = [
+  { regex: /STEP 1:\s*transcribe\s*=/i, key: "transcribe" },
+  { regex: /STEP 2:\s*detect silences/i, key: "detect_silences" },
+  { regex: /STEP 3:\s*cut silences/i, key: "cut_silences" },
+  { regex: /STEP 4:\s*re-?transcribe/i, key: "re_transcribe" },
+  { regex: /STEP 5:\s*analyze/i, key: "analyze" },
+  { regex: /STEP 6:\s*extract clips/i, key: "extract_clips" },
+  { regex: /STEP 7:\s*render/i, key: "render" },
+];
+
+/** Parsea "[skip] <step> (existe ...)" para marcar steps como skipped. */
+const SKIP_PATTERNS: { regex: RegExp; key: LongFormStepKey }[] = [
+  { regex: /\[skip\] transcribe/i, key: "transcribe" },
+  { regex: /\[skip\] detect_silences/i, key: "detect_silences" },
+  { regex: /\[skip\] cut_silences/i, key: "cut_silences" },
+  { regex: /\[skip\] re-?transcribe/i, key: "re_transcribe" },
+  { regex: /\[skip\] analyze_clips/i, key: "analyze" },
+];
+
+async function findRawFile(videoId: string): Promise<string | null> {
+  const exts = [".mp4", ".mov", ".mkv", ".webm", ".m4v"];
+  for (const ext of exts) {
+    const p = path.join(LF_RAW, `${videoId}${ext}`);
+    try {
+      await fs.access(p);
+      return p;
+    } catch {
+      // probar siguiente extensión
+    }
+  }
+  return null;
+}
+
+async function processJob(
+  jobId: string,
+  videoId: string,
+  body: ProcessBody
+): Promise<void> {
+  const args = [path.join(PYTHON_DIR, "long_form_pipeline.py"), videoId];
+  if (body.model) args.push("--model", body.model);
+  if (body.render) args.push("--render");
+  if (body.maxClips != null) args.push("--max-clips", String(body.maxClips));
+  if (body.skipTranscribe) args.push("--skip-transcribe");
+  if (body.useHeuristic) args.push("--use-heuristic");
+  if (body.styles && body.styles.length > 0) {
+    args.push("--styles", body.styles.join(","));
+  }
+  if (body.accentColor) args.push("--accent-color", body.accentColor);
+  if (body.platforms && body.platforms.length > 0) {
+    args.push("--platforms", body.platforms.join(","));
+  }
+  if (body.aspectRatio) args.push("--aspect-ratio", body.aspectRatio);
+  if (body.faceTracking && body.faceTracking !== "off") {
+    args.push("--face-tracking", body.faceTracking);
+  }
+
+  let currentStep: LongFormStepKey | null = null;
+
+  return new Promise<void>((resolve) => {
+    const proc = spawn(PYTHON_EXE, args, {
+      cwd: PYTHON_DIR,
+      shell: false,
+    });
+
+    // Idle-timeout: el pipeline puede tardar mucho (rendea N clips), así que NO usamos un
+    // tope de tiempo total. En cambio matamos el proceso si deja de emitir CUALQUIER salida
+    // por 20 min — señal de cuelgue real (no de un render largo, que loguea progreso).
+    let timedOut = false;
+    let idleTimer: ReturnType<typeof setTimeout>;
+    const IDLE_MS = 20 * 60 * 1000;
+    const resetIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        timedOut = true;
+        try { proc.kill("SIGKILL"); } catch {}
+      }, IDLE_MS);
+    };
+    resetIdle();
+
+    function processLine(line: string) {
+      appendLongFormLog(jobId, line);
+      // Detectar headers de step
+      for (const p of STEP_HEADER_PATTERNS) {
+        if (p.regex.test(line)) {
+          if (currentStep && currentStep !== p.key) {
+            updateLongFormStep(jobId, currentStep, { status: "ok" });
+          }
+          currentStep = p.key;
+          updateLongFormStep(jobId, p.key, { status: "running" });
+          return;
+        }
+      }
+      // Detectar skips
+      for (const p of SKIP_PATTERNS) {
+        if (p.regex.test(line)) {
+          updateLongFormStep(jobId, p.key, {
+            status: "skipped",
+            message: "ya existía, no se regeneró",
+          });
+          return;
+        }
+      }
+    }
+
+    let stdoutBuf = "";
+    let stderrBuf = "";
+
+    proc.stdout.on("data", (chunk: Buffer) => {
+      resetIdle();
+      const text = chunk.toString("utf-8");
+      stdoutBuf += text;
+      const lines = stdoutBuf.split(/\r?\n/);
+      stdoutBuf = lines.pop() ?? "";
+      for (const line of lines) processLine(line);
+    });
+
+    proc.stderr.on("data", (chunk: Buffer) => {
+      resetIdle();
+      const text = chunk.toString("utf-8");
+      stderrBuf += text;
+      const lines = stderrBuf.split(/\r?\n/);
+      stderrBuf = lines.pop() ?? "";
+      for (const line of lines) processLine(line);
+    });
+
+    proc.on("close", (code) => {
+      clearTimeout(idleTimer);
+      if (stdoutBuf.trim()) processLine(stdoutBuf);
+      if (stderrBuf.trim()) processLine(stderrBuf);
+
+      if (timedOut) {
+        const step = currentStep ?? "transcribe";
+        updateLongFormStep(jobId, step, {
+          status: "fail",
+          message: "Pipeline abortado por inactividad (20 min sin salida) — posible cuelgue. Reintentá.",
+        });
+        resolve();
+        return;
+      }
+
+      if (code === 0) {
+        if (currentStep) {
+          updateLongFormStep(jobId, currentStep, { status: "ok" });
+        }
+        try {
+          const fullLog = stdoutBuf;
+          const match = fullLog.match(/\{[\s\S]*"clips"\s*:\s*(\d+)[\s\S]*\}/);
+          if (match) {
+            setLongFormClipsCount(jobId, parseInt(match[1], 10));
+          }
+        } catch {
+          // ignore
+        }
+      } else {
+        if (currentStep) {
+          updateLongFormStep(jobId, currentStep, {
+            status: "fail",
+            message: `proceso terminó con código ${code}`,
+          });
+        } else {
+          updateLongFormStep(jobId, "transcribe", {
+            status: "fail",
+            message: `proceso terminó con código ${code} antes de empezar`,
+          });
+        }
+      }
+      resolve();
+    });
+
+    proc.on("error", (err) => {
+      clearTimeout(idleTimer);
+      if (currentStep) {
+        updateLongFormStep(jobId, currentStep, {
+          status: "fail",
+          message: `spawn error: ${err.message}`,
+        });
+      }
+      resolve();
+    });
+  });
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = (await req.json()) as ProcessBody;
+
+    // Normalizar a array: si vino videoIds[] usar ese; si no, fallback a videoId singular
+    const videoIdList: string[] = (body.videoIds && body.videoIds.length > 0)
+      ? body.videoIds
+      : body.videoId ? [body.videoId] : [];
+
+    if (videoIdList.length === 0) {
+      return NextResponse.json({ error: "videoId (o videoIds[]) requerido" }, { status: 400 });
+    }
+
+    // Validar que cada raw existe ANTES de empezar a encolar
+    const resolved: { videoId: string; rawPath: string }[] = [];
+    for (const vid of videoIdList) {
+      const rawPath = await findRawFile(vid);
+      if (!rawPath) {
+        return NextResponse.json(
+          {
+            error: `No se encontró ${vid}.{mp4,mov,mkv,webm} en ${LF_RAW}. Copiá ese video a la carpeta primero.`,
+          },
+          { status: 404 }
+        );
+      }
+      resolved.push({ videoId: vid, rawPath });
+    }
+
+    // Crear N jobs + encolar (la cola serial los corre 1 a la vez)
+    const jobs = resolved.map(({ videoId, rawPath }) => {
+      const job = createLongFormJob(videoId, rawPath, {
+        model: body.model,
+        render: body.render ?? false,
+        maxClips: body.maxClips,
+        skipTranscribe: body.skipTranscribe,
+        useHeuristic: body.useHeuristic,
+      });
+      enqueue("long_form", job.id, async () => {
+        await processJob(job.id, videoId, body);
+      });
+      return { job, rawPath };
+    });
+
+    return NextResponse.json({
+      ok: true,
+      // backwards-compat singular
+      jobId: jobs.length === 1 ? jobs[0].job.id : undefined,
+      videoPath: jobs.length === 1 ? jobs[0].rawPath : undefined,
+      jobIds: jobs.map((j) => j.job.id),
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
+}

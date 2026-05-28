@@ -1,0 +1,184 @@
+{
+  "_about": {
+    "purpose": "Hooks virales VERIFICADOS de TikTok en español, recopilados de fuentes que analizan rendimiento real (no inventados). Se inyectan en el prompt de generate_caption.py como few-shot para que el caption use patrones probados.",
+    "sources": [
+      {
+        "url": "https://whyadsmedia.com/blog/10-hook-tiktok-efectivos-ejemplos/",
+        "title": "Los 10 hooks más efectivos para TikTok con ejemplos reales",
+        "type": "analysis"
+      },
+      {
+        "url": "https://www.tiktok.com/@growfik/video/7476936181389823238",
+        "title": "8 hooks virales 2025 por @growfik",
+        "type": "creator_post"
+      },
+      {
+        "url": "https://metricool.com/viral-video-hooks/",
+        "title": "Metricool — colección de 25 hooks virales",
+        "type": "analysis"
+      }
+    ],
+    "last_updated": "2026-05-19",
+    "language": "es-LATAM"
+  },
+  "hooks": [
+    {
+      "id": "secret_no_one_tells",
+      "template": "Lo que nadie te cuenta sobre <X>",
+      "example_real": "Lo que nadie te cuenta sobre vender por afiliados",
+      "mechanism": "curiosidad + exclusividad",
+      "best_for": ["confesion", "insight_contraintuitivo"],
+      "source": "whyadsmedia"
+    },
+    {
+      "id": "youre_doing_it_wrong",
+      "template": "¿Sabías que estás haciendo esto mal?",
+      "example_real": "¿Sabías que estás haciendo mal tus anuncios?",
+      "mechanism": "alerta + autoreflexion",
+      "best_for": ["callout", "diagnostico"],
+      "source": "whyadsmedia"
+    },
+    {
+      "id": "if_you_have_problem",
+      "template": "Si tenés <problema>, mirá esto",
+      "example_real": "Si tenés ansiedad al vender, mirá esto",
+      "mechanism": "identificacion_inmediata",
+      "best_for": ["callout_directo"],
+      "source": "whyadsmedia"
+    },
+    {
+      "id": "five_seconds_to_decide",
+      "template": "Tenés 5 segundos para decidir...",
+      "example_real": "Tenés 5 segundos: ¿opción A u opción B?",
+      "mechanism": "urgencia + implicacion",
+      "best_for": ["pattern_interrupt"],
+      "source": "whyadsmedia"
+    },
+    {
+      "id": "how_i_achieved_in_x_days",
+      "template": "Así fue cómo conseguí <logro> en <X> días",
+      "example_real": "Así conseguí 10k seguidores en 30 días",
+      "mechanism": "aspiracion + confianza + cifra_dura",
+      "best_for": ["confesion_cifra"],
+      "source": "whyadsmedia"
+    },
+    {
+      "id": "i_tried_x_for_a_week",
+      "template": "Probé <X> durante una semana",
+      "example_real": "Probé el método Pomodoro 7 días",
+      "mechanism": "curiosidad + humanidad",
+      "best_for": ["experimento"],
+      "source": "whyadsmedia"
+    },
+    {
+      "id": "three_tricks_i_wish",
+      "template": "<N> trucos que ojalá hubiese sabido antes",
+      "example_real": "3 trucos sobre TikTok que ojalá supiera",
+      "mechanism": "empatia + valor_inmediato",
+      "best_for": ["lista_valor"],
+      "source": "whyadsmedia"
+    },
+    {
+      "id": "dont_make_this_mistake",
+      "template": "No cometas este error si usás <X>",
+      "example_real": "No cometas este error en TikTok Ads",
+      "mechanism": "prevencion + confianza",
+      "best_for": ["callout_directo", "warning"],
+      "source": "whyadsmedia"
+    },
+    {
+      "id": "this_kills_your_x",
+      "template": "Esto es lo que está matando tu <X>",
+      "example_real": "Esto mata tu engagement en TikTok",
+      "mechanism": "alarma + diagnostico",
+      "best_for": ["pattern_interrupt", "diagnostico"],
+      "source": "whyadsmedia"
+    },
+    {
+      "id": "do_this_if_you_want",
+      "template": "Hacé esto si querés <beneficio>",
+      "example_real": "Hacé esto si querés más conversiones",
+      "mechanism": "accion_clara + esperanza",
+      "best_for": ["how_to"],
+      "source": "whyadsmedia"
+    },
+    {
+      "id": "no_one_told_you",
+      "template": "Nadie te ha contado esto…",
+      "example_real": "Nadie te ha contado esto sobre cerrar ventas",
+      "mechanism": "curiosidad + exclusividad",
+      "best_for": ["confesion"],
+      "source": "growfik"
+    },
+    {
+      "id": "what_they_dont_want_you_to_know",
+      "template": "Lo que nadie quiere que sepas…",
+      "example_real": "Lo que nadie quiere que sepas sobre ganar con IA",
+      "mechanism": "conspiracion + insider",
+      "best_for": ["contraintuitivo"],
+      "source": "growfik"
+    },
+    {
+      "id": "if_you_see_this_sign",
+      "template": "Si ves esto, es una señal…",
+      "example_real": "Si ves esto, es una señal de que vas tarde",
+      "mechanism": "destino + algoritmo + identificacion",
+      "best_for": ["pattern_interrupt"],
+      "source": "growfik"
+    },
+    {
+      "id": "you_wont_believe_but",
+      "template": "No lo vas a creer pero…",
+      "example_real": "No lo vas a creer pero cobré 5x más con esto",
+      "mechanism": "sorpresa + cifra",
+      "best_for": ["confesion_cifra"],
+      "source": "growfik"
+    },
+    {
+      "id": "this_is_how_i_did_it",
+      "template": "Así fue como lo logré…",
+      "example_real": "Así fue como pasé de 0 a 30k seguidores",
+      "mechanism": "storytelling + aspiracion",
+      "best_for": ["confesion"],
+      "source": "growfik"
+    },
+    {
+      "id": "without_spending",
+      "template": "Cómo conseguir <tema> sin gastar un peso",
+      "example_real": "Cómo conseguir clientes sin gastar un peso en ads",
+      "mechanism": "ahorro + esperanza",
+      "best_for": ["how_to"],
+      "source": "growfik"
+    },
+    {
+      "id": "stop_doing_it",
+      "template": "Ya dejá de hacerlo",
+      "example_real": "Ya dejá de mandar mensajes a los leads así",
+      "mechanism": "comando_directo + autoridad",
+      "best_for": ["callout_directo"],
+      "source": "growfik"
+    },
+    {
+      "id": "stay_until_the_end",
+      "template": "Quedate hasta el final para saber…",
+      "example_real": "Quedate hasta el final para saber el método exacto",
+      "mechanism": "loop + retencion",
+      "best_for": ["retention_loop"],
+      "source": "growfik"
+    }
+  ],
+  "best_for_categories": {
+    "confesion": "Compartir una experiencia personal con vulnerabilidad. Ej: errores que cometiste",
+    "confesion_cifra": "Confesión personal + número específico que valida la historia",
+    "callout": "Apuntar a un dolor/error que el espectador típico de tu nicho tiene",
+    "callout_directo": "Dirigirte directamente al espectador con 'vos' / 'tú'",
+    "contraintuitivo": "Decir lo opuesto a lo que el nicho asume como verdad",
+    "diagnostico": "Identificar el problema oculto que el espectador no se da cuenta",
+    "pattern_interrupt": "Romper la expectativa en los primeros 3 segundos",
+    "lista_valor": "Numerar elementos accionables (3 trucos, 5 errores, etc.)",
+    "how_to": "Promesa de enseñar un paso concreto",
+    "experimento": "Probar algo y reportar resultados",
+    "warning": "Advertir sobre algo que el espectador NO debe hacer",
+    "retention_loop": "Frase que retiene viendo hasta el final"
+  }
+}

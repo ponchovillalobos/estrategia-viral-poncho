@@ -1,0 +1,949 @@
+﻿"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileVideo, Mic, Sparkles, Music2, Camera, Briefcase, Users } from "lucide-react";
+import { toast } from "sonner";
+import { CinematicStep } from "@/components/editor/wizard/cinematic-step";
+
+type StyleId = "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme" | "broll_full" | "broll_pip";
+type PlatformId = "tiktok" | "instagram" | "linkedin" | "facebook";
+
+interface VideoEntry {
+  id: string;
+  filename: string;
+  sizeMb: number;
+  durationSec: number | null;
+  status: { transcribed: boolean; cuts: boolean; rendered: boolean };
+}
+
+interface CaptionMeta {
+  caption_short?: string;
+  caption_long?: string;
+  hashtags_tiktok?: string[];
+  hashtags_instagram?: string[];
+  hashtags_linkedin?: string[];
+  hashtags_facebook?: string[];
+  _provider?: string;
+  _model?: string;
+}
+
+const PLATFORMS_META: { id: PlatformId; label: string; icon: typeof Music2; color: string }[] = [
+  { id: "instagram", label: "Instagram", icon: Camera, color: "#f59e0b" },
+  { id: "linkedin", label: "LinkedIn", icon: Briefcase, color: "#38bdf8" },
+];
+
+const TOTAL_STEPS = 5;
+
+const STYLES: { id: StyleId; name: string; tagline: string; emoji: string }[] = [
+  { id: "silent", name: "Silent", tagline: "Limpio, sin distracciones", emoji: "🤍" },
+  { id: "punch", name: "Punch", tagline: "Impacto en momentos clave", emoji: "🥊" },
+  { id: "hype", name: "Hype", tagline: "Estilo MrBeast viral", emoji: "🔥" },
+  { id: "hype_max", name: "Hype Max", tagline: "+ jump cuts + reaction zooms", emoji: "⚡" },
+  { id: "hype_max_sfx", name: "Hype Max SFX", tagline: "Premium con sonidos", emoji: "🎵" },
+  { id: "supreme", name: "Supreme", tagline: "Full stack premium (default largos)", emoji: "👑" },
+  { id: "broll_full", name: "B-roll Full", tagline: "Pexels fullscreen, auto por transcripción", emoji: "🎞️" },
+  { id: "broll_pip", name: "B-roll PIP", tagline: "Pexels pequeñito sobre tu video, auto", emoji: "🖼️" },
+];
+
+const PALETTE = [
+  { name: "rosa coral", value: "#fb7185", mood: "urgencia" },
+  { name: "violeta", value: "#a78bfa", mood: "autoridad" },
+  { name: "amarillo", value: "#fbbf24", mood: "claridad" },
+  { name: "emerald", value: "#34d399", mood: "crecimiento" },
+  { name: "cyan", value: "#22d3ee", mood: "tech" },
+  { name: "magenta", value: "#ec4899", mood: "intensidad" },
+  { name: "naranja", value: "#fb923c", mood: "acción" },
+  { name: "lime", value: "#a3e635", mood: "energía" },
+  { name: "indigo", value: "#6366f1", mood: "IA" },
+  { name: "violeta claro", value: "#c084fc", mood: "elegancia" },
+];
+
+export function WizardClient() {
+  const [videos, setVideos] = useState<VideoEntry[]>([]);
+  const [rawDir, setRawDir] = useState<string>("");
+  const [step, setStep] = useState(1);
+  // Multi-select: el wizard procesa N videos a la vez (todos con la misma config).
+  // Si seleccionás 3 videos × 2 estilos, se encolan 3 jobs (cola serial: 1 a la vez).
+  const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
+  const [selectedStyles, setSelectedStyles] = useState<StyleId[]>(["hype_max_sfx"]);
+  const [accent, setAccent] = useState<string>("#fb7185");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["tiktok", "instagram"]);
+  // Aspect ratio del output. 9:16 vertical (TikTok/Reels) default, 16:9 horizontal (LinkedIn/YouTube).
+  const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
+  const [day, setDay] = useState<string>("");
+  const [caption, setCaption] = useState<string>("");
+  const [captionMeta, setCaptionMeta] = useState<CaptionMeta | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const [generatingCaption, setGeneratingCaption] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [importing, setImporting] = useState(false);
+  // Configuración del modo cinematográfico (opt-in). Cuando enabled=true, el sistema
+  // sube imágenes, convoca asamblea de agentes IA, y aplica film grain + vignette +
+  // subtítulos cinematográficos al render.
+  const [cinematicConfig, setCinematicConfig] = useState<import("./cinematic-step").CinematicConfig>({
+    enabled: false,
+    overlayIds: [],
+    filmGrain: false,
+    vignette: false,
+    subtitleStyleCinematic: false,
+    assemblyResult: null,
+  });
+  // Con multi-video, styleId tiene formato "videoId::style" para distinguir el origen
+  const [results, setResults] = useState<Array<{ styleId: string; ok: boolean; output?: string; error?: string }>>([]);
+  const [jobProgress, setJobProgress] = useState<{
+    overallProgress: number;
+    currentStyle?: string;
+    steps: Array<{
+      styleId: string;
+      status: string;
+      progress: number;
+      currentFrame?: number;
+      totalFrames?: number;
+    }>;
+  } | null>(null);
+
+  async function loadVideos() {
+    const r = await fetch("/api/videos/list");
+    const d = await r.json();
+    setVideos(d.videos ?? []);
+    if (d.rawDir) setRawDir(d.rawDir);
+  }
+
+  useEffect(() => {
+    loadVideos();
+  }, []);
+
+  const selectedVideoList = videos.filter((v) => selectedVideos.has(v.id));
+  const firstSelected = selectedVideoList[0];
+
+  function toggleVideo(id: string) {
+    setSelectedVideos((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /**
+   * Importar videos desde la compu del usuario. Sube por multipart al endpoint
+   * /api/videos/import que los copia a RAW_DIR. Después refresca la lista.
+   */
+  async function importVideos(files: FileList | File[]) {
+    setImporting(true);
+    let ok = 0, fail = 0;
+    try {
+      for (const file of Array.from(files)) {
+        const form = new FormData();
+        form.append("file", file);
+        const r = await fetch("/api/videos/import", { method: "POST", body: form });
+        if (r.ok) ok++; else fail++;
+      }
+      if (ok > 0) toast.success(`${ok} video(s) importado(s) ✓`);
+      if (fail > 0) toast.error(`${fail} fallaron`);
+      loadVideos();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function toggleStyle(s: StyleId) {
+    setSelectedStyles((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
+  }
+
+  function togglePlatform(p: PlatformId) {
+    setSelectedPlatforms((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+    );
+  }
+
+  // Avanza al paso 2; transcribe en paralelo los videos no-transcritos del set.
+  async function advanceFromStep1() {
+    if (selectedVideos.size === 0) return;
+    const needsTranscribe = selectedVideoList.filter((v) => !v.status.transcribed);
+    if (needsTranscribe.length === 0) {
+      setStep(2);
+      return;
+    }
+    setTranscribing(true);
+    try {
+      const results = await Promise.allSettled(
+        needsTranscribe.map((v) =>
+          fetch("/api/videos/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ videoId: v.id }),
+          }).then(async (res) => {
+            const data = await res.json();
+            if (!res.ok) throw new Error(`${v.id}: ${data.error ?? "transcribe falló"}`);
+            return { videoId: v.id, words: data.transcript?.words?.length ?? 0 };
+          })
+        )
+      );
+      const ok = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+      if (failed.length > 0) {
+        for (const f of failed) toast.error(String(f.reason));
+      }
+      if (ok > 0) toast.success(`${ok}/${needsTranscribe.length} transcripciones listas`);
+      await loadVideos();
+      if (failed.length === 0) setStep(2);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  // Elegí el caption correcto según la primera plataforma seleccionada.
+  function captionForPlatforms(copy: CaptionMeta): string {
+    const tagJoin = (arr?: string[]) => (arr && arr.length ? "\n\n" + arr.join(" ") : "");
+    if (selectedPlatforms.includes("linkedin")) {
+      return (copy.caption_long ?? "") + tagJoin(copy.hashtags_linkedin);
+    }
+    if (selectedPlatforms.includes("instagram")) {
+      return (copy.caption_short ?? "") + tagJoin(copy.hashtags_instagram);
+    }
+    if (selectedPlatforms.includes("facebook")) {
+      return (copy.caption_short ?? "") + tagJoin(copy.hashtags_facebook);
+    }
+    return (copy.caption_short ?? "") + tagJoin(copy.hashtags_tiktok);
+  }
+
+  async function generateCaptionAI() {
+    // Generamos el caption del PRIMER video del set; los demás se autogeneran
+    // por video en el processJob si no traen captionMeta.
+    if (!firstSelected) return;
+    setGeneratingCaption(true);
+    try {
+      const res = await fetch(
+        `/api/videos/${encodeURIComponent(firstSelected.id)}/generate-caption?provider=auto`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.copy) throw new Error(data.error ?? "no se generó copy");
+      const copy = data.copy as CaptionMeta;
+      setCaptionMeta(copy);
+      setCaption(captionForPlatforms(copy));
+      const provider = copy._provider ?? "ia";
+      const model = copy._model ?? "";
+      toast.success(`Caption viral generado (${provider}${model ? " · " + model : ""})`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGeneratingCaption(false);
+    }
+  }
+
+  async function handleBuild() {
+    if (selectedVideos.size === 0 || selectedStyles.length === 0) return;
+    setBuilding(true);
+    setResults([]);
+    setJobProgress(null);
+    const videoIds = Array.from(selectedVideos);
+    try {
+      const res = await fetch("/api/editor/auto-build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoIds,
+          styles: selectedStyles,
+          accentColor: accent,
+          platforms: selectedPlatforms,
+          aspectRatio,
+          day: day ? parseInt(day, 10) : undefined,
+          caption: caption || undefined,
+          captionMeta: captionMeta ?? undefined,
+          // Modo cinematográfico (opt-in). Si enabled=false, el render sale idéntico a antes.
+          cinematic: cinematicConfig.enabled
+            ? {
+                overlayIds: cinematicConfig.overlayIds,
+                filmGrain: cinematicConfig.filmGrain,
+                vignette: cinematicConfig.vignette,
+                subtitleCinematic: cinematicConfig.subtitleStyleCinematic,
+              }
+            : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.jobIds || data.jobIds.length === 0) {
+        toast.error(data.error ?? "build falló");
+        setBuilding(false);
+        return;
+      }
+      const jobIds: string[] = data.jobIds;
+      if (jobIds.length > 1) {
+        toast.success(`${jobIds.length} videos encolados — la cola los procesa de a uno`);
+      }
+
+      // Polling cada 2s del progreso AGREGADO de todos los jobs.
+      // Para tracking individual de cada job, el usuario tiene el QueuePanel global (F2.4).
+      const poll = async () => {
+        try {
+          const responses = await Promise.allSettled(
+            jobIds.map((jid) => fetch(`/api/editor/progress?jobId=${jid}`).then((r) => r.json()))
+          );
+          const jobs = responses
+            .filter((r): r is PromiseFulfilledResult<{ job: { status: string; overallProgress: number; currentStyle?: string; steps: { styleId: string; status: string; progress: number; currentFrame?: number; totalFrames?: number; output?: string; error?: string }[] } }> => r.status === "fulfilled" && Boolean(r.value?.job))
+            .map((r) => r.value.job);
+
+          if (jobs.length === 0) {
+            setTimeout(poll, 3000);
+            return;
+          }
+
+          // Promedio de overallProgress de todos los jobs
+          const avgProgress = Math.round(
+            jobs.reduce((acc, j) => acc + j.overallProgress, 0) / jobs.length
+          );
+          // El "currentStyle" es del primer job running (el otros están queued o ya terminaron)
+          const runningJob = jobs.find((j) => j.status === "running");
+          // Agregar todos los steps de todos los jobs en una sola lista (prefijando videoId)
+          const aggregatedSteps = jobs.flatMap((j, i) =>
+            j.steps.map((s) => ({ ...s, styleId: `${videoIds[i]}::${s.styleId}` }))
+          );
+
+          setJobProgress({
+            overallProgress: avgProgress,
+            currentStyle: runningJob?.currentStyle,
+            steps: aggregatedSteps,
+          });
+
+          const allDone = jobs.every((j) => j.status === "done" || j.status === "failed");
+          if (allDone) {
+            const allResults = jobs.flatMap((j, i) =>
+              j.steps.map((s) => ({
+                styleId: `${videoIds[i]}::${s.styleId}`,
+                ok: s.status === "ok",
+                output: s.output,
+                error: s.error,
+              }))
+            );
+            setResults(allResults);
+            const okCount = allResults.filter((r) => r.ok).length;
+            toast.success(`${okCount}/${allResults.length} renders OK`);
+            setBuilding(false);
+            setStep(6);
+            return;
+          }
+          setTimeout(poll, 2000);
+        } catch {
+          setTimeout(poll, 4000);
+        }
+      };
+      poll();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      setBuilding(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stepper visual */}
+      <div className="flex items-center gap-2 text-xs">
+        {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
+          <div key={n} className="flex items-center gap-2">
+            <div
+              className={`flex h-7 w-7 items-center justify-center rounded-full border ${
+                step >= n
+                  ? "border-emerald-400 bg-emerald-500/20 text-emerald-400"
+                  : "border-border bg-card text-muted-foreground"
+              }`}
+            >
+              {step > n ? <CheckCircle2 className="h-3.5 w-3.5" /> : n}
+            </div>
+            {n < TOTAL_STEPS && (
+              <div className={`h-px w-8 ${step > n ? "bg-emerald-400" : "bg-border"}`} />
+            )}
+          </div>
+        ))}
+        <span className="ml-3 text-muted-foreground">
+          Paso {Math.min(step, TOTAL_STEPS)} de {TOTAL_STEPS}
+        </span>
+      </div>
+
+      {/* STEP 1: videos (multi-select) */}
+      {step === 1 && (
+        <Card className="border-border bg-card p-6">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-medium">1. Elegí los videos</h2>
+            <div className="flex items-center gap-2">
+              <span className="font-mono-tab text-[10px] text-muted-foreground">
+                {selectedVideos.size} de {videos.length} seleccionado{selectedVideos.size === 1 ? "" : "s"}
+              </span>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20">
+                {importing ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <FileVideo className="h-3 w-3" />
+                )}
+                {importing ? "importando…" : "importar desde mi compu"}
+                <input
+                  type="file"
+                  accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm"
+                  multiple
+                  className="hidden"
+                  disabled={importing}
+                  onChange={(e) => e.target.files && importVideos(e.target.files)}
+                />
+              </label>
+            </div>
+          </div>
+
+          {videos.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border bg-muted/20 p-6 text-center">
+              <FileVideo className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                No hay videos en tu carpeta de grabaciones.
+              </p>
+              <p className="mt-1 font-mono-tab text-[10px] text-muted-foreground">
+                Usá <strong className="text-foreground">"importar desde mi compu"</strong> arriba a la derecha o copiá MP4s a{" "}
+                <span className="text-foreground">{rawDir || "raw/"}</span>
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="mb-3 flex items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setSelectedVideos(new Set(videos.map((v) => v.id)))}
+                  className="rounded border border-border bg-muted/30 px-2 py-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  seleccionar todos ({videos.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedVideos(new Set())}
+                  disabled={selectedVideos.size === 0}
+                  className="rounded border border-border bg-muted/30 px-2 py-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+                >
+                  limpiar
+                </button>
+                <span className="ml-auto font-mono-tab text-[10px] text-muted-foreground">
+                  ↕ scroll para ver más
+                </span>
+              </div>
+              {/* Grid compacto + scroll. Más columnas = thumbs más chicos. */}
+              <div className="max-h-[60vh] overflow-y-auto rounded-md border border-border/50 bg-background/30 p-2">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">
+                  {videos.map((v) => {
+                    const sel = selectedVideos.has(v.id);
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => toggleVideo(v.id)}
+                        className={`group relative flex flex-col overflow-hidden rounded border bg-card text-left transition-all ${
+                          sel
+                            ? "border-emerald-400 ring-1 ring-emerald-400"
+                            : "border-border hover:border-foreground/30"
+                        }`}
+                      >
+                        {sel && (
+                          <div className="absolute right-1 top-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-black shadow">
+                            <CheckCircle2 className="h-2.5 w-2.5" />
+                          </div>
+                        )}
+                        <div className="aspect-[9/16] overflow-hidden bg-zinc-900">
+                          <img
+                            src={`/api/videos/${encodeURIComponent(v.id)}/thumbnail`}
+                            alt={v.filename}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                        <div className="px-1.5 py-1">
+                          <p className="line-clamp-1 text-[10px] font-medium" title={v.filename}>
+                            {v.filename}
+                          </p>
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="font-mono-tab text-[9px] text-muted-foreground">
+                              {v.durationSec
+                                ? `${Math.floor(v.durationSec / 60)}:${(Math.floor(v.durationSec % 60))
+                                    .toString()
+                                    .padStart(2, "0")}`
+                                : "?"}
+                            </p>
+                            {v.status.transcribed ? (
+                              <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
+                            ) : (
+                              <Mic className="h-2.5 w-2.5 text-amber-400" />
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </Card>
+      )}
+
+      {/* STEP 2: estilos + aspect ratio */}
+      {step === 2 && (
+        <Card className="border-border bg-card p-6">
+          <h2 className="mb-2 text-lg font-medium">2. Elegí estilo(s) y formato</h2>
+
+          {/* Aspect ratio toggle */}
+          <div className="mb-5">
+            <p className="mb-2 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
+              Formato de salida
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAspectRatio("9:16")}
+                className={`flex items-center gap-3 rounded-md border p-3 transition-all ${
+                  aspectRatio === "9:16"
+                    ? "border-emerald-400 ring-1 ring-emerald-400 bg-emerald-500/5"
+                    : "border-border hover:border-foreground/30"
+                }`}
+              >
+                <div className="flex h-10 w-6 items-center justify-center rounded-sm border-2 border-current text-emerald-400 shrink-0">
+                  <span className="text-[8px]">9:16</span>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-medium">Vertical 9:16</p>
+                  <p className="font-mono-tab text-[10px] text-muted-foreground">
+                    TikTok · Reels · Stories
+                  </p>
+                </div>
+                {aspectRatio === "9:16" && <CheckCircle2 className="ml-auto h-4 w-4 text-emerald-400" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAspectRatio("16:9")}
+                className={`flex items-center gap-3 rounded-md border p-3 transition-all ${
+                  aspectRatio === "16:9"
+                    ? "border-emerald-400 ring-1 ring-emerald-400 bg-emerald-500/5"
+                    : "border-border hover:border-foreground/30"
+                }`}
+              >
+                <div className="flex h-6 w-10 items-center justify-center rounded-sm border-2 border-current text-emerald-400 shrink-0">
+                  <span className="text-[8px]">16:9</span>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-medium">Horizontal 16:9</p>
+                  <p className="font-mono-tab text-[10px] text-muted-foreground">
+                    LinkedIn · YouTube · Twitter
+                  </p>
+                </div>
+                {aspectRatio === "16:9" && <CheckCircle2 className="ml-auto h-4 w-4 text-emerald-400" />}
+              </button>
+            </div>
+          </div>
+
+          <p className="mb-4 text-xs text-muted-foreground">
+            Podés seleccionar varios estilos — el sistema genera un MP4 por estilo para comparar.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {STYLES.map((s) => {
+              const selected = selectedStyles.includes(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleStyle(s.id)}
+                  className={`flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all ${
+                    selected
+                      ? "border-emerald-400 ring-1 ring-emerald-400 bg-emerald-500/5"
+                      : "border-border hover:border-foreground/30"
+                  }`}
+                >
+                  <div className="text-3xl">{s.emoji}</div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{s.name}</span>
+                      {selected && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{s.tagline}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            {selectedStyles.length === 0
+              ? "Seleccioná al menos uno"
+              : `${selectedStyles.length} estilo${selectedStyles.length === 1 ? "" : "s"} seleccionado${selectedStyles.length === 1 ? "" : "s"}`}
+          </p>
+        </Card>
+      )}
+
+      {/* STEP 3: color */}
+      {step === 3 && (
+        <Card className="border-border bg-card p-6">
+          <h2 className="mb-2 text-lg font-medium">3. Elegí el color principal</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Un solo color para todo el video (subtítulos highlight, stickers, vignette glow, border).
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {PALETTE.map((c) => {
+              const selected = accent === c.value;
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => setAccent(c.value)}
+                  className={`flex flex-col items-center gap-2 rounded-lg border p-3 transition-all ${
+                    selected ? "border-foreground" : "border-border hover:border-foreground/30"
+                  }`}
+                >
+                  <div
+                    className="h-12 w-12 rounded-full"
+                    style={{ background: c.value, boxShadow: selected ? `0 0 24px ${c.value}66` : "none" }}
+                  />
+                  <span className="text-xs font-medium">{c.name}</span>
+                  <span className="font-mono-tab text-[10px] text-muted-foreground">{c.mood}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* STEP 4: plataformas destino */}
+      {step === 4 && (
+        <Card className="border-border bg-card p-6">
+          <h2 className="mb-2 text-lg font-medium">4. Plataformas destino</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            El caption viral se adapta a la primera red seleccionada (LinkedIn usa
+            <span className="font-mono-tab"> caption_long</span>, el resto usan
+            <span className="font-mono-tab"> caption_short</span>). Podés cambiarlo después.
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {PLATFORMS_META.map((p) => {
+              const selected = selectedPlatforms.includes(p.id);
+              const Icon = p.icon;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => togglePlatform(p.id)}
+                  className={`flex flex-col items-center gap-2 rounded-lg border p-4 transition-all ${
+                    selected
+                      ? "border-emerald-400 ring-1 ring-emerald-400 bg-emerald-500/5"
+                      : "border-border hover:border-foreground/30"
+                  }`}
+                >
+                  <Icon className="h-6 w-6" style={{ color: selected ? p.color : undefined }} />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium">{p.label}</span>
+                    {selected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            {selectedPlatforms.length === 0
+              ? "Seleccioná al menos una"
+              : `${selectedPlatforms.length} plataforma${selectedPlatforms.length === 1 ? "" : "s"} seleccionada${selectedPlatforms.length === 1 ? "" : "s"}`}
+          </p>
+        </Card>
+      )}
+
+      {/* STEP 5: meta + confirmar + caption IA */}
+      {step === 5 && (
+        <Card className="border-border bg-card p-6">
+          <h2 className="mb-4 text-lg font-medium">5. Metadata y confirmación</h2>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Día calendario (opcional, 1-30)</Label>
+                <Input type="number" min={1} max={30} value={day} onChange={(e) => setDay(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>Caption viral</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={generateCaptionAI}
+                  disabled={generatingCaption || selectedVideos.size === 0}
+                  title="Genera caption + hashtags del PRIMER video con Claude Opus. Los demás se autogeneran al renderizar."
+                >
+                  {generatingCaption ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {generatingCaption ? "Generando…" : "Generar con IA (Opus)"}
+                </Button>
+              </div>
+              <textarea
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                rows={6}
+                className="w-full rounded-md border border-border bg-muted/30 p-2 text-sm font-mono-tab"
+                placeholder="Click ✨ para generar copy viral, o escribilo a mano. Si lo dejás vacío, se autogenera al renderizar."
+              />
+              {captionMeta?._provider && (
+                <p className="font-mono-tab text-[10px] text-muted-foreground">
+                  generado por {captionMeta._provider}
+                  {captionMeta._model ? ` · ${captionMeta._model}` : ""}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Modo cinematográfico (opcional) — toggle + upload de imágenes + asamblea IA */}
+          {firstSelected && (
+            <div className="mt-6">
+              <CinematicStep
+                videoId={firstSelected.id}
+                transcriptPath={
+                  firstSelected.status.transcribed
+                    ? `${rawDir.replace(/[/\\]raw[/\\]?$/, "")}/transcripts/${firstSelected.id}.json`
+                    : null
+                }
+                videoDurationSec={firstSelected.durationSec ?? undefined}
+                value={cinematicConfig}
+                onChange={setCinematicConfig}
+              />
+            </div>
+          )}
+
+          <div className="mt-6 rounded-md border border-border bg-muted/30 p-4 text-sm">
+            <p className="mb-2 font-medium">Resumen</p>
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              <li>
+                · Video{selectedVideos.size === 1 ? "" : "s"} ({selectedVideos.size}):{" "}
+                <span className="font-mono-tab text-foreground">
+                  {Array.from(selectedVideos).slice(0, 3).join(", ")}
+                  {selectedVideos.size > 3 && ` +${selectedVideos.size - 3} más`}
+                </span>
+              </li>
+              <li>
+                · Estilo{selectedStyles.length === 1 ? "" : "s"}:{" "}
+                <span className="text-foreground">{selectedStyles.join(", ")}</span>
+              </li>
+              <li>
+                · Formato:{" "}
+                <span className="text-foreground">
+                  {aspectRatio === "9:16" ? "Vertical 9:16 (1080×1920)" : "Horizontal 16:9 (1920×1080)"}
+                </span>
+              </li>
+              <li>
+                · Color: <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: accent }} />{" "}
+                <span className="font-mono-tab text-foreground">{accent}</span>
+              </li>
+              <li>
+                · Plataformas:{" "}
+                <span className="text-foreground">{selectedPlatforms.join(", ") || "—"}</span>
+              </li>
+              <li>· Día: {day || "—"}</li>
+              <li>
+                · Renders a generar:{" "}
+                <span className="text-foreground">
+                  {selectedVideos.size * selectedStyles.length}
+                </span>{" "}
+                ({selectedVideos.size} video{selectedVideos.size === 1 ? "" : "s"} × {selectedStyles.length} estilo{selectedStyles.length === 1 ? "" : "s"})
+              </li>
+              <li className="text-amber-400">
+                Estimado: ~{4 * selectedVideos.size * selectedStyles.length} min total
+                (cola serial: 1 a la vez, ~4 min por estilo)
+              </li>
+              {cinematicConfig.enabled && (
+                <li className="text-violet-300">
+                  · 🎬 Modo cinematográfico ACTIVO:{" "}
+                  <span className="text-foreground">
+                    {cinematicConfig.overlayIds.length} imagen(es)
+                    {cinematicConfig.filmGrain ? " · film grain" : ""}
+                    {cinematicConfig.vignette ? " · vignette" : ""}
+                    {cinematicConfig.subtitleStyleCinematic ? " · subs cine" : ""}
+                  </span>
+                </li>
+              )}
+            </ul>
+          </div>
+
+          <Button onClick={handleBuild} disabled={building} className="mt-4 w-full">
+            {building ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Renderizando…
+              </>
+            ) : (
+              <>
+                Generar y renderizar
+                <ChevronRight className="ml-1.5 h-4 w-4" />
+              </>
+            )}
+          </Button>
+
+          {building && jobProgress && (
+            <div className="mt-6 space-y-4">
+              {/* Barra global */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-mono-tab text-muted-foreground">
+                    Progreso total
+                  </span>
+                  <span className="font-mono-tab text-emerald-400">
+                    {jobProgress.overallProgress}%
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-emerald-400 transition-all duration-500"
+                    style={{ width: `${jobProgress.overallProgress}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Por estilo */}
+              <ul className="space-y-2">
+                {jobProgress.steps.map((step) => (
+                  <li key={step.styleId} className="rounded-md border border-border bg-muted/30 p-3 text-xs">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {step.status === "ok" ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                        ) : step.status === "fail" ? (
+                          <span className="h-3.5 w-3.5 text-red-400">✗</span>
+                        ) : step.status === "rendering" || step.status === "building" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                        ) : (
+                          <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground" />
+                        )}
+                        <span className="font-medium">{step.styleId}</span>
+                        <span className="text-muted-foreground">
+                          ({step.status})
+                        </span>
+                      </div>
+                      <span className="font-mono-tab text-muted-foreground">
+                        {step.progress}%
+                        {step.currentFrame && step.totalFrames && (
+                          <span className="ml-2 text-[10px]">
+                            frame {step.currentFrame}/{step.totalFrames}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="h-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          step.status === "ok"
+                            ? "bg-emerald-400"
+                            : step.status === "fail"
+                              ? "bg-red-400"
+                              : "bg-emerald-400/60"
+                        }`}
+                        style={{ width: `${step.progress}%` }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* STEP 6: resultados */}
+      {step === 6 && (
+        <Card className="border-border bg-card p-6">
+          <h2 className="mb-4 text-lg font-medium">Renders generados</h2>
+          <ul className="space-y-2">
+            {results.map((r, i) => (
+              <li
+                key={i}
+                className={`flex items-center gap-3 rounded-md border p-3 text-sm ${
+                  r.ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-red-500/40 bg-red-500/5"
+                }`}
+              >
+                {r.ok ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                ) : (
+                  <span className="h-4 w-4 text-red-400">✗</span>
+                )}
+                <div className="flex-1">
+                  <p className="font-medium">{r.styleId}</p>
+                  {r.output && (
+                    <p className="font-mono-tab text-[10px] text-muted-foreground">{r.output}</p>
+                  )}
+                  {r.error && <p className="text-[10px] text-red-400">{r.error.slice(0, 200)}</p>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 flex gap-2">
+            <Link
+              href="/produccion"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-4 text-sm font-medium hover:bg-muted"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Ver en Producción
+            </Link>
+            <Button
+              onClick={() => {
+                setStep(1);
+                setResults([]);
+                setSelectedVideos(new Set());
+                setCaption("");
+                setCaptionMeta(null);
+                setSelectedPlatforms(["tiktok", "instagram"]);
+                setJobProgress(null);
+              }}
+            >
+              <FileVideo className="mr-1.5 h-3.5 w-3.5" />
+              Editar otro video
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Navegación */}
+      {step < 6 && (
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            onClick={() => setStep(Math.max(1, step - 1))}
+            disabled={step === 1 || building || transcribing}
+          >
+            <ChevronLeft className="mr-1.5 h-4 w-4" />
+            Atrás
+          </Button>
+          {step < 5 && (
+            <Button
+              onClick={step === 1 ? advanceFromStep1 : () => setStep(step + 1)}
+              disabled={
+                transcribing ||
+                (step === 1 && selectedVideos.size === 0) ||
+                (step === 2 && selectedStyles.length === 0) ||
+                (step === 4 && selectedPlatforms.length === 0)
+              }
+            >
+              {step === 1 && transcribing ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Transcribiendo…
+                </>
+              ) : (
+                <>
+                  Siguiente
+                  <ChevronRight className="ml-1.5 h-4 w-4" />
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

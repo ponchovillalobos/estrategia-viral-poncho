@@ -1,0 +1,133 @@
+# ============================================================================
+# Estrategia Viral Poncho — .gitignore
+# ============================================================================
+
+# ===== SECRETS — JAMÁS commitear ============================================
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets/
+# Credenciales OAuth de redes (LinkedIn/Instagram/TikTok) + tokens. Vive en
+# C:\hermes-data\ (FUERA del repo), pero por las dudas nunca lo commitees:
+user-settings.json
+
+# ===== Node ==================================================================
+# Deps pesadas que se reinstalan con `npm install`
+node_modules/
+.pnp.*
+.yarn/
+
+# Next.js build cache
+.next/
+out/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== Python ===============================================================
+# Virtual env (3 GB, se recrea con `python -m venv venv`)
+venv/
+.venv/
+env/
+
+# Bytecode + cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+.mypy_cache/
+
+# Distribución
+dist/
+build/
+*.egg-info/
+*.egg
+
+# ===== Remotion =============================================================
+# Temporal: build-props.mjs lo regenera cada render
+remotion/props.json
+remotion/out/
+
+# ===== Sistema operativo ====================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ===== Editores =============================================================
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# ===== Datos del usuario (videos, transcripts, renders, etc.) ==============
+# Estos viven en C:\hermes-data\ FUERA del repo, pero por si acaso:
+hermes-data/
+videos-data/
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.wav
+*.mp3
+*.m4a
+*.ogg
+
+# ===== Pero SÍ permitir =====================================================
+# Los .md de memoria/documentación que tengan en su nombre algo así
+!docs/**/*.md
+!PROMPT_HERMES_SOCIAL.md
+!ESTRATEGIA_VIRAL_7_DIAS.md
+!*.md
+
+# ===== Backups locales ======================================================
+*-backup-*.zip
+backups/
+
+# ===== Tests / outputs temporales ==========================================
+.test-output/
+tmp/
+.cache/
+
+# ===== Assets generados / descargados (se recrean, ver README) =============
+# LUTs de color cinematográfico: regenerar con `node remotion/generate-luts.mjs`
+remotion/public/luts/*.cube
+# Modelos de visión (mediapipe selfie segmenter): re-descargar (ver README)
+python/models/*.tflite
+# Artefactos de smoke-test de Remotion
+remotion/_smoke*
+
+# ===== Logs / estado local de Claude Code ==================================
+logs/
+.claude/
+
+# ===== Misc =================================================================
+*.log
+*.tmp
+.eslintcache
+.turbo/
+
+# Logs del autostart
+.dashboard.log
+.dashboard.log.npm.log

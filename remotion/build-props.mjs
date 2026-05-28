@@ -1,0 +1,194 @@
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const VIDEO_ID = process.argv[2] || "D01_test_01";
+const PROJECT_OVERRIDE = process.argv[3];
+import { existsSync as _existsSync } from "node:fs";
+function pickDataRoot() {
+  const o = process.env.VIRAL_DATA_ROOT;
+  if (o) return o;
+  for (const c of ["C:\\viral-data\\videos", "C:\\hermes-data\\videos"]) {
+    if (_existsSync(c)) return c;
+  }
+  return "C:\\viral-data\\videos";
+}
+const DATA_ROOT = pickDataRoot();
+const HOST = process.env.VIRAL_API_HOST ?? "http://localhost:3000";
+
+const projectPath = PROJECT_OVERRIDE
+  ? PROJECT_OVERRIDE
+  : path.join(DATA_ROOT, "projects", `${VIDEO_ID}.json`);
+const project = JSON.parse(readFileSync(projectPath, "utf-8"));
+const transcript = JSON.parse(
+  readFileSync(path.join(DATA_ROOT, "transcripts", `${VIDEO_ID}.json`), "utf-8")
+);
+
+// Limpiar transcript (join "cha" + "GPT")
+const words = [];
+let i = 0;
+while (i < transcript.words.length) {
+  const w = transcript.words[i];
+  const next = transcript.words[i + 1];
+  if (
+    next &&
+    /^(cha|chat)$/i.test(w.word) &&
+    /^GPT$/i.test(next.word.replace(/[.,]/g, ""))
+  ) {
+    words.push({ word: "ChatGPT", start: w.start, end: next.end });
+    i += 2;
+    continue;
+  }
+  words.push({ word: w.word, start: w.start, end: w.end });
+  i += 1;
+}
+
+// Jump cuts: si está habilitado y existe _cut.mp4, remapear timestamps
+let useCutVideo = false;
+let segments = null;
+let totalDuration = transcript.duration;
+let videoIdForUrl = VIDEO_ID;
+
+if (project.enableJumpCuts) {
+  const cutVideoPath = path.join(DATA_ROOT, "raw", `${VIDEO_ID}_cut.mp4`);
+  const cutsJsonPath = path.join(DATA_ROOT, "cuts", `${VIDEO_ID}.json`);
+  if (existsSync(cutVideoPath) && existsSync(cutsJsonPath)) {
+    const cuts = JSON.parse(readFileSync(cutsJsonPath, "utf-8"));
+    segments = cuts.keep_segments;
+    totalDuration = segments.reduce((acc, s) => acc + (s.end - s.start), 0);
+    useCutVideo = true;
+    videoIdForUrl = `${VIDEO_ID}_cut`;
+    console.log(
+      `[jump cuts] aplicado: ${segments.length} segmentos · ${transcript.duration.toFixed(2)}s → ${totalDuration.toFixed(2)}s`
+    );
+  } else {
+    console.log("[jump cuts] enableJumpCuts=true pero falta _cut.mp4 o cuts JSON — ignorando");
+  }
+}
+
+// Quitar fondo IA: si auto-build generó el compuesto ({videoId}_fg.mp4 en raw),
+// usarlo como video base. Solo cuando NO hay jump cuts (los estilos removeBg no cortan).
+if (project.foregroundVideoId && !useCutVideo) {
+  videoIdForUrl = project.foregroundVideoId;
+  console.log(`[quitar fondo] usando compuesto: ${videoIdForUrl}`);
+}
+
+function remapTime(t) {
+  if (!segments) return t;
+  let offset = 0;
+  for (const seg of segments) {
+    if (t < seg.start) return null; // en un silencio anterior
+    if (t <= seg.end) return +(offset + (t - seg.start)).toFixed(3);
+    offset += seg.end - seg.start;
+  }
+  return null; // después del último segmento
+}
+
+function remapItem(item, fields) {
+  const out = { ...item };
+  for (const f of fields) {
+    if (typeof item[f] === "number") {
+      const r = remapTime(item[f]);
+      if (r === null) return null;
+      out[f] = r;
+    }
+  }
+  return out;
+}
+
+function filterAndRemap(arr, fields) {
+  if (!segments) return arr;
+  return arr.map((it) => remapItem(it, fields)).filter((it) => it !== null);
+}
+
+const subtitlesRemapped = filterAndRemap(words, ["start", "end"]);
+const bRollRemapped = filterAndRemap(project.bRoll || [], ["start", "end"]);
+const zoomMarksRemapped = filterAndRemap(project.zoomMarks || [], ["at"]);
+const wordStickersRemapped = filterAndRemap(project.wordStickers || [], ["at"]);
+const floatingEmojisRemapped = filterAndRemap(project.floatingEmojis || [], ["at"]);
+const animationsRemapped = filterAndRemap(project.animations || [], ["at"]);
+const emphasisCardsRemapped = filterAndRemap(project.emphasisCards || [], ["at"]);
+const reactionZoomsRemapped = filterAndRemap(project.reactionZooms || [], ["at"]);
+const stutterMarksRemapped = filterAndRemap(project.stutterMarks || [], ["at"]);
+const sfxMarksRemapped = filterAndRemap(project.sfxMarks || [], ["at"]).map((m) => ({
+  at: m.at,
+  sound: m.sound,
+  volume: m.volume ?? 0.4,
+  url: `${HOST}/api/sfx/stream?file=${encodeURIComponent(m.sound)}`,
+}));
+// CapCut Pro FX (opt-in, aditivo) — remapear timestamps igual que el resto.
+const sceneFxRemapped = filterAndRemap(project.sceneFx || [], ["at"]);
+const proTransitionsRemapped = filterAndRemap(project.proTransitions || [], ["at"]);
+const mirrorFxRemapped = filterAndRemap(project.mirrorFx || [], ["at"]);
+const trackPathRemapped = filterAndRemap(project.trackPath || [], ["t"]);
+const trackedItemsRemapped = filterAndRemap(project.trackedItems || [], ["at"]);
+
+const subtitles =
+  project.manualSubtitles && project.manualSubtitles.length > 0
+    ? project.manualSubtitles
+    : subtitlesRemapped;
+
+const props = {
+  rawVideoUrl: `${HOST}/api/videos/${encodeURIComponent(videoIdForUrl)}/stream?source=raw`,
+  videoDurationSec: +totalDuration.toFixed(3),
+  words: subtitles,
+  bRoll: bRollRemapped.map((c) => ({ start: c.start, end: c.end, url: c.url })),
+  musicUrl: project.musicTrack
+    ? `${HOST}/api/music/stream?file=${encodeURIComponent(project.musicTrack)}`
+    : null,
+  musicVolume: project.musicVolume ?? 0.15,
+  subtitleStyle: project.subtitleStyle ?? "bebas",
+  subtitleColor: project.subtitleColor ?? "#ffffff",
+  subtitleHighlight: project.subtitleHighlight ?? "#34d399",
+  animations: animationsRemapped,
+  emphasisCards: emphasisCardsRemapped,
+  bRollMode: project.bRollMode ?? "fullscreen",
+  zoomMarks: zoomMarksRemapped,
+  wordStickers: wordStickersRemapped,
+  floatingEmojis: floatingEmojisRemapped,
+  colorRotation: project.colorRotation || [],
+  vignette: project.vignette ?? false,
+  reactionZooms: reactionZoomsRemapped,
+  stutterMarks: stutterMarksRemapped,
+  captionBounce: project.captionBounce ?? false,
+  sfxMarks: sfxMarksRemapped,
+  // Dimensiones del composition. Default 1080×1920 (vertical 9:16).
+  width: project.width ?? 1080,
+  height: project.height ?? 1920,
+  // Modo cinematográfico (opt-in). Defaults vacíos/falsos = render igual a antes.
+  imageOverlays: Array.isArray(project.imageOverlays)
+    ? project.imageOverlays.map((o) => ({
+        id: o.id,
+        // URL absoluta porque Remotion render no comparte el contexto del navegador.
+        // En dev el host es http://localhost:3000.
+        url: o.url?.startsWith("http") ? o.url : `http://localhost:3000${o.url}`,
+        startTime: o.startTime ?? 0,
+        endTime: o.endTime ?? 3,
+        effect: o.effect ?? "memory_flash",
+        motion: o.motion ?? "ken_burns_in",
+        transitionIn: o.transitionIn ?? "fade",
+        transitionOut: o.transitionOut ?? "fade",
+        position: o.position ?? "center",
+        sizeRatio: o.sizeRatio ?? 0.65,
+      }))
+    : [],
+  cameraMoves: Array.isArray(project.cameraMoves) ? project.cameraMoves : [],
+  filmGrain: project.filmGrain ?? false,
+  // F3 SUPREME — mood-aware color grading (KODAK/FUJI/BLEACH según densidad).
+  cinematicDensity: project.cinematicDensity ?? "medium",
+  // === CapCut Pro FX (opt-in, ADITIVO). Defaults vacíos/"none" = render igual a antes. ===
+  sceneFx: sceneFxRemapped,
+  proTransitions: proTransitionsRemapped,
+  kineticPreset: project.kineticPreset ?? "none",
+  mirrorFx: mirrorFxRemapped,
+  trackPath: trackPathRemapped,
+  trackedItems: trackedItemsRemapped,
+};
+
+const outFile = path.join(__dirname, "props.json");
+writeFileSync(outFile, JSON.stringify(props, null, 2), "utf-8");
+console.log(`props written: ${outFile}`);
+console.log(
+  `subs: ${props.words.length} · b-roll: ${props.bRoll.length} · zoom: ${props.zoomMarks.length} · stickers: ${props.wordStickers.length} · emojis: ${props.floatingEmojis.length} · reactZooms: ${props.reactionZooms.length} · stutter: ${props.stutterMarks.length} · sfx: ${props.sfxMarks.length} · duration: ${props.videoDurationSec}s`
+);

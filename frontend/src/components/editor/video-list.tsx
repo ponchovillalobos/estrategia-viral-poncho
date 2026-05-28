@@ -1,0 +1,235 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { RefreshCcw, FileVideo, CheckCircle2, Circle, Pencil, Archive, ArchiveRestore } from "lucide-react";
+import { RenameDialog } from "@/components/editor/rename-dialog";
+import { toast } from "sonner";
+
+interface VideoEntry {
+  id: string;
+  filename: string;
+  sizeMb: number;
+  modified: string;
+  durationSec: number | null;
+  archived: boolean;
+  status: {
+    transcribed: boolean;
+    cuts: boolean;
+    rendered: boolean;
+    projectExists: boolean;
+  };
+}
+
+function formatDuration(s: number | null): string {
+  if (s === null) return "?";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+export function VideoList() {
+  const [videos, setVideos] = useState<VideoEntry[]>([]);
+  const [activeCount, setActiveCount] = useState(0);
+  const [archivedCount, setArchivedCount] = useState(0);
+  const [showArchived, setShowArchived] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/videos/list?archived=${showArchived}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "load failed");
+      setVideos(data.videos);
+      setActiveCount(data.activeCount ?? 0);
+      setArchivedCount(data.archivedCount ?? 0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function archive(videoId: string) {
+    if (!confirm(`Mover ${videoId} a "usados"? (los renders se conservan)`)) return;
+    try {
+      const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}/archive`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "archive failed");
+      toast.success(`${videoId} movido a usados`);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function unarchive(videoId: string) {
+    try {
+      const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}/archive`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "unarchive failed");
+      toast.success(`${videoId} restaurado`);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="font-mono-tab text-xs text-muted-foreground">
+            {activeCount} activos
+            {archivedCount > 0 && ` · ${archivedCount} usados`}
+          </span>
+          {archivedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              className="rounded border border-border bg-card px-2 py-1 text-[10px] hover:bg-muted"
+            >
+              {showArchived ? "Ocultar usados" : "Mostrar usados"}
+            </button>
+          )}
+        </div>
+        <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
+          <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+          Recargar
+        </Button>
+      </div>
+
+      {error && (
+        <Card className="border-red-500/50 bg-red-500/10 p-4 text-sm text-red-400">
+          {error}
+        </Card>
+      )}
+
+      {!loading && videos.length === 0 && !error && (
+        <Card className="border-border bg-card p-8 text-center text-sm text-muted-foreground">
+          <FileVideo className="mx-auto mb-3 h-8 w-8 opacity-50" />
+          No hay videos en raw/. Copiá un MP4 ahí y dale "Recargar".
+        </Card>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        {videos.map((v) => (
+          <div
+            key={v.id}
+            className={`group relative flex flex-col overflow-hidden rounded-lg border bg-card transition-all hover:border-foreground/30 ${
+              v.archived ? "opacity-60 border-dashed border-border" : "border-border"
+            }`}
+          >
+            {v.archived && (
+              <div className="absolute top-2 left-2 z-10 rounded bg-zinc-900/90 px-2 py-0.5 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
+                usado
+              </div>
+            )}
+            <Link href={`/editor/${encodeURIComponent(v.id)}`} className="block">
+              <div className="relative aspect-[9/16] bg-zinc-900">
+                <img
+                  src={`/api/videos/${encodeURIComponent(v.id)}/thumbnail`}
+                  alt={v.filename}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+                <span className="absolute right-2 bottom-2 rounded bg-black/70 px-1.5 py-0.5 font-mono-tab text-[10px]">
+                  {formatDuration(v.durationSec)}
+                </span>
+              </div>
+            </Link>
+            <div className="space-y-1.5 p-2.5">
+              <div className="flex items-start gap-1.5">
+                <h3 className="line-clamp-2 flex-1 text-xs font-medium leading-snug">{v.filename}</h3>
+                <div className="flex shrink-0 items-center">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setRenaming(v.id);
+                    }}
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    title="Renombrar"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  {v.archived ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        unarchive(v.id);
+                      }}
+                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-emerald-400"
+                      title="Restaurar"
+                    >
+                      <ArchiveRestore className="h-3 w-3" />
+                    </button>
+                  ) : v.status.rendered ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        archive(v.id);
+                      }}
+                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      title="Mover a usados"
+                    >
+                      <Archive className="h-3 w-3" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 text-[10px]">
+                <StatusBadge label="Transcrito" on={v.status.transcribed} />
+                <StatusBadge label="Cortes" on={v.status.cuts} />
+                <StatusBadge label="Renderizado" on={v.status.rendered} />
+              </div>
+              <p className="font-mono-tab text-[10px] text-muted-foreground">
+                {v.sizeMb} MB · {new Date(v.modified).toLocaleString("es")}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {renaming && (
+        <RenameDialog
+          currentId={renaming}
+          open={true}
+          onOpenChange={(o) => !o && setRenaming(null)}
+          onRenamed={() => {
+            setRenaming(null);
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ label, on }: { label: string; on: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 ${
+        on
+          ? "bg-emerald-500/20 text-emerald-400"
+          : "bg-muted text-muted-foreground"
+      }`}
+    >
+      {on ? <CheckCircle2 className="h-2.5 w-2.5" /> : <Circle className="h-2.5 w-2.5" />}
+      {label}
+    </span>
+  );
+}
