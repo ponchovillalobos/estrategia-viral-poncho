@@ -184,6 +184,9 @@ const props = {
   mirrorFx: mirrorFxRemapped,
   trackPath: trackPathRemapped,
   trackedItems: trackedItemsRemapped,
+  // A6/A8 — opt-in. null/false = render idéntico.
+  endScreen: project.endScreen ?? null,
+  progressBar: project.progressBar ?? false,
 };
 
 const outFile = path.join(__dirname, "props.json");

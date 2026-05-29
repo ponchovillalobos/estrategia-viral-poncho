@@ -758,10 +758,22 @@ async function processJob(job: Job, body: AutoBuildRequest) {
               const beatTrans = top
                 .filter((_, i) => i % 2 === 0)
                 .map((b) => ({ at: +b.t.toFixed(2), kind: "flash" as const, durationFrames: 5, color: "#ffffff" }));
-              const p = project as { zoomMarks?: unknown[]; proTransitions?: unknown[] };
+              // A7 — "cortar al ritmo": en los 5 beats MÁS fuertes, un reaction-zoom punch
+              // (golpe rápido de cámara) para que se sienta un corte al beat, no solo brillo.
+              const beatPunches = top
+                .slice()
+                .sort((a, b) => b.strength - a.strength)
+                .slice(0, 5)
+                .map((b) => ({ at: +b.t.toFixed(2), intensity: 1.18, duration: 0.22 }));
+              const p = project as {
+                zoomMarks?: unknown[];
+                proTransitions?: unknown[];
+                reactionZooms?: unknown[];
+              };
               p.zoomMarks = [...(p.zoomMarks ?? []), ...beatZooms];
               p.proTransitions = [...(p.proTransitions ?? []), ...beatTrans];
-              console.log(`[auto-build] beat-sync: ${top.length} beats → zooms+flashes`);
+              p.reactionZooms = [...(p.reactionZooms ?? []), ...beatPunches];
+              console.log(`[auto-build] beat-sync: ${top.length} beats → zooms+flashes+${beatPunches.length} punches`);
             }
           }
         } catch (err) {

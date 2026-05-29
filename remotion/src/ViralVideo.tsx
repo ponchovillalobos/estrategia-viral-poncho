@@ -107,6 +107,16 @@ const sfxMarkSchema = z.object({
   volume: z.number().default(0.4),
 });
 
+// A6 — End-screen / CTA: tarjeta animada en los últimos `durationSec` del video.
+const endScreenSchema = z.object({
+  text: z.string().default("Seguime para más"),
+  handle: z.string().default(""),
+  emoji: z.string().default("🔥"),
+  durationSec: z.number().default(2.5),
+  bg: z.string().default("#0a0a0a"),
+  accent: z.string().default("#34d399"),
+});
+
 export const viralVideoSchema = z.object({
   rawVideoUrl: z.string(),
   videoDurationSec: z.number().default(30),
@@ -143,6 +153,9 @@ export const viralVideoSchema = z.object({
   mirrorFx: z.array(mirrorFxSchema).default([]),
   trackPath: z.array(trackPointSchema).default([]),
   trackedItems: z.array(trackedItemSchema).default([]),
+  // A6/A8 — opt-in. null/false = render idéntico.
+  endScreen: endScreenSchema.nullable().default(null),
+  progressBar: z.boolean().default(false),
   // Dimensiones del composition — Root.tsx las lee vía calculateMetadata.
   // Default vertical 9:16. Pasar {width:1920, height:1080} para horizontal 16:9.
   width: z.number().default(1080),
@@ -183,6 +196,8 @@ export const defaultProps: ViralVideoProps = {
   mirrorFx: [],
   trackPath: [],
   trackedItems: [],
+  endScreen: null,
+  progressBar: false,
   width: 1080,
   height: 1920,
 };
@@ -218,6 +233,8 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   mirrorFx,
   trackPath,
   trackedItems,
+  endScreen,
+  progressBar,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -231,8 +248,9 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   const isCinematicMode =
     subtitleStyle === "cinematic" || filmGrain || imageOverlays.length > 0;
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   const currentTime = frame / fps;
+  const totalDuration = durationInFrames / fps;
 
   const activeAnim = animations.find(
     (a) => currentTime >= a.at && currentTime <= a.at + 0.5
@@ -564,12 +582,121 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           fontFamily={fontFamily}
         />
       )}
+
+      {/* A8 — Barra de progreso (opt-in). Encima de todo, no tapa nada. */}
+      {progressBar && (
+        <AbsoluteFill style={{ pointerEvents: "none", justifyContent: "flex-start" }}>
+          <div
+            style={{
+              height: 8,
+              width: `${Math.min(100, (frame / Math.max(1, durationInFrames)) * 100)}%`,
+              background: subtitleHighlight,
+              boxShadow: `0 0 16px ${subtitleHighlight}`,
+            }}
+          />
+        </AbsoluteFill>
+      )}
+
+      {/* A6 — End-screen / CTA en los últimos segundos. Encima de todo. Aditivo. */}
+      {endScreen && (
+        <EndScreenLayer
+          config={endScreen}
+          currentTime={currentTime}
+          totalDuration={totalDuration}
+          fps={fps}
+          fontFamily={fontFamily}
+        />
+      )}
     </AbsoluteFill>
   );
 };
 
 // Silenciar warning de variable sin usar (VignetteLayer queda exportada para uso futuro)
 void VignetteLayer;
+
+// A6 — End-screen / CTA: aparece en los últimos `durationSec` con entrada animada.
+const EndScreenLayer: React.FC<{
+  config: z.infer<typeof endScreenSchema>;
+  currentTime: number;
+  totalDuration: number;
+  fps: number;
+  fontFamily: string;
+}> = ({ config, currentTime, totalDuration, fps, fontFamily }) => {
+  const startAt = totalDuration - config.durationSec;
+  if (currentTime < startAt) return null;
+  const elapsed = currentTime - startAt;
+  const enter = spring({
+    frame: Math.max(0, elapsed * fps),
+    fps,
+    config: { damping: 16, stiffness: 140, mass: 0.7 },
+  });
+  const scale = 0.7 + enter * 0.3;
+  return (
+    <AbsoluteFill
+      style={{
+        background: `${config.bg}f2`,
+        backdropFilter: "blur(14px)",
+        justifyContent: "center",
+        alignItems: "center",
+        opacity: Math.min(1, elapsed / 0.25),
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 32,
+          transform: `scale(${scale})`,
+        }}
+      >
+        <div style={{ fontSize: 200, lineHeight: 1, filter: `drop-shadow(0 12px 50px ${config.accent}66)` }}>
+          {config.emoji}
+        </div>
+        <div
+          style={{
+            fontFamily,
+            fontSize: 120,
+            fontWeight: 900,
+            color: "#ffffff",
+            textTransform: "uppercase",
+            letterSpacing: "0.02em",
+            lineHeight: 1.0,
+            textAlign: "center",
+            padding: "0 60px",
+            maxWidth: 980,
+            textShadow: `0 0 70px ${config.accent}88`,
+          }}
+        >
+          {config.text}
+        </div>
+        {config.handle ? (
+          <div
+            style={{
+              fontFamily,
+              fontSize: 56,
+              fontWeight: 700,
+              color: config.accent,
+              letterSpacing: "0.04em",
+            }}
+          >
+            {config.handle.startsWith("@") ? config.handle : `@${config.handle}`}
+          </div>
+        ) : null}
+        <div
+          style={{
+            height: 8,
+            width: 220 * enter,
+            background: config.accent,
+            borderRadius: 4,
+            boxShadow: `0 0 30px ${config.accent}`,
+          }}
+        />
+      </div>
+    </AbsoluteFill>
+  );
+};
 
 const PipBRollLayer: React.FC<{ url: string; accent: string }> = ({
   url,
@@ -720,6 +847,11 @@ const WordStickerLayer: React.FC<{
     Math.max(56, Math.floor(sizeByWidth))
   );
 
+  // A8 — animación post-entrada: el sticker flota suave (drift Y) y oscila apenas su
+  // rotación, en vez de quedar congelado tras la entrada. Sutil para no distraer.
+  const floatY = Math.sin(elapsed * 2.2) * 6;
+  const wobbleRot = Math.sin(elapsed * 1.6) * 2;
+
   return (
     <div
       style={{
@@ -728,7 +860,7 @@ const WordStickerLayer: React.FC<{
         opacity,
         transform: `${
           positionStyles.transform ?? ""
-        } scale(${enter}) rotate(${sticker.rotation}deg)`,
+        } translateY(${floatY}px) scale(${enter}) rotate(${sticker.rotation + wobbleRot}deg)`,
         transformOrigin: "center",
       }}
     >

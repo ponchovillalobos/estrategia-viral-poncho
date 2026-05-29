@@ -266,6 +266,9 @@ function applyCapcutFx<T extends object>(
     transitions?: boolean;
     mirror?: boolean;
     tracking?: boolean;
+    // A6/A8 — opt-in: end-screen/CTA y barra de progreso.
+    endScreen?: boolean;
+    progressBar?: boolean;
   } = {}
 ) {
   return {
@@ -280,6 +283,17 @@ function applyCapcutFx<T extends object>(
     ...(opts.tracking
       ? { tracking: true, trackedItems: generateTrackedItems(ctx), trackPath: [] as unknown[] }
       : {}),
+    ...(opts.endScreen
+      ? {
+          endScreen: {
+            text: "Seguime para más",
+            emoji: "🔥",
+            accent: ctx.accentColor,
+            durationSec: 2.5,
+          },
+        }
+      : {}),
+    ...(opts.progressBar ? { progressBar: true } : {}),
   };
 }
 
@@ -626,7 +640,13 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         // bRoll lo puebla auto-build (Pexels por keyword). Default [] del commonBase.
       },
       ctx,
-      { lut: "teal_orange.cube", kinetic: "karaoke", mirror: styleId === "broll_full" }
+      {
+        lut: "teal_orange.cube",
+        kinetic: "karaoke",
+        mirror: styleId === "broll_full",
+        endScreen: true,
+        progressBar: true,
+      }
     );
   }
 
@@ -735,6 +755,8 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
     return applyCapcutFx(buildSupremeStyle(ctx, styleId), ctx, {
       lut: "kodak_warm.cube",
       kinetic: "karaoke",
+      endScreen: true,
+      progressBar: true,
     });
   }
 
