@@ -174,11 +174,30 @@ export function generateSceneFx(ctx: BuildContext): Array<{
 /** Transiciones pro (whip/zoom/glitch/flash/reveal) en puntos clave del transcript. */
 export function generateProTransitions(ctx: BuildContext): Array<{
   at: number;
-  kind: "whip" | "zoom_punch" | "glitch" | "flash" | "reveal_lr" | "reveal_ud";
+  kind:
+    | "whip"
+    | "zoom_punch"
+    | "glitch"
+    | "flash"
+    | "reveal_lr"
+    | "reveal_ud"
+    | "light_streak"
+    | "swipe_blur"
+    | "iris";
   durationFrames: number;
   color: string;
 }> {
-  const kinds = ["whip", "zoom_punch", "glitch", "reveal_lr", "flash"] as const;
+  // Pool ampliado (A5): suma light_streak / swipe_blur / iris a la rotación para más variedad.
+  const kinds = [
+    "whip",
+    "zoom_punch",
+    "light_streak",
+    "glitch",
+    "swipe_blur",
+    "reveal_lr",
+    "iris",
+    "flash",
+  ] as const;
   const kws = ctx.keywords.filter((k) => k.start > 1 && k.start < ctx.duration - 1).slice(0, 6);
   return kws.map((kw, i) => ({
     at: +Math.max(0, kw.start - 0.1).toFixed(2),
@@ -225,7 +244,7 @@ export function generateTrackedItems(ctx: BuildContext): Array<{
   }));
 }
 
-type KineticPresetName = "none" | "pop" | "slide_up" | "type_on" | "bounce" | "glow_pulse";
+type KineticPresetName = "none" | "pop" | "slide_up" | "type_on" | "bounce" | "glow_pulse" | "karaoke";
 
 /**
  * Suma las "recetas CapCut" (LUT de color, scene-fx atmosféricos, transiciones pro y
@@ -607,7 +626,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         // bRoll lo puebla auto-build (Pexels por keyword). Default [] del commonBase.
       },
       ctx,
-      { lut: "teal_orange.cube", kinetic: "pop", mirror: styleId === "broll_full" }
+      { lut: "teal_orange.cube", kinetic: "karaoke", mirror: styleId === "broll_full" }
     );
   }
 
@@ -715,7 +734,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
   if (styleId === "supreme") {
     return applyCapcutFx(buildSupremeStyle(ctx, styleId), ctx, {
       lut: "kodak_warm.cube",
-      kinetic: "glow_pulse",
+      kinetic: "karaoke",
     });
   }
 
