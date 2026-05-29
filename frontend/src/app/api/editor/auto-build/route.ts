@@ -81,7 +81,12 @@ function runProcess(
   args: string[],
   cwd?: string,
   onProgress?: (data: string) => void,
-  timeoutMs?: number
+  timeoutMs?: number,
+  // Timeout por INACTIVIDAD: si el proceso no emite NADA por este tiempo, se considera
+  // colgado y se mata. Ideal para procesos largos pero "habladores" (render de Remotion,
+  // pipeline): un render que avanza emite progreso seguido, así que sólo se mata si de
+  // verdad se trabó — sin matar renders largos legítimos.
+  idleTimeoutMs?: number
 ): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     // Node 17+ rechaza .cmd/.bat con shell:false en Windows (CVE-2024-27980 → EINVAL).
@@ -100,22 +105,41 @@ function runProcess(
           } catch {}
         }, timeoutMs)
       : null;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const armIdle = () => {
+      if (!idleTimeoutMs) return;
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        timedOut = true;
+        stderr += `\n[runProcess] IDLE TIMEOUT ${idleTimeoutMs}ms sin salida — proceso colgado, killing\n`;
+        try {
+          proc.kill("SIGKILL");
+        } catch {}
+      }, idleTimeoutMs);
+    };
+    armIdle();
+    const clearTimers = () => {
+      if (timer) clearTimeout(timer);
+      if (idleTimer) clearTimeout(idleTimer);
+    };
     proc.stdout.on("data", (d) => {
+      armIdle();
       const s = d.toString();
       stdout += s;
       onProgress?.(s);
     });
     proc.stderr.on("data", (d) => {
+      armIdle();
       const s = d.toString();
       stderr += s;
       onProgress?.(s);
     });
     proc.on("close", (code) => {
-      if (timer) clearTimeout(timer);
+      clearTimers();
       resolve({ ok: !timedOut && code === 0, stdout, stderr });
     });
     proc.on("error", () => {
-      if (timer) clearTimeout(timer);
+      clearTimers();
       resolve({ ok: false, stdout, stderr });
     });
   });
@@ -777,7 +801,12 @@ async function processJob(job: Job, body: AutoBuildRequest) {
               });
             }
           }
-        }
+        },
+        // timeoutMs = undefined: un render largo es válido, no hay tope de tiempo total.
+        undefined,
+        // idleTimeoutMs = 15 min: si Remotion deja de emitir progreso por 15 min está colgado
+        // → se mata, el step falla y la cola sigue con el próximo. Nunca queda trabada.
+        15 * 60 * 1000
       );
 
       if (!renderRun.ok) {
