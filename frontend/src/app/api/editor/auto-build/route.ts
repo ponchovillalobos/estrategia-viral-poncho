@@ -560,12 +560,21 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       let autoBroll: BrollClip[] = [];
       if (styleId === "broll_full" || styleId === "broll_pip") {
         try {
-          autoBroll = await autoMatchBroll(keywords, transcript.duration, {
-            count: 5,
+          // Escalar la cantidad de clips con la DURACIÓN del video: ~1 clip cada 16s,
+          // mínimo 5, máximo 40 (cada clip = 1 request a Pexels; 40 respeta el rate limit).
+          // Antes era fijo en 5 → un video de 12 min recibía lo mismo que uno de 30s.
+          const brollCount = Math.max(5, Math.min(40, Math.round(transcript.duration / 16)));
+          // Pasamos TODAS las palabras del transcript (no solo las 7 keywords globales) para
+          // que el matcher tenga candidatos repartidos a lo largo de todo el video.
+          autoBroll = await autoMatchBroll(transcript.words, transcript.duration, {
+            count: brollCount,
             clipDur: 3,
             orientation: "portrait",
           });
-          console.log(`[auto-build] auto b-roll (${styleId}): ${autoBroll.length} clips de Pexels`);
+          console.log(
+            `[auto-build] auto b-roll (${styleId}): ${autoBroll.length}/${brollCount} clips de Pexels ` +
+              `(video ${Math.round(transcript.duration)}s)`
+          );
         } catch (err) {
           console.warn("[auto-build] auto b-roll falló:", err);
         }
