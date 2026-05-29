@@ -750,17 +750,23 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         ["remotion", "render", "src/index.ts", "ViralVideo", outArg, "--props=props.json"],
         REMOTION_DIR,
         (chunk) => {
-          // Parsear "Rendered X/Y, time remaining: Zs"
-          const match = chunk.match(/Rendered (\d+)\/(\d+)/);
-          if (match) {
-            const current = parseInt(match[1], 10);
-            const total = parseInt(match[2], 10);
-            const progress = Math.min(95, 10 + Math.floor((current / total) * 85));
-            updateStep(job.id, styleId, {
-              progress,
-              currentFrame: current,
-              totalFrames: total,
-            });
+          // Remotion emite MUCHAS líneas "Rendered X/Y" muy seguidas y el stream las
+          // agrupa en un mismo chunk. Hay que tomar la ÚLTIMA (la más reciente), no la
+          // primera: si no, la barra reporta un frame viejo y queda muy por detrás del
+          // render real (peor cuanto más largo el video → más updates por chunk).
+          const matches = [...chunk.matchAll(/Rendered (\d+)\/(\d+)/g)];
+          if (matches.length > 0) {
+            const last = matches[matches.length - 1];
+            const current = parseInt(last[1], 10);
+            const total = parseInt(last[2], 10);
+            if (total > 0 && current <= total) {
+              const progress = Math.min(95, 10 + Math.floor((current / total) * 85));
+              updateStep(job.id, styleId, {
+                progress,
+                currentFrame: current,
+                totalFrames: total,
+              });
+            }
           }
         }
       );
