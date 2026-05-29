@@ -33,9 +33,24 @@ interface CaptionVariant {
   hashtags: string[];
 }
 
+// Etiqueta legible del estilo de edición (los proyectos guardan el codename en styleId).
+const STYLE_LABEL: Record<string, string> = {
+  silent: "Limpio",
+  punch: "Punch",
+  hype: "Viral",
+  hype_max: "Viral intenso",
+  hype_max_sfx: "Viral con sonidos",
+  supreme: "Premium",
+  cinematic_pro: "Cine",
+  broll_full: "Con videos de apoyo",
+  broll_pip: "Videos de apoyo (chico)",
+};
+
 interface ProjectExt extends Project {
   source?: "short" | "long_form";
   styleId?: string;
+  /** Título corto basado en el contenido (lo arma auto-build para nombrar el archivo). */
+  title?: string;
   /** Nuevo: 3 variantes por plataforma generadas en una corrida de generate_caption.py */
   captions?: {
     tiktok?: CaptionVariant;
@@ -484,9 +499,9 @@ export function ProductionList() {
 
               <div className="space-y-2 p-3">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-mono-tab text-xs leading-tight">{p.id}</h3>
-                  <span className="font-mono-tab text-[10px] text-muted-foreground">
-                    {p.styleId ?? "—"}
+                  <h3 className="text-sm font-semibold leading-tight">{p.title ?? p.id}</h3>
+                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                    {STYLE_LABEL[p.styleId ?? ""] ?? p.styleId ?? "—"}
                   </span>
                 </div>
 

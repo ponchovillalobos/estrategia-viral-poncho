@@ -162,6 +162,90 @@ function pickTopKeywords(words: TranscriptWord[], count = 7): TranscriptWord[] {
   return picks;
 }
 
+// Etiqueta corta y legible del estilo, para el nombre del archivo de salida.
+const STYLE_SHORT_LABEL: Record<StyleId, string> = {
+  silent: "Limpio",
+  punch: "Punch",
+  hype: "Viral",
+  hype_max: "ViralMax",
+  hype_max_sfx: "ViralSFX",
+  supreme: "Premium",
+  cinematic_pro: "Cine",
+  broll_full: "Broll",
+  broll_pip: "BrollPIP",
+};
+
+const TITLE_STOPWORDS = new Set([
+  "porque", "cuando", "donde", "nuestro", "nuestra", "nuestros", "nuestras", "tambien",
+  "hacia", "sobre", "entre", "durante", "hasta", "desde", "para", "pero", "como", "esto",
+  "esta", "este", "estos", "estas", "una", "unos", "unas", "con", "sin", "del", "sus",
+  "mas", "muy", "los", "las", "que", "todo", "todos", "toda", "todas", "cada", "tiene",
+  "tienen", "puede", "pueden", "vamos", "aqui", "asi", "ahora", "bien", "solo", "cosa",
+  "cosas", "hace", "dice", "decir", "gente", "entonces", "siempre", "nunca", "porqué",
+]);
+
+/** Quita acentos para comparar/agrupar; conserva ñ. */
+function normForFreq(w: string): string {
+  return w
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9ñ]/gi, "");
+}
+
+function titleCaseWord(w: string): string {
+  return w.length ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w;
+}
+
+/** Quita caracteres ilegales en nombres de archivo (Windows) y colapsa espacios. */
+function sanitizeForFilename(s: string): string {
+  return s
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Genera un título corto (1-2 palabras de contenido) a partir de lo que MÁS se dice en
+ * el video — para que el archivo de salida sea identificable. Frecuencia de palabras
+ * significativas (sin stopwords, ≥5 letras), conservando acentos para que se lea bien.
+ */
+function generateContentTitle(words: TranscriptWord[]): string {
+  const freq = new Map<string, { count: number; display: string }>();
+  for (const w of words) {
+    const norm = normForFreq(w.word);
+    if (norm.length < 5) continue;
+    if (TITLE_STOPWORDS.has(norm)) continue;
+    const display = w.word.replace(/[^\p{L}\p{N}ñÑ]/gu, "");
+    if (!display) continue;
+    const e = freq.get(norm) ?? { count: 0, display };
+    e.count++;
+    freq.set(norm, e);
+  }
+  const top = [...freq.values()].sort((a, b) => b.count - a.count).slice(0, 2);
+  return top.map((t) => titleCaseWord(t.display)).join(" ").trim();
+}
+
+/**
+ * Devuelve un projectId único basado en `${titulo} ${EstiloLabel}`. Si ya existe un proyecto
+ * con ese id pero de OTRO video, agrega un número para no pisarlo. Si es el mismo video
+ * (re-render del mismo estilo), reusa el id (sobrescribe a propósito).
+ */
+async function uniqueProjectId(base: string, videoId: string, suffix: string): Promise<string> {
+  for (let n = 0; n < 50; n++) {
+    const id = (n === 0 ? base : `${base} ${n + 1}`) + suffix;
+    const jsonPath = path.join(PROJECTS_DIR, `${id}.json`);
+    try {
+      const existing = JSON.parse(await fs.readFile(jsonPath, "utf-8"));
+      if (existing?.videoId === videoId) return id; // mismo video → reusar/sobrescribir
+      // distinto video con ese id → probar el siguiente número
+    } catch {
+      return id; // no existe → libre
+    }
+  }
+  return `${base} ${Date.now()}${suffix}`;
+}
+
 async function processJob(job: Job, body: AutoBuildRequest) {
   // Usar job.videoId (siempre string) en lugar de body.videoId (opcional ahora con batch)
   const videoId = job.videoId;
@@ -568,15 +652,26 @@ async function processJob(job: Job, body: AutoBuildRequest) {
 
   await fs.mkdir(PROJECTS_DIR, { recursive: true });
 
+  // Título corto basado en el CONTENIDO del video (lo que más se dice), para que el archivo
+  // de salida sea identificable: "<Título> <Estilo>.mp4". Cae al videoId si no hay nada útil.
+  const contentTitle = sanitizeForFilename(generateContentTitle(transcript.words)) || videoId;
+
   // 4. Procesar cada estilo
   for (const styleId of job.styles) {
     setCurrentStyle(job.id, styleId);
     updateStep(job.id, styleId, { status: "building", progress: 5 });
 
+    // projectId = nombre del archivo de salida (.mp4 y .json). Declarado afuera del try
+    // para poder limpiar el temporal en el catch. Se arma con el título + estilo legible.
+    let projectId = `${videoId}_${styleId}${body.projectIdSuffix ?? ""}`;
     try {
       const baseProject = buildProjectForStyle(ctx, styleId);
-      // Sufijo opcional para test A/B/C — diferencia renders del mismo video+estilo
-      const projectId = `${videoId}_${styleId}${body.projectIdSuffix ?? ""}`;
+      const styleLabel = STYLE_SHORT_LABEL[styleId] ?? styleId;
+      projectId = await uniqueProjectId(
+        sanitizeForFilename(`${contentTitle} ${styleLabel}`),
+        videoId,
+        body.projectIdSuffix ?? ""
+      );
 
       // Auto B-roll desde Pexels por transcripción — SOLO estilos broll_*.
       // broll_full → fullscreen, broll_pip → pequeñito sobre el video. Si Pexels
@@ -612,6 +707,11 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         // `id` base sin sufijo de buildProjectForStyle → keys duplicadas en React y
         // lookups rotos. Ver nota en /api/projects/route.ts.
         id: projectId,
+        // videoId real (fuente para raw/transcript/cut) y título legible — el projectId ya
+        // NO contiene el videoId, así que los guardamos explícitos en el JSON.
+        videoId,
+        title: contentTitle,
+        styleId,
         platforms: platforms ?? (baseProject as { platforms?: string[] }).platforms ?? [],
         captionMeta: captionMeta ?? (baseProject as { captionMeta?: unknown }).captionMeta ?? null,
       };
@@ -761,14 +861,16 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         continue;
       }
 
-      updateStep(job.id, styleId, { status: "rendering", progress: 10 });
-
       // Render ATÓMICO: renderizamos (y post-procesamos LUT/mastering) sobre un archivo
       // temporal `__rendering.mp4`; sólo al final lo renombramos al .mp4 definitivo. Así, si
       // el server muere a mitad del render, NO queda un .mp4 parcial en la ruta final que el
       // dashboard o la reconciliación de jobs tomarían por "terminado".
       const finalOut = path.join(RENDERS_DIR, `${projectId}.mp4`);
       const outPath = path.join(RENDERS_DIR, `${projectId}.__rendering.mp4`);
+      // Guardamos `output` ya en "rendering": como el projectId ahora es el título (no
+      // videoId_estilo), la reconciliación al reiniciar necesita esta ruta para detectar
+      // si el render llegó a completarse.
+      updateStep(job.id, styleId, { status: "rendering", progress: 10, output: finalOut });
       // Limpiar restos de un intento anterior interrumpido (best-effort).
       await fs.rm(outPath, { force: true }).catch(() => {});
       const npxExe = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -938,8 +1040,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       await fs.rename(outPath, finalOut);
       updateStep(job.id, styleId, { status: "ok", progress: 100, output: finalOut });
     } catch (err) {
-      // Si quedó un temporal a medias por la excepción, limpiarlo.
-      await fs.rm(path.join(RENDERS_DIR, `${videoId}_${styleId}${body.projectIdSuffix ?? ""}.__rendering.mp4`), { force: true }).catch(() => {});
+      // Si quedó un temporal a medias por la excepción, limpiarlo (projectId ya resuelto).
+      await fs.rm(path.join(RENDERS_DIR, `${projectId}.__rendering.mp4`), { force: true }).catch(() => {});
       updateStep(job.id, styleId, { status: "fail", error: String(err) });
     }
   }
