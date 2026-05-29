@@ -266,9 +266,10 @@ function applyCapcutFx<T extends object>(
     transitions?: boolean;
     mirror?: boolean;
     tracking?: boolean;
-    // A6/A8 — opt-in: end-screen/CTA y barra de progreso.
+    // A6/A8/B6 — opt-in: end-screen/CTA, barra de progreso y marca de agua de marca.
     endScreen?: boolean;
     progressBar?: boolean;
+    brandKit?: boolean;
   } = {}
 ) {
   return {
@@ -294,6 +295,9 @@ function applyCapcutFx<T extends object>(
         }
       : {}),
     ...(opts.progressBar ? { progressBar: true } : {}),
+    // Marca de agua: marcador con handle vacío; auto-build lo rellena desde user-settings.
+    // Si no hay handle configurado, ViralVideo no la renderiza (queda igual).
+    ...(opts.brandKit ? { brandKit: { handle: "", position: "bottom-right" } } : {}),
   };
 }
 
@@ -646,6 +650,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         mirror: styleId === "broll_full",
         endScreen: true,
         progressBar: true,
+        brandKit: true,
       }
     );
   }
@@ -757,6 +762,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
       kinetic: "karaoke",
       endScreen: true,
       progressBar: true,
+      brandKit: true,
     });
   }
 

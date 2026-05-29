@@ -21,6 +21,7 @@ import { createJob, updateStep, setCurrentStyle, type Job } from "@/lib/job-stor
 import { enqueue } from "@/lib/job-queue";
 import { autoMatchBroll, type BrollClip } from "@/lib/pexels";
 import { writeJsonFileAtomic } from "@/lib/atomic-write";
+import { readSettings } from "@/lib/user-settings";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -656,6 +657,22 @@ async function processJob(job: Job, body: AutoBuildRequest) {
   // de salida sea identificable: "<Título> <Estilo>.mp4". Cae al videoId si no hay nada útil.
   const contentTitle = sanitizeForFilename(generateContentTitle(transcript.words)) || videoId;
 
+  // B6 — Handle para la marca de agua: prioridad instagram → linkedin → tiktok → facebook.
+  // Si no hay ninguno configurado en settings, el watermark queda vacío y ViralVideo no lo
+  // renderiza (render idéntico). Se lee una sola vez por job, no por estilo.
+  let brandHandle = "";
+  try {
+    const s = await readSettings();
+    brandHandle =
+      s.handles?.instagram ||
+      s.handles?.linkedin ||
+      s.handles?.tiktok ||
+      s.handles?.facebook ||
+      "";
+  } catch {
+    /* sin settings → sin watermark, no rompe */
+  }
+
   // 4. Procesar cada estilo
   for (const styleId of job.styles) {
     setCurrentStyle(job.id, styleId);
@@ -712,6 +729,15 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         videoId,
         title: contentTitle,
         styleId,
+        // B6 — Si el estilo activó brandKit y hay handle en settings, rellenarlo. Si el
+        // estilo no lo activó (no hay brandKit en baseProject), esto no hace nada.
+        ...(() => {
+          const bk = (baseProject as { brandKit?: { handle?: string } }).brandKit;
+          if (bk && !bk.handle && brandHandle) {
+            return { brandKit: { ...bk, handle: brandHandle } };
+          }
+          return {};
+        })(),
         platforms: platforms ?? (baseProject as { platforms?: string[] }).platforms ?? [],
         captionMeta: captionMeta ?? (baseProject as { captionMeta?: unknown }).captionMeta ?? null,
       };

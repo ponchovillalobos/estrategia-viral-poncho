@@ -117,6 +117,17 @@ const endScreenSchema = z.object({
   accent: z.string().default("#34d399"),
 });
 
+// B6 — Brand kit / marca de agua: handle (y/o logo) sutil en una esquina, todo el video.
+const brandKitSchema = z.object({
+  handle: z.string().default(""),
+  logoUrl: z.string().default(""),
+  position: z
+    .enum(["top-left", "top-right", "bottom-left", "bottom-right"])
+    .default("bottom-right"),
+  opacity: z.number().default(0.55),
+  color: z.string().default("#ffffff"),
+});
+
 export const viralVideoSchema = z.object({
   rawVideoUrl: z.string(),
   videoDurationSec: z.number().default(30),
@@ -153,9 +164,10 @@ export const viralVideoSchema = z.object({
   mirrorFx: z.array(mirrorFxSchema).default([]),
   trackPath: z.array(trackPointSchema).default([]),
   trackedItems: z.array(trackedItemSchema).default([]),
-  // A6/A8 — opt-in. null/false = render idéntico.
+  // A6/A8/B6 — opt-in. null/false = render idéntico.
   endScreen: endScreenSchema.nullable().default(null),
   progressBar: z.boolean().default(false),
+  brandKit: brandKitSchema.nullable().default(null),
   // Dimensiones del composition — Root.tsx las lee vía calculateMetadata.
   // Default vertical 9:16. Pasar {width:1920, height:1080} para horizontal 16:9.
   width: z.number().default(1080),
@@ -198,6 +210,7 @@ export const defaultProps: ViralVideoProps = {
   trackedItems: [],
   endScreen: null,
   progressBar: false,
+  brandKit: null,
   width: 1080,
   height: 1920,
 };
@@ -235,6 +248,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   trackedItems,
   endScreen,
   progressBar,
+  brandKit,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -607,12 +621,58 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           fontFamily={fontFamily}
         />
       )}
+
+      {/* B6 — Marca de agua (handle/logo) sutil en una esquina, todo el video. Aditivo. */}
+      {brandKit && (brandKit.handle || brandKit.logoUrl) && (
+        <BrandWatermarkLayer config={brandKit} fontFamily={fontFamily} />
+      )}
     </AbsoluteFill>
   );
 };
 
 // Silenciar warning de variable sin usar (VignetteLayer queda exportada para uso futuro)
 void VignetteLayer;
+
+// B6 — Marca de agua: handle (y/o logo) fijo en una esquina, opacidad sutil.
+const BrandWatermarkLayer: React.FC<{
+  config: z.infer<typeof brandKitSchema>;
+  fontFamily: string;
+}> = ({ config, fontFamily }) => {
+  const isTop = config.position.startsWith("top");
+  const isLeft = config.position.endsWith("left");
+  return (
+    <AbsoluteFill
+      style={{
+        pointerEvents: "none",
+        justifyContent: isTop ? "flex-start" : "flex-end",
+        alignItems: isLeft ? "flex-start" : "flex-end",
+        padding: 48,
+        opacity: config.opacity,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {config.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={config.logoUrl} alt="" style={{ height: 56, width: "auto" }} />
+        ) : null}
+        {config.handle ? (
+          <span
+            style={{
+              fontFamily,
+              fontSize: 36,
+              fontWeight: 700,
+              color: config.color,
+              letterSpacing: "0.04em",
+              textShadow: "0 2px 12px rgba(0,0,0,0.8)",
+            }}
+          >
+            {config.handle.startsWith("@") ? config.handle : `@${config.handle}`}
+          </span>
+        ) : null}
+      </div>
+    </AbsoluteFill>
+  );
+};
 
 // A6 — End-screen / CTA: aparece en los últimos `durationSec` con entrada animada.
 const EndScreenLayer: React.FC<{
