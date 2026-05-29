@@ -244,6 +244,40 @@ export function generateTrackedItems(ctx: BuildContext): Array<{
   }));
 }
 
+// B5 — Iconos curados para stickers (mismos keys que ICON_MAP en Remotion).
+const ICON_POOL = ["fire", "lightbulb", "target", "rocket", "zap", "trending", "crown"] as const;
+
+/**
+ * B5 — Genera 3-5 icon stickers repartidos por keyword del video, rotando por ICON_POOL.
+ * Cada uno aparece en el timestamp de su keyword, con bg accent y posición top-right.
+ */
+export function generateIconStickers(ctx: BuildContext): Array<{
+  at: number;
+  duration: number;
+  icon: string;
+  position: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "top-center";
+  color: string;
+  bg: string;
+  size: number;
+}> {
+  const kws = pickKeywords(ctx, 4);
+  const positions: Array<"top-left" | "top-right" | "bottom-left" | "bottom-right"> = [
+    "top-right",
+    "top-left",
+    "bottom-right",
+    "bottom-left",
+  ];
+  return kws.map((kw, i) => ({
+    at: +Math.max(0.5, kw.start - 0.1).toFixed(2),
+    duration: 1.2,
+    icon: ICON_POOL[i % ICON_POOL.length],
+    position: positions[i % positions.length],
+    color: "#0a0a0a",
+    bg: ctx.accentColor,
+    size: 110,
+  }));
+}
+
 type KineticPresetName = "none" | "pop" | "slide_up" | "type_on" | "bounce" | "glow_pulse" | "karaoke";
 
 /**
@@ -266,10 +300,11 @@ function applyCapcutFx<T extends object>(
     transitions?: boolean;
     mirror?: boolean;
     tracking?: boolean;
-    // A6/A8/B6 — opt-in: end-screen/CTA, barra de progreso y marca de agua de marca.
+    // A6/A8/B5/B6 — opt-in: end-screen/CTA, barra de progreso, marca de agua e icon stickers.
     endScreen?: boolean;
     progressBar?: boolean;
     brandKit?: boolean;
+    iconStickers?: boolean;
   } = {}
 ) {
   return {
@@ -298,6 +333,7 @@ function applyCapcutFx<T extends object>(
     // Marca de agua: marcador con handle vacío; auto-build lo rellena desde user-settings.
     // Si no hay handle configurado, ViralVideo no la renderiza (queda igual).
     ...(opts.brandKit ? { brandKit: { handle: "", position: "bottom-right" } } : {}),
+    ...(opts.iconStickers ? { iconStickers: generateIconStickers(ctx) } : {}),
   };
 }
 
@@ -651,6 +687,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         endScreen: true,
         progressBar: true,
         brandKit: true,
+        iconStickers: true,
       }
     );
   }
@@ -763,6 +800,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
       endScreen: true,
       progressBar: true,
       brandKit: true,
+      iconStickers: true,
     });
   }
 

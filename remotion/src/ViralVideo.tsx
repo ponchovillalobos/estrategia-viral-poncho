@@ -30,6 +30,23 @@ import {
 } from "./scene-fx";
 import { MirrorFxLayer, mirrorFxSchema } from "./mirror-fx";
 import { TrackedLayer, trackPointSchema, trackedItemSchema } from "./tracked-layer";
+import {
+  Flame, Rocket, Target, Lightbulb, Heart, Star, Zap, TrendingUp, ThumbsUp, Eye,
+  Crown, Sparkles, Brain, MessageCircle, DollarSign, Award, Bell, CheckCircle,
+  AlertTriangle, Music, Camera, Film, Hash, Bookmark, Share2, Play, Coffee, Smile,
+  Gem, Sun,
+} from "lucide-react";
+
+// B5 — Iconos curados (lucide-react, offline, MIT). Cualquier sticker puede pedir un
+// icono por NOMBRE — si no está en el mapa, se cae a un fallback (Sparkles).
+const ICON_MAP: Record<string, React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>> = {
+  fire: Flame, rocket: Rocket, target: Target, lightbulb: Lightbulb, heart: Heart,
+  star: Star, zap: Zap, trending: TrendingUp, thumbsup: ThumbsUp, eye: Eye,
+  crown: Crown, sparkles: Sparkles, brain: Brain, message: MessageCircle,
+  money: DollarSign, award: Award, bell: Bell, check: CheckCircle, warn: AlertTriangle,
+  music: Music, camera: Camera, film: Film, hash: Hash, bookmark: Bookmark,
+  share: Share2, play: Play, coffee: Coffee, smile: Smile, gem: Gem, sun: Sun,
+};
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -117,6 +134,19 @@ const endScreenSchema = z.object({
   accent: z.string().default("#34d399"),
 });
 
+// B5 — Icon sticker: aparece N segundos con un icono del ICON_MAP + bg circular opcional.
+const iconStickerSchema = z.object({
+  at: z.number(),
+  duration: z.number().default(1.1),
+  icon: z.string().default("sparkles"),
+  position: z
+    .enum(["top-left", "top-right", "bottom-left", "bottom-right", "top-center"])
+    .default("top-right"),
+  color: z.string().default("#0a0a0a"),
+  bg: z.string().default("#fbbf24"),
+  size: z.number().default(120),
+});
+
 // B6 — Brand kit / marca de agua: handle (y/o logo) sutil en una esquina, todo el video.
 const brandKitSchema = z.object({
   handle: z.string().default(""),
@@ -164,10 +194,11 @@ export const viralVideoSchema = z.object({
   mirrorFx: z.array(mirrorFxSchema).default([]),
   trackPath: z.array(trackPointSchema).default([]),
   trackedItems: z.array(trackedItemSchema).default([]),
-  // A6/A8/B6 — opt-in. null/false = render idéntico.
+  // A6/A8/B6/B5 — opt-in. null/false/[] = render idéntico.
   endScreen: endScreenSchema.nullable().default(null),
   progressBar: z.boolean().default(false),
   brandKit: brandKitSchema.nullable().default(null),
+  iconStickers: z.array(iconStickerSchema).default([]),
   // Dimensiones del composition — Root.tsx las lee vía calculateMetadata.
   // Default vertical 9:16. Pasar {width:1920, height:1080} para horizontal 16:9.
   width: z.number().default(1080),
@@ -211,6 +242,7 @@ export const defaultProps: ViralVideoProps = {
   endScreen: null,
   progressBar: false,
   brandKit: null,
+  iconStickers: [],
   width: 1080,
   height: 1920,
 };
@@ -249,6 +281,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   endScreen,
   progressBar,
   brandKit,
+  iconStickers,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -549,6 +582,13 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           />
         ))}
 
+      {/* B5 — Icon stickers: aparecen N segundos con un icono del ICON_MAP. Aditivo. */}
+      {iconStickers
+        .filter((s) => currentTime >= s.at - 0.05 && currentTime <= s.at + s.duration)
+        .map((s, i) => (
+          <IconStickerLayer key={`is-${i}-${s.at}`} sticker={s} currentTime={currentTime} />
+        ))}
+
       {activeEmphasis && (
         <EmphasisCardLayer
           card={activeEmphasis}
@@ -632,6 +672,65 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
 
 // Silenciar warning de variable sin usar (VignetteLayer queda exportada para uso futuro)
 void VignetteLayer;
+
+// B5 — Icon sticker: render de un icono lucide con bg circular animado.
+const IconStickerLayer: React.FC<{
+  sticker: z.infer<typeof iconStickerSchema>;
+  currentTime: number;
+}> = ({ sticker, currentTime }) => {
+  const elapsed = currentTime - sticker.at;
+  const enter = spring({
+    frame: Math.max(0, elapsed * 30),
+    fps: 30,
+    config: { damping: 10, stiffness: 260, mass: 0.5 },
+  });
+  const exitStart = sticker.duration - 0.2;
+  const exitProgress = elapsed > exitStart ? (elapsed - exitStart) / 0.2 : 0;
+  const opacity = interpolate(exitProgress, [0, 1], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const Icon = ICON_MAP[sticker.icon.toLowerCase()] ?? Sparkles;
+  const floatY = Math.sin(elapsed * 2.2) * 5;
+  const wobbleRot = Math.sin(elapsed * 1.6) * 3;
+  // Posicionamiento por esquina/center con padding seguro.
+  const pad = 80;
+  const isTop = sticker.position.startsWith("top");
+  const isLeft = sticker.position.endsWith("left");
+  const isCenter = sticker.position === "top-center";
+  const justify = isCenter ? "center" : isLeft ? "flex-start" : "flex-end";
+  const align = isTop ? "flex-start" : "flex-end";
+  const padTop = isCenter ? 160 : pad;
+  const diameter = sticker.size + 36;
+  return (
+    <AbsoluteFill
+      style={{
+        pointerEvents: "none",
+        justifyContent: align,
+        alignItems: justify,
+        padding: pad,
+        paddingTop: padTop,
+        opacity,
+      }}
+    >
+      <div
+        style={{
+          width: diameter,
+          height: diameter,
+          borderRadius: "50%",
+          background: sticker.bg,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 16px 40px rgba(0,0,0,0.55), 0 0 0 4px rgba(255,255,255,0.1) inset",
+          transform: `translateY(${floatY}px) scale(${enter}) rotate(${wobbleRot}deg)`,
+        }}
+      >
+        <Icon size={sticker.size} color={sticker.color} strokeWidth={2.4} />
+      </div>
+    </AbsoluteFill>
+  );
+};
 
 // B6 — Marca de agua: handle (y/o logo) fijo en una esquina, opacidad sutil.
 const BrandWatermarkLayer: React.FC<{

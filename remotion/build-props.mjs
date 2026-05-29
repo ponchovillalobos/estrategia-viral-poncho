@@ -123,6 +123,7 @@ const proTransitionsRemapped = filterAndRemap(project.proTransitions || [], ["at
 const mirrorFxRemapped = filterAndRemap(project.mirrorFx || [], ["at"]);
 const trackPathRemapped = filterAndRemap(project.trackPath || [], ["t"]);
 const trackedItemsRemapped = filterAndRemap(project.trackedItems || [], ["at"]);
+const iconStickersRemapped = filterAndRemap(project.iconStickers || [], ["at"]);
 
 const subtitles =
   project.manualSubtitles && project.manualSubtitles.length > 0
@@ -184,10 +185,11 @@ const props = {
   mirrorFx: mirrorFxRemapped,
   trackPath: trackPathRemapped,
   trackedItems: trackedItemsRemapped,
-  // A6/A8/B6 — opt-in. null/false = render idéntico.
+  // A6/A8/B5/B6 — opt-in. null/false/[] = render idéntico.
   endScreen: project.endScreen ?? null,
   progressBar: project.progressBar ?? false,
   brandKit: project.brandKit ?? null,
+  iconStickers: iconStickersRemapped,
 };
 
 const outFile = path.join(__dirname, "props.json");
