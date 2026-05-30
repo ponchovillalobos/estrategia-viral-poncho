@@ -460,7 +460,10 @@ export function ProductionList() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-2">
         {filtered.map((p) => (
-          <Card key={p.id} className="overflow-hidden border-border bg-card p-0">
+          <Card
+            key={p.id}
+            className="group overflow-hidden border-border bg-card p-0 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10"
+          >
             <div className="grid grid-cols-[140px_1fr] gap-0">
               <button
                 type="button"
