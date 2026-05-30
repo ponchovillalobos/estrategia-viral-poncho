@@ -174,6 +174,7 @@ const STYLE_SHORT_LABEL: Record<StyleId, string> = {
   cinematic_pro: "Cine",
   broll_full: "Broll",
   broll_pip: "BrollPIP",
+  text_behind: "TextoDetras",
 };
 
 const TITLE_STOPWORDS = new Set([
@@ -877,6 +878,52 @@ async function processJob(job: Job, body: AutoBuildRequest) {
           }
         } catch (err) {
           console.warn("[auto-build] quitar fondo falló:", err);
+        }
+      }
+
+      // === A3 — Texto detrás del sujeto (opt-in, ADITIVO) ===
+      // Si el project trae `textBehind`, correr text_behind_subject.py para bake-ar el
+      // efecto en un nuevo mp4. Luego seteamos foregroundVideoId para que build-props
+      // use ese mp4 como base del render. Si falla, sigue con el raw normal (no rompe).
+      const tb = (project as { textBehind?: { phrase?: string; color?: string } }).textBehind;
+      if (tb && tb.phrase) {
+        try {
+          let rawVideo = path.join(RAW_DIR, `${videoId}.mp4`);
+          let rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
+          if (!rawExists) {
+            rawVideo = path.join(RAW_DIR, `${videoId}.mov`);
+            rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
+          }
+          if (rawExists) {
+            const tbId = `${videoId}_textbehind`;
+            const tbPath = path.join(RAW_DIR, `${tbId}.mp4`);
+            const tbRun = await runProcess(
+              PYTHON_EXE,
+              [
+                path.join(PYTHON_DIR, "text_behind_subject.py"),
+                rawVideo,
+                tbPath,
+                tb.phrase,
+                "--color",
+                tb.color || "ffffff",
+              ],
+              PYTHON_DIR,
+              undefined,
+              600_000 // 10 min — segmentación por frame
+            );
+            const okLine = tbRun.ok
+              ? tbRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
+              : null;
+            const okFlag = okLine ? (JSON.parse(okLine) as { ok?: boolean }).ok : false;
+            if (okFlag && (await fs.access(tbPath).then(() => true).catch(() => false))) {
+              (project as { foregroundVideoId?: string }).foregroundVideoId = tbId;
+              console.log(`[auto-build] texto-detrás-del-sujeto: ${tbId}.mp4 generado`);
+            } else {
+              console.warn("[auto-build] texto-detrás: no se generó, sigo con el raw");
+            }
+          }
+        } catch (err) {
+          console.warn("[auto-build] texto-detrás-del-sujeto falló:", err);
         }
       }
 

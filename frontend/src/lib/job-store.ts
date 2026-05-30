@@ -23,7 +23,8 @@ export type StyleId =
   | "supreme"
   | "cinematic_pro"
   | "broll_full"
-  | "broll_pip";
+  | "broll_pip"
+  | "text_behind";
 
 export interface JobStep {
   styleId: StyleId;

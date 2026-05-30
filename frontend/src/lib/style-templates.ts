@@ -17,7 +17,9 @@ export type StyleId =
   | "supreme"
   | "cinematic_pro"
   | "broll_full"
-  | "broll_pip";
+  | "broll_pip"
+  // A3 — Estilo NUEVO: texto detrás del sujeto (bake con mediapipe + ffmpeg).
+  | "text_behind";
 
 export interface BuildContext {
   videoId: string;
@@ -833,6 +835,28 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
     });
   }
 
+  // A3 — Estilo NUEVO "text_behind": bake en Python del texto detrás del sujeto.
+  // auto-build corre text_behind_subject.py y setea foregroundVideoId al mp4 procesado.
+  // Por encima va el resto del FX premium normal (subtítulos karaoke, etc.).
+  if (styleId === "text_behind") {
+    const topKw = pickKeywords(ctx, 1)[0]?.word ?? ctx.videoId;
+    const phrase = topKw.toUpperCase().replace(/[.,;:!?¿¡]/g, "").slice(0, 18);
+    return applyCapcutFx(
+      {
+        ...base,
+        textBehind: { phrase, color: ctx.accentColor.replace("#", "") },
+      },
+      ctx,
+      {
+        lut: "teal_orange.cube",
+        kinetic: "karaoke",
+        endScreen: true,
+        progressBar: true,
+        brandKit: true,
+      }
+    );
+  }
+
   return base;
 }
 
@@ -857,6 +881,11 @@ export const STYLE_INFO: Record<StyleId, { name: string; tagline: string; emoji:
     name: "B-roll PIP",
     tagline: "Videos de Pexels pequeñitos sobre tu video, auto por transcripción",
     emoji: "🖼️",
+  },
+  text_behind: {
+    name: "Texto detrás de vos",
+    tagline: "El efecto CapCut clásico: la palabra clave queda detrás del sujeto",
+    emoji: "🧍",
   },
 };
 
