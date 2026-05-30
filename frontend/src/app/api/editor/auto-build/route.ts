@@ -11,6 +11,7 @@ import {
   PYTHON_EXE,
   PYTHON_DIR,
   MUSIC_DIR,
+  VOICEOVER_DIR,
 } from "@/lib/paths";
 import {
   buildProjectForStyle,
@@ -878,6 +879,46 @@ async function processJob(job: Job, body: AutoBuildRequest) {
           }
         } catch (err) {
           console.warn("[auto-build] quitar fondo falló:", err);
+        }
+      }
+
+      // === C1 — Voz IA (Piper, opt-in, ADITIVO) ===
+      // Si project trae `voiceover: { text, volume?, startSec? }`, correr tts.py para
+      // sintetizar la locución y setear voiceoverUrl + voiceoverVolume + voiceoverStartSec.
+      // Si falla o no hay modelo, el render sale sin voz extra (no rompe).
+      const vo = (project as { voiceover?: { text?: string; volume?: number; startSec?: number } })
+        .voiceover;
+      if (vo && vo.text && vo.text.trim().length > 0) {
+        try {
+          await fs.mkdir(VOICEOVER_DIR, { recursive: true });
+          const voFile = `${projectId}.wav`;
+          const voPath = path.join(VOICEOVER_DIR, voFile);
+          const ttsRun = await runProcess(
+            PYTHON_EXE,
+            [path.join(PYTHON_DIR, "tts.py"), vo.text, voPath],
+            PYTHON_DIR,
+            undefined,
+            180_000
+          );
+          const okLine = ttsRun.ok
+            ? ttsRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
+            : null;
+          const parsed = okLine ? (JSON.parse(okLine) as { ok?: boolean }) : null;
+          if (parsed?.ok && (await fs.access(voPath).then(() => true).catch(() => false))) {
+            const apiHost = process.env.VIRAL_API_HOST ?? "http://localhost:3000";
+            (project as {
+              voiceoverUrl?: string;
+              voiceoverVolume?: number;
+              voiceoverStartSec?: number;
+            }).voiceoverUrl = `${apiHost}/api/voiceover/stream?file=${encodeURIComponent(voFile)}`;
+            (project as { voiceoverVolume?: number }).voiceoverVolume = vo.volume ?? 0.7;
+            (project as { voiceoverStartSec?: number }).voiceoverStartSec = vo.startSec ?? 0;
+            console.log(`[auto-build] voz IA (Piper): ${voFile}`);
+          } else {
+            console.warn("[auto-build] tts.py no generó WAV; render sin voz");
+          }
+        } catch (err) {
+          console.warn("[auto-build] voz IA falló:", err);
         }
       }
 
