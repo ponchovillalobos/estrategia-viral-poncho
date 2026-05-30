@@ -29,23 +29,7 @@ import {
 } from "./scene-fx";
 import { MirrorFxLayer, mirrorFxSchema } from "./mirror-fx";
 import { TrackedLayer, trackPointSchema, trackedItemSchema } from "./tracked-layer";
-import {
-  Flame, Rocket, Target, Lightbulb, Heart, Star, Zap, TrendingUp, ThumbsUp, Eye,
-  Crown, Sparkles, Brain, MessageCircle, DollarSign, Award, Bell, CheckCircle,
-  AlertTriangle, Music, Camera, Film, Hash, Bookmark, Share2, Play, Coffee, Smile,
-  Gem, Sun,
-} from "lucide-react";
-
-// B5 — Iconos curados (lucide-react, offline, MIT). Cualquier sticker puede pedir un
-// icono por NOMBRE — si no está en el mapa, se cae a un fallback (Sparkles).
-const ICON_MAP: Record<string, React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>> = {
-  fire: Flame, rocket: Rocket, target: Target, lightbulb: Lightbulb, heart: Heart,
-  star: Star, zap: Zap, trending: TrendingUp, thumbsup: ThumbsUp, eye: Eye,
-  crown: Crown, sparkles: Sparkles, brain: Brain, message: MessageCircle,
-  money: DollarSign, award: Award, bell: Bell, check: CheckCircle, warn: AlertTriangle,
-  music: Music, camera: Camera, film: Film, hash: Hash, bookmark: Bookmark,
-  share: Share2, play: Play, coffee: Coffee, smile: Smile, gem: Gem, sun: Sun,
-};
+import { ICON_MAP, FallbackIcon } from "./icon-map";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -795,7 +779,7 @@ const IconStickerLayer: React.FC<{
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const Icon = ICON_MAP[sticker.icon.toLowerCase()] ?? Sparkles;
+  const Icon = ICON_MAP[sticker.icon.toLowerCase()] ?? FallbackIcon;
   const floatY = Math.sin(elapsed * 2.2) * 5;
   const wobbleRot = Math.sin(elapsed * 1.6) * 3;
   // Posicionamiento por esquina/center con padding seguro.
