@@ -34,6 +34,7 @@ import { IconStickerLayer } from "./layers/icon-sticker-layer";
 import { EndScreenLayer } from "./layers/end-screen-layer";
 import { PipBRollLayer } from "./layers/pip-broll-layer";
 import { FloatingEmojiLayer } from "./layers/floating-emoji-layer";
+import { WordStickerLayer } from "./layers/word-sticker-layer";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -677,89 +678,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
 
 // FloatingEmojiLayer vive ahora en ./layers/floating-emoji-layer.
 
-const WordStickerLayer: React.FC<{
-  sticker: z.infer<typeof wordStickerSchema>;
-  currentTime: number;
-  fontFamily: string;
-}> = ({ sticker, currentTime, fontFamily }) => {
-  const elapsed = currentTime - sticker.at;
-  const enter = spring({
-    frame: Math.max(0, elapsed * 30),
-    fps: 30,
-    config: { damping: 10, stiffness: 280, mass: 0.5 },
-  });
-  const exitStart = sticker.duration - 0.2;
-  const exitProgress =
-    elapsed > exitStart ? (elapsed - exitStart) / 0.2 : 0;
-  const opacity = interpolate(exitProgress, [0, 1], [1, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-
-  // Forzamos siempre top-center para que el sticker nunca quede recortado
-  // por bordes del frame y nunca tape PiP/B-roll que va abajo. Ignoramos
-  // sticker.position de los JSONs viejos.
-  // Dimensiones responsivas: 1080×1920 → top 180, availableWidth 720.
-  // En 16:9 (1920×1080) → top escala con height, availableWidth con compWidth.
-  const { width: compWidth, height: compHeight } = useVideoConfig();
-  const positionStyles: React.CSSProperties = {
-    top: compHeight * 0.094,
-    left: "50%",
-    transform: "translateX(-50%)",
-  };
-
-  const availableWidth = compWidth * 0.667;
-  const charFactor = 0.55;
-  const sizeByWidth =
-    availableWidth / Math.max(1, sticker.word.length * charFactor);
-  // Tope superior escala con compWidth para mantener legibilidad
-  const wordSize = Math.min(
-    Math.floor(compWidth * 0.102),
-    Math.max(56, Math.floor(sizeByWidth))
-  );
-
-  // A8 — animación post-entrada: el sticker flota suave (drift Y) y oscila apenas su
-  // rotación, en vez de quedar congelado tras la entrada. Sutil para no distraer.
-  const floatY = Math.sin(elapsed * 2.2) * 6;
-  const wobbleRot = Math.sin(elapsed * 1.6) * 2;
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        ...positionStyles,
-        opacity,
-        transform: `${
-          positionStyles.transform ?? ""
-        } translateY(${floatY}px) scale(${enter}) rotate(${sticker.rotation + wobbleRot}deg)`,
-        transformOrigin: "center",
-      }}
-    >
-      <div
-        style={{
-          background: sticker.bg,
-          color: sticker.color,
-          padding: "18px 28px",
-          borderRadius: 18,
-          fontFamily,
-          fontSize: wordSize,
-          fontWeight: 900,
-          textTransform: "uppercase",
-          letterSpacing: "0.02em",
-          lineHeight: 1,
-          display: "flex",
-          alignItems: "center",
-          gap: 18,
-          boxShadow: "0 16px 40px rgba(0,0,0,0.6), 0 0 0 4px rgba(255,255,255,0.08) inset",
-          whiteSpace: "nowrap",
-        }}
-      >
-        <span style={{ fontSize: wordSize * 0.85 }}>{sticker.emoji}</span>
-        <span>{sticker.word}</span>
-      </div>
-    </div>
-  );
-};
+// WordStickerLayer vive ahora en ./layers/word-sticker-layer.
 
 interface EmphasisCardLayerProps {
   card: z.infer<typeof emphasisCardSchema>;
