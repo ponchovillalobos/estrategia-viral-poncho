@@ -135,6 +135,19 @@ function titleCaseWord(w: string): string {
 }
 
 /** Quita caracteres ilegales en nombres de archivo (Windows) y colapsa espacios. */
+/**
+ * Encuentra el video raw de un videoId, probando .mp4 primero y .mov como fallback.
+ * Devuelve la ruta absoluta o `null` si ninguno existe. Centraliza el patrón que se
+ * repetía 3 veces (tracking, bg-removal, text-behind).
+ */
+async function findRawVideo(videoId: string): Promise<string | null> {
+  const mp4 = path.join(RAW_DIR, `${videoId}.mp4`);
+  if (await fs.access(mp4).then(() => true).catch(() => false)) return mp4;
+  const mov = path.join(RAW_DIR, `${videoId}.mov`);
+  if (await fs.access(mov).then(() => true).catch(() => false)) return mov;
+  return null;
+}
+
 function sanitizeForFilename(s: string): string {
   return s
     .replace(/[\\/:*?"<>|]/g, "")
@@ -749,13 +762,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // hay raw, queda vacío y el render sale sin tracking (no rompe).
       if ((project as { tracking?: boolean }).tracking) {
         try {
-          let rawVideo = path.join(RAW_DIR, `${videoId}.mp4`);
-          let rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          if (!rawExists) {
-            rawVideo = path.join(RAW_DIR, `${videoId}.mov`);
-            rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          }
-          if (rawExists) {
+          const rawVideo = await findRawVideo(videoId);
+          if (rawVideo) {
             const trackRun = await runProcess(
               PYTHON_EXE,
               [path.join(PYTHON_DIR, "track_subject.py"), rawVideo, "0.15"],
@@ -784,13 +792,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // Pesado (segmentación por frame); solo estilos con removeBg=true (ej. broll_pip).
       if ((project as { removeBg?: boolean }).removeBg) {
         try {
-          let rawVideo = path.join(RAW_DIR, `${videoId}.mp4`);
-          let rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          if (!rawExists) {
-            rawVideo = path.join(RAW_DIR, `${videoId}.mov`);
-            rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          }
-          if (rawExists) {
+          const rawVideo = await findRawVideo(videoId);
+          if (rawVideo) {
             const fgId = `${videoId}_fg`;
             const fgPath = path.join(RAW_DIR, `${fgId}.mp4`);
             const bgRun = await runProcess(
@@ -880,13 +883,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       const tb = (project as { textBehind?: { phrase?: string; color?: string } }).textBehind;
       if (tb && tb.phrase) {
         try {
-          let rawVideo = path.join(RAW_DIR, `${videoId}.mp4`);
-          let rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          if (!rawExists) {
-            rawVideo = path.join(RAW_DIR, `${videoId}.mov`);
-            rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          }
-          if (rawExists) {
+          const rawVideo = await findRawVideo(videoId);
+          if (rawVideo) {
             const tbId = `${videoId}_textbehind`;
             const tbPath = path.join(RAW_DIR, `${tbId}.mp4`);
             const tbRun = await runProcess(
