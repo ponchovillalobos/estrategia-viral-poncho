@@ -115,6 +115,10 @@ tmp/
 remotion/public/luts/*.cube
 # Modelos de visión (mediapipe selfie segmenter): re-descargar (ver README)
 python/models/*.tflite
+# Piper voice models (.onnx + .onnx.json) — re-bajar con curl (ver docs/NIVEL_2.md)
+python/models/piper/
+# Cache de XTTS-v2 si quedara dentro del repo por error
+python/models/tts/
 # Artefactos de smoke-test de Remotion
 remotion/_smoke*
 
