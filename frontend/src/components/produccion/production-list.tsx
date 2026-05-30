@@ -19,6 +19,7 @@ import { ScheduleStatusBadge } from "@/components/produccion/schedule-status-bad
 import { FilterChip } from "@/components/produccion/filter-chip";
 import { CaptionTabs } from "@/components/produccion/caption-tabs";
 import * as publishActions from "@/lib/produccion/publish-actions";
+import * as scheduleHelpers from "@/lib/produccion/schedule-helpers";
 import {
   STATUS_COLOR,
   STATUS_OPTIONS,
@@ -133,26 +134,7 @@ export function ProductionList() {
     }
   }
 
-  async function loadSchedule() {
-    try {
-      const r = await fetch("/api/tiktok/schedule");
-      const d = await r.json();
-      const map: Record<
-        string,
-        Partial<Record<"tiktok" | "linkedin" | "instagram_bridge", { status: string; scheduledAt: number }>>
-      > = {};
-      for (const u of d.uploads ?? []) {
-        const platform = (u.platform ?? "tiktok") as "tiktok" | "linkedin" | "instagram_bridge";
-        const entry = map[u.projectId] ?? {};
-        // Si hay varios para el mismo projectId+platform, gana el último (lista ordenada asc por scheduledAt)
-        entry[platform] = { status: u.status, scheduledAt: u.scheduledAt };
-        map[u.projectId] = entry;
-      }
-      setScheduledByProjectId(map);
-    } catch {
-      // ignore
-    }
-  }
+  const loadSchedule = () => scheduleHelpers.loadSchedule(setScheduledByProjectId);
 
   useEffect(() => {
     load();
