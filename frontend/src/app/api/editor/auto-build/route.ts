@@ -24,6 +24,12 @@ import { autoMatchBroll, type BrollClip } from "@/lib/pexels";
 import { writeJsonFileAtomic } from "@/lib/atomic-write";
 import { readSettings } from "@/lib/user-settings";
 import { runProcess, parseLastJsonLine } from "@/lib/run-process";
+import {
+  pickTopKeywords,
+  sanitizeForFilename,
+  generateContentTitle,
+  type TranscriptWord,
+} from "@/lib/content-title";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -72,31 +78,11 @@ function dimensionsFromAspect(ratio: AutoBuildRequest["aspectRatio"]): { width: 
   return { width: 1080, height: 1920 }; // default 9:16
 }
 
-interface TranscriptWord {
-  word: string;
-  start: number;
-  end: number;
-  score?: number;
-}
+// TranscriptWord se importa de @/lib/content-title.
 
 // runProcess vive ahora en `lib/run-process.ts` (centralizado, sin cambio de semántica).
 
-function pickTopKeywords(words: TranscriptWord[], count = 7): TranscriptWord[] {
-  const filtered = words.filter((w) => {
-    const clean = w.word.replace(/[^\wáéíóúñÁÉÍÓÚÑ]/g, "");
-    return (
-      clean.length >= 5 &&
-      !/^(porque|cuando|donde|nuestro|nuestra|nuestros|nuestras|también|tambien|hacia|sobre|entre|durante|hasta|desde)$/i.test(clean)
-    );
-  });
-  if (filtered.length <= count) return filtered;
-  const slice = filtered.length / count;
-  const picks: TranscriptWord[] = [];
-  for (let i = 0; i < count; i++) {
-    picks.push(filtered[Math.floor(i * slice)]);
-  }
-  return picks;
-}
+// pickTopKeywords vive en @/lib/content-title.
 
 // Etiqueta corta y legible del estilo, para el nombre del archivo de salida.
 const STYLE_SHORT_LABEL: Record<StyleId, string> = {
@@ -112,29 +98,8 @@ const STYLE_SHORT_LABEL: Record<StyleId, string> = {
   text_behind: "TextoDetras",
 };
 
-const TITLE_STOPWORDS = new Set([
-  "porque", "cuando", "donde", "nuestro", "nuestra", "nuestros", "nuestras", "tambien",
-  "hacia", "sobre", "entre", "durante", "hasta", "desde", "para", "pero", "como", "esto",
-  "esta", "este", "estos", "estas", "una", "unos", "unas", "con", "sin", "del", "sus",
-  "mas", "muy", "los", "las", "que", "todo", "todos", "toda", "todas", "cada", "tiene",
-  "tienen", "puede", "pueden", "vamos", "aqui", "asi", "ahora", "bien", "solo", "cosa",
-  "cosas", "hace", "dice", "decir", "gente", "entonces", "siempre", "nunca", "porqué",
-]);
+// TITLE_STOPWORDS, normForFreq, titleCaseWord ahora viven en @/lib/content-title.
 
-/** Quita acentos para comparar/agrupar; conserva ñ. */
-function normForFreq(w: string): string {
-  return w
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9ñ]/gi, "");
-}
-
-function titleCaseWord(w: string): string {
-  return w.length ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w;
-}
-
-/** Quita caracteres ilegales en nombres de archivo (Windows) y colapsa espacios. */
 /**
  * Forma "wide" del project que arma processJob: la base (buildProjectForStyle) ya viene
  * con sceneFx/proTransitions/etc pero muchos campos opt-in se agregan o leen en este
@@ -185,33 +150,7 @@ async function findRawVideo(videoId: string): Promise<string | null> {
   return null;
 }
 
-function sanitizeForFilename(s: string): string {
-  return s
-    .replace(/[\\/:*?"<>|]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/**
- * Genera un título corto (1-2 palabras de contenido) a partir de lo que MÁS se dice en
- * el video — para que el archivo de salida sea identificable. Frecuencia de palabras
- * significativas (sin stopwords, ≥5 letras), conservando acentos para que se lea bien.
- */
-function generateContentTitle(words: TranscriptWord[]): string {
-  const freq = new Map<string, { count: number; display: string }>();
-  for (const w of words) {
-    const norm = normForFreq(w.word);
-    if (norm.length < 5) continue;
-    if (TITLE_STOPWORDS.has(norm)) continue;
-    const display = w.word.replace(/[^\p{L}\p{N}ñÑ]/gu, "");
-    if (!display) continue;
-    const e = freq.get(norm) ?? { count: 0, display };
-    e.count++;
-    freq.set(norm, e);
-  }
-  const top = [...freq.values()].sort((a, b) => b.count - a.count).slice(0, 2);
-  return top.map((t) => titleCaseWord(t.display)).join(" ").trim();
-}
+// sanitizeForFilename y generateContentTitle viven en @/lib/content-title.
 
 /**
  * Devuelve un projectId único basado en `${titulo} ${EstiloLabel}`. Si ya existe un proyecto
