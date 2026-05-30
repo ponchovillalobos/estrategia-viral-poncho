@@ -18,6 +18,7 @@ import { InstagramHelperDialog } from "@/components/produccion/instagram-helper-
 import { ScheduleStatusBadge } from "@/components/produccion/schedule-status-badge";
 import { FilterChip } from "@/components/produccion/filter-chip";
 import { CaptionTabs } from "@/components/produccion/caption-tabs";
+import * as publishActions from "@/lib/produccion/publish-actions";
 import {
   STATUS_COLOR,
   STATUS_OPTIONS,
@@ -89,146 +90,15 @@ export function ProductionList() {
     }
   }
 
-  async function copyCaption(p: ProjectExt) {
-    try {
-      await navigator.clipboard.writeText(p.caption ?? "");
-      setCopiedId(p.id);
-      toast.success("Caption copiado");
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      toast.error("No se pudo copiar");
-    }
-  }
-
-  /** Publica directamente a LinkedIn vía API (sin scheduling). Llama /api/linkedin/publish. */
-  async function publishToLinkedIn(p: ProjectExt) {
-    setPublishingToLinkedin(p.id);
-    const toastId = toast.loading(`Subiendo ${p.id} a LinkedIn…`);
-    try {
-      const res = await fetch("/api/linkedin/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: p.id,
-          source: p.source ?? "short",
-          caption: pickCaptionForPlatform(p, "linkedin"),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      toast.success("Publicado en LinkedIn ✓", { id: toastId });
-    } catch (err) {
-      toast.error(`LinkedIn falló: ${err instanceof Error ? err.message : String(err)}`, {
-        id: toastId,
-      });
-    } finally {
-      setPublishingToLinkedin(null);
-    }
-  }
-
-  async function publishToInstagram(p: ProjectExt) {
-    setPublishingToInstagram(p.id);
-    const toastId = toast.loading(`Publicando ${p.id} en Instagram…`);
-    try {
-      const res = await fetch("/api/instagram/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: p.id,
-          source: p.source ?? "short",
-          caption: pickCaptionForPlatform(p, "instagram"),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      toast.success("Publicado en Instagram ✓", { id: toastId });
-    } catch (err) {
-      toast.error(`Instagram falló: ${err instanceof Error ? err.message : String(err)}`, {
-        id: toastId,
-      });
-    } finally {
-      setPublishingToInstagram(null);
-    }
-  }
-
-  /**
-   * Bridge manual para subir a TikTok mientras esperamos approval del Content Posting API.
-   *
-   * Flujo:
-   *   1. Copia el archivo de video (no texto, el binary) al portapapeles via PowerShell.
-   *      TikTok acepta Ctrl+V en el file picker → video subido sin arrastrar.
-   *   2. Abre Explorer con el archivo seleccionado por si preferís drag.
-   *   3. Abre tiktok.com/upload en pestaña nueva.
-   *   4. El caption queda esperando en el botón 📋 al lado del caption — lo copiás
-   *      después de que cargue el video.
-   */
-  async function postToTikTok(p: ProjectExt) {
-    if (!p.caption) {
-      toast.error("Este proyecto no tiene caption. Generalo primero con ✨.");
-      return;
-    }
-    setPostingToTikTok(p.id);
-    try {
-      // 1. Archivo de video al portapapeles (vía PowerShell Set-Clipboard -Path)
-      const clipRes = await fetch(
-        `/api/projects/${encodeURIComponent(p.id)}/copy-file-to-clipboard`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source: p.source ?? "short" }),
-        }
-      );
-      if (!clipRes.ok) {
-        const data = await clipRes.json().catch(() => ({}));
-        throw new Error(data.error ?? `clipboard HTTP ${clipRes.status}`);
-      }
-
-      // 2. Abrir Explorer con el render seleccionado (fallback si Ctrl+V no funciona)
-      await fetch(
-        `/api/projects/${encodeURIComponent(p.id)}/reveal-render`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source: p.source ?? "short" }),
-        }
-      );
-
-      // 3. Abrir TikTok Upload
-      window.open("https://www.tiktok.com/upload", "_blank", "noopener,noreferrer");
-
-      const asAccount = tiktokHandle ? ` como ${tiktokHandle}` : "";
-      toast.success(
-        `Video copiado${asAccount}. En TikTok: click "Seleccionar video" → Ctrl+V. Luego volvé acá y tocá 📋 para copiar el caption.`,
-        { duration: 9000 }
-      );
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "No se pudo preparar el upload"
-      );
-    } finally {
-      setPostingToTikTok(null);
-    }
-  }
-
-  async function regenerate(p: ProjectExt, provider: string = "auto") {
-    setRegenerating(p.id);
-    try {
-      const res = await fetch(
-        `/api/projects/${encodeURIComponent(p.id)}/generate-caption?provider=${provider}`,
-        { method: "POST" }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "regenerate failed");
-      const usedProvider = data.copy?._provider ?? provider;
-      const usedModel = data.copy?._model ?? "";
-      toast.success(`Caption regenerado (${usedProvider} · ${usedModel})`);
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRegenerating(null);
-    }
-  }
+  const copyCaption = (p: ProjectExt) => publishActions.copyCaption(p, setCopiedId);
+  const publishToLinkedIn = (p: ProjectExt) =>
+    publishActions.publishToLinkedIn(p, setPublishingToLinkedin);
+  const publishToInstagram = (p: ProjectExt) =>
+    publishActions.publishToInstagram(p, setPublishingToInstagram);
+  const postToTikTok = (p: ProjectExt) =>
+    publishActions.postToTikTok(p, setPostingToTikTok, tiktokHandle);
+  const regenerate = (p: ProjectExt, provider: string = "auto") =>
+    publishActions.regenerate(p, setRegenerating, load, provider);
 
   // Carga el transcript del video. Cacheado por videoId.
   async function loadTranscript(videoId: string) {
