@@ -83,7 +83,7 @@ const DEFAULT_STEPS: { key: LongFormStepKey; label: string }[] = [
 ];
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __viral_lf_job_store__: Map<string, LongFormJob> | undefined;
 }
 

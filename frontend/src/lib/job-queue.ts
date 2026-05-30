@@ -36,7 +36,7 @@ interface QueueState {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __viral_job_queue__: QueueState | undefined;
 }
 

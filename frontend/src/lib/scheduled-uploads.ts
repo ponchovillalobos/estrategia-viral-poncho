@@ -269,7 +269,7 @@ async function processUpload(upload: ScheduledUpload): Promise<void> {
 
 // Singleton — evita iniciar 2 timers si el módulo se re-importa (HMR de Next.js).
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __viralSchedulerStarted: boolean | undefined;
 }
 

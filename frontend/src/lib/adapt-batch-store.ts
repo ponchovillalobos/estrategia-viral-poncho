@@ -27,7 +27,7 @@ export interface AdaptBatchProgress {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __viral_adapt_batch__: AdaptBatchProgress | null | undefined;
 }
 
