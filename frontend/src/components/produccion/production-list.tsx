@@ -15,6 +15,7 @@ import {
 import { ScheduleDialog } from "@/components/produccion/schedule-dialog";
 import { UploadHelperDialog } from "@/components/produccion/upload-helper-dialog";
 import { InstagramHelperDialog } from "@/components/produccion/instagram-helper-dialog";
+import { ScheduleStatusBadge } from "@/components/produccion/schedule-status-badge";
 import {
   STATUS_COLOR,
   STATUS_OPTIONS,
@@ -804,47 +805,6 @@ const PLATFORM_TABS: { key: CaptionPlatform; label: string; color: string }[] = 
   { key: "linkedin", label: "LinkedIn", color: "text-sky-400" },
   { key: "instagram", label: "Instagram", color: "text-amber-400" },
 ];
-
-/**
- * Pílula de status para schedules — muestra el estado del último schedule en esa plataforma.
- * Se renderiza dentro de cada botón de bridge (TT/IG/LI).
- */
-function ScheduleStatusBadge({
-  state,
-}: {
-  state: { status: string; scheduledAt: number } | undefined;
-}) {
-  if (!state) return null;
-  const { status, scheduledAt } = state;
-  const dot =
-    status === "published"
-      ? "bg-emerald-400"
-      : status === "failed"
-        ? "bg-red-400"
-        : status === "pending_manual"
-          ? "bg-amber-400"
-          : "bg-foreground/40";
-  const short =
-    status === "published"
-      ? "✓"
-      : status === "failed"
-        ? "✗"
-        : status === "pending_manual"
-          ? "⌛"
-          : status === "uploaded"
-            ? "↑"
-            : "•";
-  const tooltip = `${status} · ${new Date(scheduledAt).toLocaleString("es")}`;
-  return (
-    <span
-      title={tooltip}
-      className="ml-1 inline-flex h-3 w-3 items-center justify-center rounded-full bg-foreground/10 text-[8px] text-foreground/80"
-    >
-      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
-      <span className="sr-only">{short}</span>
-    </span>
-  );
-}
 
 function CaptionTabs({ project }: { project: ProjectExt }) {
   const [active, setActive] = useState<CaptionPlatform>("tiktok");
