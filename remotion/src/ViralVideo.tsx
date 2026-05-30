@@ -31,6 +31,7 @@ import { MirrorFxLayer, mirrorFxSchema } from "./mirror-fx";
 import { TrackedLayer, trackPointSchema, trackedItemSchema } from "./tracked-layer";
 import { BrandWatermarkLayer } from "./layers/brand-watermark-layer";
 import { IconStickerLayer } from "./layers/icon-sticker-layer";
+import { EndScreenLayer } from "./layers/end-screen-layer";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -668,89 +669,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
 
 // IconStickerLayer vive ahora en ./layers/icon-sticker-layer.
 
-// A6 — End-screen / CTA: aparece en los últimos `durationSec` con entrada animada.
-const EndScreenLayer: React.FC<{
-  config: z.infer<typeof endScreenSchema>;
-  currentTime: number;
-  totalDuration: number;
-  fps: number;
-  fontFamily: string;
-}> = ({ config, currentTime, totalDuration, fps, fontFamily }) => {
-  const startAt = totalDuration - config.durationSec;
-  if (currentTime < startAt) return null;
-  const elapsed = currentTime - startAt;
-  const enter = spring({
-    frame: Math.max(0, elapsed * fps),
-    fps,
-    config: { damping: 16, stiffness: 140, mass: 0.7 },
-  });
-  const scale = 0.7 + enter * 0.3;
-  return (
-    <AbsoluteFill
-      style={{
-        background: `${config.bg}f2`,
-        backdropFilter: "blur(14px)",
-        justifyContent: "center",
-        alignItems: "center",
-        opacity: Math.min(1, elapsed / 0.25),
-        pointerEvents: "none",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 32,
-          transform: `scale(${scale})`,
-        }}
-      >
-        <div style={{ fontSize: 200, lineHeight: 1, filter: `drop-shadow(0 12px 50px ${config.accent}66)` }}>
-          {config.emoji}
-        </div>
-        <div
-          style={{
-            fontFamily,
-            fontSize: 120,
-            fontWeight: 900,
-            color: "#ffffff",
-            textTransform: "uppercase",
-            letterSpacing: "0.02em",
-            lineHeight: 1.0,
-            textAlign: "center",
-            padding: "0 60px",
-            maxWidth: 980,
-            textShadow: `0 0 70px ${config.accent}88`,
-          }}
-        >
-          {config.text}
-        </div>
-        {config.handle ? (
-          <div
-            style={{
-              fontFamily,
-              fontSize: 56,
-              fontWeight: 700,
-              color: config.accent,
-              letterSpacing: "0.04em",
-            }}
-          >
-            {config.handle.startsWith("@") ? config.handle : `@${config.handle}`}
-          </div>
-        ) : null}
-        <div
-          style={{
-            height: 8,
-            width: 220 * enter,
-            background: config.accent,
-            borderRadius: 4,
-            boxShadow: `0 0 30px ${config.accent}`,
-          }}
-        />
-      </div>
-    </AbsoluteFill>
-  );
-};
+// EndScreenLayer vive ahora en ./layers/end-screen-layer.
 
 const PipBRollLayer: React.FC<{ url: string; accent: string }> = ({
   url,
