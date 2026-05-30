@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
-import { RAW_DIR, LF_CLIPS, LF_RENDERS, FFMPEG_EXE, DATA_ROOT } from "@/lib/paths";
+import { RAW_DIR, LF_CLIPS, LF_RENDERS, FFMPEG_EXE, FFPROBE_EXE, DATA_ROOT } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -75,11 +75,40 @@ export async function GET(
     return NextResponse.json({ error: "video not found", id }, { status: 404 });
   }
 
+  // C4 — Auto-thumbnail mejorado: en vez del frame a 1s (suele ser logo/intro), tomar
+  // ~35% de la duración (un frame representativo del contenido). Si ffprobe falla, 1s.
+  const seekSec = await new Promise<number>((resolve) => {
+    const proc = spawn(FFPROBE_EXE, [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      videoPath,
+    ]);
+    let out = "";
+    let settled = false;
+    const done = (v: number) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(t);
+      resolve(v);
+    };
+    const t = setTimeout(() => {
+      try { proc.kill("SIGKILL"); } catch {}
+      done(1);
+    }, 8_000);
+    proc.stdout.on("data", (d) => (out += d.toString()));
+    proc.on("error", () => done(1));
+    proc.on("close", () => {
+      const dur = parseFloat(out.trim());
+      done(Number.isFinite(dur) && dur > 2 ? +(dur * 0.35).toFixed(2) : 1);
+    });
+  });
+
   try {
     await new Promise<void>((resolve, reject) => {
       const proc = spawn(FFMPEG_EXE, [
         "-y",
-        "-ss", "00:00:01",
+        "-ss", String(seekSec),
         "-i", videoPath,
         "-frames:v", "1",
         "-q:v", "4",

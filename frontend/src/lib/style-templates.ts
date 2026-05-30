@@ -17,7 +17,9 @@ export type StyleId =
   | "supreme"
   | "cinematic_pro"
   | "broll_full"
-  | "broll_pip";
+  | "broll_pip"
+  // A3 — Estilo NUEVO: texto detrás del sujeto (bake con mediapipe + ffmpeg).
+  | "text_behind";
 
 export interface BuildContext {
   videoId: string;
@@ -174,11 +176,30 @@ export function generateSceneFx(ctx: BuildContext): Array<{
 /** Transiciones pro (whip/zoom/glitch/flash/reveal) en puntos clave del transcript. */
 export function generateProTransitions(ctx: BuildContext): Array<{
   at: number;
-  kind: "whip" | "zoom_punch" | "glitch" | "flash" | "reveal_lr" | "reveal_ud";
+  kind:
+    | "whip"
+    | "zoom_punch"
+    | "glitch"
+    | "flash"
+    | "reveal_lr"
+    | "reveal_ud"
+    | "light_streak"
+    | "swipe_blur"
+    | "iris";
   durationFrames: number;
   color: string;
 }> {
-  const kinds = ["whip", "zoom_punch", "glitch", "reveal_lr", "flash"] as const;
+  // Pool ampliado (A5): suma light_streak / swipe_blur / iris a la rotación para más variedad.
+  const kinds = [
+    "whip",
+    "zoom_punch",
+    "light_streak",
+    "glitch",
+    "swipe_blur",
+    "reveal_lr",
+    "iris",
+    "flash",
+  ] as const;
   const kws = ctx.keywords.filter((k) => k.start > 1 && k.start < ctx.duration - 1).slice(0, 6);
   return kws.map((kw, i) => ({
     at: +Math.max(0, kw.start - 0.1).toFixed(2),
@@ -225,7 +246,58 @@ export function generateTrackedItems(ctx: BuildContext): Array<{
   }));
 }
 
-type KineticPresetName = "none" | "pop" | "slide_up" | "type_on" | "bounce" | "glow_pulse";
+// B5 — Iconos curados para stickers (mismos keys que ICON_MAP en Remotion).
+const ICON_POOL = ["fire", "lightbulb", "target", "rocket", "zap", "trending", "crown"] as const;
+
+/**
+ * B5 — Genera 3-5 icon stickers repartidos por keyword del video, rotando por ICON_POOL.
+ * Cada uno aparece en el timestamp de su keyword, con bg accent y posición top-right.
+ */
+export function generateIconStickers(ctx: BuildContext): Array<{
+  at: number;
+  duration: number;
+  icon: string;
+  position: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "top-center";
+  color: string;
+  bg: string;
+  size: number;
+}> {
+  const kws = pickKeywords(ctx, 4);
+  const positions: Array<"top-left" | "top-right" | "bottom-left" | "bottom-right"> = [
+    "top-right",
+    "top-left",
+    "bottom-right",
+    "bottom-left",
+  ];
+  return kws.map((kw, i) => ({
+    at: +Math.max(0.5, kw.start - 0.1).toFixed(2),
+    duration: 1.2,
+    icon: ICON_POOL[i % ICON_POOL.length],
+    position: positions[i % positions.length],
+    color: "#0a0a0a",
+    bg: ctx.accentColor,
+    size: 110,
+  }));
+}
+
+/**
+ * A4 — Genera 2 speed ramps (slow-mo 0.5x de ~1.2s) en los keywords más visuales.
+ * Cada ventana de slow-mo no extiende la duración total: tapa el video base a 1x.
+ */
+export function generateSpeedRamps(ctx: BuildContext): Array<{
+  at: number;
+  duration: number;
+  rate: number;
+}> {
+  const kws = pickKeywords(ctx, 2);
+  return kws.map((kw) => ({
+    at: +Math.max(0.5, kw.start - 0.05).toFixed(2),
+    duration: 1.2,
+    rate: 0.5,
+  }));
+}
+
+type KineticPresetName = "none" | "pop" | "slide_up" | "type_on" | "bounce" | "glow_pulse" | "karaoke";
 
 /**
  * Suma las "recetas CapCut" (LUT de color, scene-fx atmosféricos, transiciones pro y
@@ -247,6 +319,13 @@ function applyCapcutFx<T extends object>(
     transitions?: boolean;
     mirror?: boolean;
     tracking?: boolean;
+    // A6/A8/B5/B6/A2/A4 — opt-in.
+    endScreen?: boolean;
+    progressBar?: boolean;
+    brandKit?: boolean;
+    iconStickers?: boolean;
+    autoReframe?: boolean;
+    speedRamps?: boolean;
   } = {}
 ) {
   return {
@@ -261,6 +340,30 @@ function applyCapcutFx<T extends object>(
     ...(opts.tracking
       ? { tracking: true, trackedItems: generateTrackedItems(ctx), trackPath: [] as unknown[] }
       : {}),
+    ...(opts.endScreen
+      ? {
+          endScreen: {
+            text: "Seguime para más",
+            emoji: "🔥",
+            accent: ctx.accentColor,
+            durationSec: 2.5,
+          },
+        }
+      : {}),
+    ...(opts.progressBar ? { progressBar: true } : {}),
+    // Marca de agua: marcador con handle vacío; auto-build lo rellena desde user-settings.
+    // Si no hay handle configurado, ViralVideo no la renderiza (queda igual).
+    ...(opts.brandKit ? { brandKit: { handle: "", position: "bottom-right" } } : {}),
+    ...(opts.iconStickers ? { iconStickers: generateIconStickers(ctx) } : {}),
+    // A2 — autoReframe necesita tracking activo para tener trackPath. Si el estilo
+    // ya pidió tracking (vía opts.tracking) o lo activamos acá, el trackPath se llena.
+    ...(opts.autoReframe
+      ? {
+          autoReframe: true,
+          ...(opts.tracking ? {} : { tracking: true, trackedItems: [], trackPath: [] as unknown[] }),
+        }
+      : {}),
+    ...(opts.speedRamps ? { speedRamps: generateSpeedRamps(ctx) } : {}),
   };
 }
 
@@ -607,7 +710,15 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         // bRoll lo puebla auto-build (Pexels por keyword). Default [] del commonBase.
       },
       ctx,
-      { lut: "teal_orange.cube", kinetic: "pop", mirror: styleId === "broll_full" }
+      {
+        lut: "teal_orange.cube",
+        kinetic: "karaoke",
+        mirror: styleId === "broll_full",
+        endScreen: true,
+        progressBar: true,
+        brandKit: true,
+        iconStickers: true,
+      }
     );
   }
 
@@ -651,7 +762,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         zoomMarks: pickKeywords(ctx, 5).map((kw) => ({ at: kw.start, duration: 0.6, scale: 1.14 })),
       },
       ctx,
-      { lut: "teal_orange.cube", kinetic: "pop", tracking: true }
+      { lut: "teal_orange.cube", kinetic: "pop", tracking: true, autoReframe: true }
     );
   }
 
@@ -676,7 +787,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         stutterMarks: pickKeywords(ctx, 2).map((kw) => ({ at: Math.max(0, kw.start - 0.15), duration: 0.18 })),
       },
       ctx,
-      { lut: "cyberpunk.cube", kinetic: "bounce", mirror: true }
+      { lut: "cyberpunk.cube", kinetic: "bounce", mirror: true, speedRamps: true }
     );
   }
 
@@ -715,8 +826,35 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
   if (styleId === "supreme") {
     return applyCapcutFx(buildSupremeStyle(ctx, styleId), ctx, {
       lut: "kodak_warm.cube",
-      kinetic: "glow_pulse",
+      kinetic: "karaoke",
+      endScreen: true,
+      progressBar: true,
+      brandKit: true,
+      iconStickers: true,
+      speedRamps: true,
     });
+  }
+
+  // A3 — Estilo NUEVO "text_behind": bake en Python del texto detrás del sujeto.
+  // auto-build corre text_behind_subject.py y setea foregroundVideoId al mp4 procesado.
+  // Por encima va el resto del FX premium normal (subtítulos karaoke, etc.).
+  if (styleId === "text_behind") {
+    const topKw = pickKeywords(ctx, 1)[0]?.word ?? ctx.videoId;
+    const phrase = topKw.toUpperCase().replace(/[.,;:!?¿¡]/g, "").slice(0, 18);
+    return applyCapcutFx(
+      {
+        ...base,
+        textBehind: { phrase, color: ctx.accentColor.replace("#", "") },
+      },
+      ctx,
+      {
+        lut: "teal_orange.cube",
+        kinetic: "karaoke",
+        endScreen: true,
+        progressBar: true,
+        brandKit: true,
+      }
+    );
   }
 
   return base;
@@ -743,6 +881,11 @@ export const STYLE_INFO: Record<StyleId, { name: string; tagline: string; emoji:
     name: "B-roll PIP",
     tagline: "Videos de Pexels pequeñitos sobre tu video, auto por transcripción",
     emoji: "🖼️",
+  },
+  text_behind: {
+    name: "Texto detrás de vos",
+    tagline: "El efecto CapCut clásico: la palabra clave queda detrás del sujeto",
+    emoji: "🧍",
   },
 };
 

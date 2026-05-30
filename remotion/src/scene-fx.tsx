@@ -40,7 +40,18 @@ export type SceneFxProps = z.infer<typeof sceneFxSchema>;
 export const proTransitionSchema = z.object({
   at: z.number(),
   kind: z
-    .enum(["whip", "zoom_punch", "glitch", "flash", "reveal_lr", "reveal_ud"])
+    .enum([
+      "whip",
+      "zoom_punch",
+      "glitch",
+      "flash",
+      "reveal_lr",
+      "reveal_ud",
+      // Nuevas (A5): streak de luz diagonal, barrido con desenfoque, e iris circular.
+      "light_streak",
+      "swipe_blur",
+      "iris",
+    ])
     .default("whip"),
   durationFrames: z.number().default(8),
   color: z.string().default("#ffffff"),
@@ -54,6 +65,10 @@ const KINETIC_PRESETS = [
   "type_on",
   "bounce",
   "glow_pulse",
+  // Karaoke: muestra la línea/frase completa y resalta la palabra que se está diciendo
+  // (estilo CapCut "auto captions"). A diferencia de los otros, NO muestra 1 palabra
+  // sola sino el grupo, con la activa en color highlight.
+  "karaoke",
 ] as const;
 export const kineticPresetSchema = z.enum(KINETIC_PRESETS).default("none");
 export type KineticPreset = (typeof KINETIC_PRESETS)[number];
@@ -67,6 +82,35 @@ function envelope(progress: number, inFrac = 0.22, outFrac = 0.28): number {
   const fin = clamp01(progress / inFrac);
   const fout = clamp01((1 - progress) / outFrac);
   return Math.min(fin, fout);
+}
+
+/**
+ * Agrupa palabras en "líneas" para el modo karaoke: corta cuando hay una pausa
+ * (gap > maxGap) o cuando se llega a maxWords. Devuelve arrays de índices de palabra.
+ */
+function groupWordsIntoLines(
+  words: { word: string; start: number; end: number }[],
+  maxWords = 4,
+  maxGap = 0.6
+): number[][] {
+  const lines: number[][] = [];
+  let cur: number[] = [];
+  for (let i = 0; i < words.length; i++) {
+    if (cur.length === 0) {
+      cur = [i];
+      continue;
+    }
+    const prev = words[cur[cur.length - 1]];
+    const gap = words[i].start - prev.end;
+    if (cur.length >= maxWords || gap > maxGap) {
+      lines.push(cur);
+      cur = [i];
+    } else {
+      cur.push(i);
+    }
+  }
+  if (cur.length) lines.push(cur);
+  return lines;
 }
 
 // ───────────────────────── SceneFxLayer ─────────────────────────────────────
@@ -325,6 +369,55 @@ export const ProTransitionLayer: React.FC<ProTransitionLayerProps> = ({
           );
         }
 
+        if (tr.kind === "light_streak") {
+          // Streak de luz diagonal que cruza la pantalla (look "anamorphic flare").
+          const pos = interpolate(t, [0, 1], [-30, 130]);
+          return (
+            <AbsoluteFill
+              key={`tr-${i}`}
+              style={{
+                pointerEvents: "none",
+                mixBlendMode: "screen",
+                opacity: Math.sin(Math.PI * t) * 0.9,
+                background: `linear-gradient(115deg, transparent ${pos - 18}%, ${tr.color} ${pos}%, transparent ${pos + 18}%)`,
+                filter: "blur(10px)",
+              }}
+            />
+          );
+        }
+
+        if (tr.kind === "swipe_blur") {
+          // Panel de color que barre de izquierda a derecha con bordes desenfocados.
+          const cut = interpolate(t, [0, 1], [-10, 110]);
+          return (
+            <AbsoluteFill
+              key={`tr-${i}`}
+              style={{
+                pointerEvents: "none",
+                opacity: Math.sin(Math.PI * t),
+                background: `linear-gradient(90deg, ${tr.color} 0%, ${tr.color} ${cut}%, transparent ${cut + 12}%)`,
+                filter: "blur(6px)",
+              }}
+            />
+          );
+        }
+
+        if (tr.kind === "iris") {
+          // Iris circular que se cierra/abre desde el centro (clip-path circle).
+          const r = interpolate(t, [0, 0.5, 1], [0, 80, 0]);
+          return (
+            <AbsoluteFill
+              key={`tr-${i}`}
+              style={{
+                pointerEvents: "none",
+                background: tr.color,
+                clipPath: `circle(${100 - r}% at 50% 50%)`,
+                opacity: 0.96,
+              }}
+            />
+          );
+        }
+
         // flash — destello blanco con decay rápido.
         return (
           <AbsoluteFill
@@ -370,6 +463,72 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
     else break;
   }
   if (activeIndex === -1) return null;
+
+  // ── Modo KARAOKE: línea completa con la palabra activa resaltada ──
+  if (preset === "karaoke") {
+    const lines = groupWordsIntoLines(words);
+    const line = lines.find((l) => l.includes(activeIndex)) ?? [activeIndex];
+    const lineStart = words[line[0]].start;
+    const lineEntry = currentTime - lineStart;
+    const sLine = spring({
+      frame: lineEntry * fps,
+      fps,
+      config: { damping: 14, stiffness: 120, mass: 0.6 },
+    });
+    const lineOpacity = clamp01(lineEntry / 0.12);
+    const lineY = (1 - sLine) * 40;
+    return (
+      <AbsoluteFill
+        style={{
+          justifyContent: "flex-end",
+          alignItems: "center",
+          paddingBottom: 320,
+          pointerEvents: "none",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: "0.28em",
+            maxWidth: 980,
+            padding: "0 50px",
+            opacity: lineOpacity,
+            transform: `translateY(${lineY}px)`,
+            fontFamily,
+            fontSize: 96,
+            fontWeight: 800,
+            textTransform: "uppercase",
+            letterSpacing: "0.02em",
+            lineHeight: 1.05,
+            textAlign: "center",
+          }}
+        >
+          {line.map((j) => {
+            const isActive = j === activeIndex;
+            return (
+              <span
+                key={j}
+                style={{
+                  color: isActive ? highlight || color : color,
+                  opacity: isActive ? 1 : 0.55,
+                  transform: isActive ? "scale(1.08)" : "scale(1)",
+                  display: "inline-block",
+                  transformOrigin: "center bottom",
+                  filter: isActive
+                    ? `drop-shadow(0 0 24px ${highlight}) drop-shadow(0 4px 16px rgba(0,0,0,0.95))`
+                    : `drop-shadow(0 3px 14px rgba(0,0,0,0.9))`,
+                }}
+              >
+                {words[j].word}
+              </span>
+            );
+          })}
+        </div>
+      </AbsoluteFill>
+    );
+  }
 
   const word = words[activeIndex];
   const next = words[activeIndex + 1];
