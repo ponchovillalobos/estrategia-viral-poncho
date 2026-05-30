@@ -30,6 +30,7 @@ import {
 import { MirrorFxLayer, mirrorFxSchema } from "./mirror-fx";
 import { TrackedLayer, trackPointSchema, trackedItemSchema } from "./tracked-layer";
 import { ICON_MAP, FallbackIcon } from "./icon-map";
+import { BrandWatermarkLayer } from "./layers/brand-watermark-layer";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -719,47 +720,6 @@ const IconStickerLayer: React.FC<{
         }}
       >
         <Icon size={sticker.size} color={sticker.color} strokeWidth={2.4} />
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// B6 — Marca de agua: handle (y/o logo) fijo en una esquina, opacidad sutil.
-const BrandWatermarkLayer: React.FC<{
-  config: z.infer<typeof brandKitSchema>;
-  fontFamily: string;
-}> = ({ config, fontFamily }) => {
-  const isTop = config.position.startsWith("top");
-  const isLeft = config.position.endsWith("left");
-  return (
-    <AbsoluteFill
-      style={{
-        pointerEvents: "none",
-        justifyContent: isTop ? "flex-start" : "flex-end",
-        alignItems: isLeft ? "flex-start" : "flex-end",
-        padding: 48,
-        opacity: config.opacity,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        {config.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={config.logoUrl} alt="" style={{ height: 56, width: "auto" }} />
-        ) : null}
-        {config.handle ? (
-          <span
-            style={{
-              fontFamily,
-              fontSize: 36,
-              fontWeight: 700,
-              color: config.color,
-              letterSpacing: "0.04em",
-              textShadow: "0 2px 12px rgba(0,0,0,0.8)",
-            }}
-          >
-            {config.handle.startsWith("@") ? config.handle : `@${config.handle}`}
-          </span>
-        ) : null}
       </div>
     </AbsoluteFill>
   );
