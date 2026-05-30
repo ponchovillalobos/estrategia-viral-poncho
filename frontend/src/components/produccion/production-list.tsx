@@ -16,6 +16,7 @@ import { ScheduleDialog } from "@/components/produccion/schedule-dialog";
 import { UploadHelperDialog } from "@/components/produccion/upload-helper-dialog";
 import { InstagramHelperDialog } from "@/components/produccion/instagram-helper-dialog";
 import { ScheduleStatusBadge } from "@/components/produccion/schedule-status-badge";
+import { FilterChip } from "@/components/produccion/filter-chip";
 import {
   STATUS_COLOR,
   STATUS_OPTIONS,
@@ -772,31 +773,6 @@ export function ProductionList() {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function FilterChip({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider transition-colors",
-        active
-          ? "bg-foreground text-background"
-          : "bg-muted text-muted-foreground hover:text-foreground"
-      )}
-    >
-      {label}
-    </button>
   );
 }
 
