@@ -882,23 +882,45 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         }
       }
 
-      // === C1 — Voz IA (Piper, opt-in, ADITIVO) ===
-      // Si project trae `voiceover: { text, volume?, startSec? }`, correr tts.py para
-      // sintetizar la locución y setear voiceoverUrl + voiceoverVolume + voiceoverStartSec.
+      // === C1/C2 — Voz IA (Piper o XTTS-clon, opt-in, ADITIVO) ===
+      // Si project trae `voiceover: { text }`, sintetizar la locución:
+      //   - Con `speakerWav` definido → C2 (XTTS-v2 clona tu voz, ~1.8GB modelo).
+      //   - Sin `speakerWav`         → C1 (Piper, voz ES default, ~63MB).
       // Si falla o no hay modelo, el render sale sin voz extra (no rompe).
-      const vo = (project as { voiceover?: { text?: string; volume?: number; startSec?: number } })
-        .voiceover;
+      const vo = (project as {
+        voiceover?: {
+          text?: string;
+          volume?: number;
+          startSec?: number;
+          speakerWav?: string;
+          lang?: string;
+        };
+      }).voiceover;
       if (vo && vo.text && vo.text.trim().length > 0) {
         try {
           await fs.mkdir(VOICEOVER_DIR, { recursive: true });
           const voFile = `${projectId}.wav`;
           const voPath = path.join(VOICEOVER_DIR, voFile);
+          const useXtts = Boolean(vo.speakerWav);
+          const scriptArgs = useXtts
+            ? [
+                path.join(PYTHON_DIR, "xtts.py"),
+                vo.text,
+                voPath,
+                "--speaker",
+                vo.speakerWav!,
+                "--lang",
+                vo.lang ?? "es",
+              ]
+            : [path.join(PYTHON_DIR, "tts.py"), vo.text, voPath];
+          // XTTS es CPU-intensivo + descarga el modelo la primera vez → timeout más amplio.
+          const ttsTimeout = useXtts ? 900_000 : 180_000;
           const ttsRun = await runProcess(
             PYTHON_EXE,
-            [path.join(PYTHON_DIR, "tts.py"), vo.text, voPath],
+            scriptArgs,
             PYTHON_DIR,
             undefined,
-            180_000
+            ttsTimeout
           );
           const okLine = ttsRun.ok
             ? ttsRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
@@ -913,7 +935,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
             }).voiceoverUrl = `${apiHost}/api/voiceover/stream?file=${encodeURIComponent(voFile)}`;
             (project as { voiceoverVolume?: number }).voiceoverVolume = vo.volume ?? 0.7;
             (project as { voiceoverStartSec?: number }).voiceoverStartSec = vo.startSec ?? 0;
-            console.log(`[auto-build] voz IA (Piper): ${voFile}`);
+            console.log(`[auto-build] voz IA (${useXtts ? "XTTS clon" : "Piper"}): ${voFile}`);
           } else {
             console.warn("[auto-build] tts.py no generó WAV; render sin voz");
           }
