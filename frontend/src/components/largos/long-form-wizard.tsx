@@ -167,7 +167,7 @@ export function LongFormWizard() {
   const [submitting, setSubmitting] = useState(false);
   const [activeJob, setActiveJob] = useState<JobState | null>(null);
   const [proposals, setProposals] = useState<ProposalsResponse | null>(null);
-  const [now, setNow] = useState<number>(Date.now());
+  const [now, setNow] = useState<number>(() => Date.now());
 
   // ─── State del wizard (6 pasos) ─────────────────────────────────────────
   const [step, setStep] = useState(1);
