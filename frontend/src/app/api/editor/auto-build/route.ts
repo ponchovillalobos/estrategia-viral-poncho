@@ -23,6 +23,7 @@ import { enqueue } from "@/lib/job-queue";
 import { autoMatchBroll, type BrollClip } from "@/lib/pexels";
 import { writeJsonFileAtomic } from "@/lib/atomic-write";
 import { readSettings } from "@/lib/user-settings";
+import { runProcess, parseLastJsonLine } from "@/lib/run-process";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -78,74 +79,7 @@ interface TranscriptWord {
   score?: number;
 }
 
-function runProcess(
-  cmd: string,
-  args: string[],
-  cwd?: string,
-  onProgress?: (data: string) => void,
-  timeoutMs?: number,
-  // Timeout por INACTIVIDAD: si el proceso no emite NADA por este tiempo, se considera
-  // colgado y se mata. Ideal para procesos largos pero "habladores" (render de Remotion,
-  // pipeline): un render que avanza emite progreso seguido, así que sólo se mata si de
-  // verdad se trabó — sin matar renders largos legítimos.
-  idleTimeoutMs?: number
-): Promise<{ ok: boolean; stdout: string; stderr: string }> {
-  return new Promise((resolve) => {
-    // Node 17+ rechaza .cmd/.bat con shell:false en Windows (CVE-2024-27980 → EINVAL).
-    // npx.cmd y otros wrappers necesitan shell:true. Para .exe nativos mantenemos shell:false.
-    const isWindowsScript = process.platform === "win32" && /\.(cmd|bat|ps1)$/i.test(cmd);
-    const proc = spawn(cmd, args, { cwd, shell: isWindowsScript });
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    const timer = timeoutMs
-      ? setTimeout(() => {
-          timedOut = true;
-          stderr += `\n[runProcess] TIMEOUT ${timeoutMs}ms — killing\n`;
-          try {
-            proc.kill("SIGKILL");
-          } catch {}
-        }, timeoutMs)
-      : null;
-    let idleTimer: ReturnType<typeof setTimeout> | null = null;
-    const armIdle = () => {
-      if (!idleTimeoutMs) return;
-      if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => {
-        timedOut = true;
-        stderr += `\n[runProcess] IDLE TIMEOUT ${idleTimeoutMs}ms sin salida — proceso colgado, killing\n`;
-        try {
-          proc.kill("SIGKILL");
-        } catch {}
-      }, idleTimeoutMs);
-    };
-    armIdle();
-    const clearTimers = () => {
-      if (timer) clearTimeout(timer);
-      if (idleTimer) clearTimeout(idleTimer);
-    };
-    proc.stdout.on("data", (d) => {
-      armIdle();
-      const s = d.toString();
-      stdout += s;
-      onProgress?.(s);
-    });
-    proc.stderr.on("data", (d) => {
-      armIdle();
-      const s = d.toString();
-      stderr += s;
-      onProgress?.(s);
-    });
-    proc.on("close", (code) => {
-      clearTimers();
-      resolve({ ok: !timedOut && code === 0, stdout, stderr });
-    });
-    proc.on("error", () => {
-      clearTimers();
-      resolve({ ok: false, stdout, stderr });
-    });
-  });
-}
+// runProcess vive ahora en `lib/run-process.ts` (centralizado, sin cambio de semántica).
 
 function pickTopKeywords(words: TranscriptWord[], count = 7): TranscriptWord[] {
   const filtered = words.filter((w) => {
@@ -201,6 +135,56 @@ function titleCaseWord(w: string): string {
 }
 
 /** Quita caracteres ilegales en nombres de archivo (Windows) y colapsa espacios. */
+/**
+ * Forma "wide" del project que arma processJob: la base (buildProjectForStyle) ya viene
+ * con sceneFx/proTransitions/etc pero muchos campos opt-in se agregan o leen en este
+ * archivo. Antes había ~17 `(project as { foo? }).foo` repartidos; con este tipo y un
+ * solo cast al construir el project, todos los accesos quedan tipados.
+ */
+interface ResolvedProject {
+  id: string;
+  videoId: string;
+  title?: string;
+  styleId: StyleId;
+  caption?: string;
+  captionTranslated?: string;
+  platforms?: string[];
+  captionMeta?: unknown;
+  // FX y assets opt-in
+  beatSync?: boolean;
+  enableJumpCuts?: boolean;
+  musicTrack?: string | null;
+  tracking?: boolean;
+  trackPath?: unknown[];
+  removeBg?: boolean;
+  foregroundVideoId?: string;
+  voiceover?: { text?: string; volume?: number; startSec?: number; speakerWav?: string; lang?: string };
+  voiceoverUrl?: string;
+  voiceoverVolume?: number;
+  voiceoverStartSec?: number;
+  textBehind?: { phrase?: string; color?: string };
+  translateTo?: string;
+  lut?: string | null;
+  zoomMarks?: unknown[];
+  proTransitions?: unknown[];
+  reactionZooms?: unknown[];
+  brandKit?: { handle?: string; logoUrl?: string; position?: string; opacity?: number; color?: string };
+  bRoll?: unknown[];
+}
+
+/**
+ * Encuentra el video raw de un videoId, probando .mp4 primero y .mov como fallback.
+ * Devuelve la ruta absoluta o `null` si ninguno existe. Centraliza el patrón que se
+ * repetía 3 veces (tracking, bg-removal, text-behind).
+ */
+async function findRawVideo(videoId: string): Promise<string | null> {
+  const mp4 = path.join(RAW_DIR, `${videoId}.mp4`);
+  if (await fs.access(mp4).then(() => true).catch(() => false)) return mp4;
+  const mov = path.join(RAW_DIR, `${videoId}.mov`);
+  if (await fs.access(mov).then(() => true).catch(() => false)) return mov;
+  return null;
+}
+
 function sanitizeForFilename(s: string): string {
   return s
     .replace(/[\\/:*?"<>|]/g, "")
@@ -718,7 +702,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         }
       }
 
-      const project = {
+      const project: ResolvedProject = {
         ...baseProject,
         ...(autoBroll.length ? { bRoll: autoBroll } : {}),
         // El `id` interno DEBE coincidir con el filename (`${projectId}.json`) y el
@@ -749,9 +733,9 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // en los más fuertes. Si no hay música o falla, no agrega nada (no rompe).
       // Nota: solo en estilos SIN jump cuts (broll_*), para que los tiempos de beat
       // (en el timeline final) no se desfasen del remapeo de build-props.
-      const beatSyncOn = (project as { beatSync?: boolean }).beatSync === true;
-      const musicTrack = (project as { musicTrack?: string | null }).musicTrack;
-      if (beatSyncOn && musicTrack && !(project as { enableJumpCuts?: boolean }).enableJumpCuts) {
+      const beatSyncOn = project.beatSync === true;
+      const musicTrack = project.musicTrack;
+      if (beatSyncOn && musicTrack && !project.enableJumpCuts) {
         try {
           const fileParam = new URL(musicTrack, "http://x").searchParams.get("file");
           const musicPath = fileParam ? path.join(MUSIC_DIR, fileParam) : null;
@@ -793,14 +777,9 @@ async function processJob(job: Job, body: AutoBuildRequest) {
                 .sort((a, b) => b.strength - a.strength)
                 .slice(0, 5)
                 .map((b) => ({ at: +b.t.toFixed(2), intensity: 1.18, duration: 0.22 }));
-              const p = project as {
-                zoomMarks?: unknown[];
-                proTransitions?: unknown[];
-                reactionZooms?: unknown[];
-              };
-              p.zoomMarks = [...(p.zoomMarks ?? []), ...beatZooms];
-              p.proTransitions = [...(p.proTransitions ?? []), ...beatTrans];
-              p.reactionZooms = [...(p.reactionZooms ?? []), ...beatPunches];
+              project.zoomMarks = [...(project.zoomMarks ?? []), ...beatZooms];
+              project.proTransitions = [...(project.proTransitions ?? []), ...beatTrans];
+              project.reactionZooms = [...(project.reactionZooms ?? []), ...beatPunches];
               console.log(`[auto-build] beat-sync: ${top.length} beats → zooms+flashes+${beatPunches.length} punches`);
             }
           }
@@ -813,15 +792,10 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // Detecta la cara del sujeto en el raw y rellena trackPath → TrackedLayer pega
       // labels que la siguen. Solo estilos con tracking=true (ej. hype). Si falla o no
       // hay raw, queda vacío y el render sale sin tracking (no rompe).
-      if ((project as { tracking?: boolean }).tracking) {
+      if (project.tracking) {
         try {
-          let rawVideo = path.join(RAW_DIR, `${videoId}.mp4`);
-          let rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          if (!rawExists) {
-            rawVideo = path.join(RAW_DIR, `${videoId}.mov`);
-            rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          }
-          if (rawExists) {
+          const rawVideo = await findRawVideo(videoId);
+          if (rawVideo) {
             const trackRun = await runProcess(
               PYTHON_EXE,
               [path.join(PYTHON_DIR, "track_subject.py"), rawVideo, "0.15"],
@@ -836,7 +810,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
                 .pop();
               const parsed = line ? (JSON.parse(line) as { points?: unknown[] }) : null;
               const pts = parsed?.points ?? [];
-              (project as { trackPath?: unknown[] }).trackPath = pts;
+              project.trackPath = pts;
               console.log(`[auto-build] motion tracking: ${pts.length} puntos de cara`);
             }
           }
@@ -848,15 +822,10 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // === Quitar fondo con IA (opt-in): compone la persona sobre fondo desenfocado ===
       // Genera {videoId}_fg.mp4 en RAW_DIR y lo marca como video base (build-props lo usa).
       // Pesado (segmentación por frame); solo estilos con removeBg=true (ej. broll_pip).
-      if ((project as { removeBg?: boolean }).removeBg) {
+      if (project.removeBg) {
         try {
-          let rawVideo = path.join(RAW_DIR, `${videoId}.mp4`);
-          let rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          if (!rawExists) {
-            rawVideo = path.join(RAW_DIR, `${videoId}.mov`);
-            rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          }
-          if (rawExists) {
+          const rawVideo = await findRawVideo(videoId);
+          if (rawVideo) {
             const fgId = `${videoId}_fg`;
             const fgPath = path.join(RAW_DIR, `${fgId}.mp4`);
             const bgRun = await runProcess(
@@ -866,12 +835,10 @@ async function processJob(job: Job, body: AutoBuildRequest) {
               undefined,
               600_000 // 10 min — segmentación por frame puede tardar en videos largos
             );
-            const okLine = bgRun.ok
-              ? bgRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
-              : null;
-            const okFlag = okLine ? (JSON.parse(okLine) as { ok?: boolean }).ok : false;
+            const parsedBg = bgRun.ok ? parseLastJsonLine<{ ok?: boolean }>(bgRun.stdout) : null;
+            const okFlag = parsedBg?.ok === true;
             if (okFlag && (await fs.access(fgPath).then(() => true).catch(() => false))) {
-              (project as { foregroundVideoId?: string }).foregroundVideoId = fgId;
+              project.foregroundVideoId = fgId;
               console.log(`[auto-build] quitar fondo IA: ${fgId}.mp4 generado`);
             } else {
               console.warn("[auto-build] quitar fondo: no se generó el compuesto, sigo con el raw");
@@ -887,15 +854,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       //   - Con `speakerWav` definido → C2 (XTTS-v2 clona tu voz, ~1.8GB modelo).
       //   - Sin `speakerWav`         → C1 (Piper, voz ES default, ~63MB).
       // Si falla o no hay modelo, el render sale sin voz extra (no rompe).
-      const vo = (project as {
-        voiceover?: {
-          text?: string;
-          volume?: number;
-          startSec?: number;
-          speakerWav?: string;
-          lang?: string;
-        };
-      }).voiceover;
+      const vo = project.voiceover;
       if (vo && vo.text && vo.text.trim().length > 0) {
         try {
           await fs.mkdir(VOICEOVER_DIR, { recursive: true });
@@ -922,19 +881,12 @@ async function processJob(job: Job, body: AutoBuildRequest) {
             undefined,
             ttsTimeout
           );
-          const okLine = ttsRun.ok
-            ? ttsRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
-            : null;
-          const parsed = okLine ? (JSON.parse(okLine) as { ok?: boolean }) : null;
+          const parsed = ttsRun.ok ? parseLastJsonLine<{ ok?: boolean }>(ttsRun.stdout) : null;
           if (parsed?.ok && (await fs.access(voPath).then(() => true).catch(() => false))) {
             const apiHost = process.env.VIRAL_API_HOST ?? "http://localhost:3000";
-            (project as {
-              voiceoverUrl?: string;
-              voiceoverVolume?: number;
-              voiceoverStartSec?: number;
-            }).voiceoverUrl = `${apiHost}/api/voiceover/stream?file=${encodeURIComponent(voFile)}`;
-            (project as { voiceoverVolume?: number }).voiceoverVolume = vo.volume ?? 0.7;
-            (project as { voiceoverStartSec?: number }).voiceoverStartSec = vo.startSec ?? 0;
+            project.voiceoverUrl = `${apiHost}/api/voiceover/stream?file=${encodeURIComponent(voFile)}`;
+            project.voiceoverVolume = vo.volume ?? 0.7;
+            project.voiceoverStartSec = vo.startSec ?? 0;
             console.log(`[auto-build] voz IA (${useXtts ? "XTTS clon" : "Piper"}): ${voFile}`);
           } else {
             console.warn("[auto-build] tts.py no generó WAV; render sin voz");
@@ -948,16 +900,11 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // Si el project trae `textBehind`, correr text_behind_subject.py para bake-ar el
       // efecto en un nuevo mp4. Luego seteamos foregroundVideoId para que build-props
       // use ese mp4 como base del render. Si falla, sigue con el raw normal (no rompe).
-      const tb = (project as { textBehind?: { phrase?: string; color?: string } }).textBehind;
+      const tb = project.textBehind;
       if (tb && tb.phrase) {
         try {
-          let rawVideo = path.join(RAW_DIR, `${videoId}.mp4`);
-          let rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          if (!rawExists) {
-            rawVideo = path.join(RAW_DIR, `${videoId}.mov`);
-            rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
-          }
-          if (rawExists) {
+          const rawVideo = await findRawVideo(videoId);
+          if (rawVideo) {
             const tbId = `${videoId}_textbehind`;
             const tbPath = path.join(RAW_DIR, `${tbId}.mp4`);
             const tbRun = await runProcess(
@@ -974,12 +921,10 @@ async function processJob(job: Job, body: AutoBuildRequest) {
               undefined,
               600_000 // 10 min — segmentación por frame
             );
-            const okLine = tbRun.ok
-              ? tbRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
-              : null;
-            const okFlag = okLine ? (JSON.parse(okLine) as { ok?: boolean }).ok : false;
+            const parsedTb = tbRun.ok ? parseLastJsonLine<{ ok?: boolean }>(tbRun.stdout) : null;
+            const okFlag = parsedTb?.ok === true;
             if (okFlag && (await fs.access(tbPath).then(() => true).catch(() => false))) {
-              (project as { foregroundVideoId?: string }).foregroundVideoId = tbId;
+              project.foregroundVideoId = tbId;
               console.log(`[auto-build] texto-detrás-del-sujeto: ${tbId}.mp4 generado`);
             } else {
               console.warn("[auto-build] texto-detrás: no se generó, sigo con el raw");
@@ -994,8 +939,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // Si project trae `translateTo: "en"` (o "pt", etc.), correr translate.py para
       // traducir la caption y guardar `captionTranslated`. Útil para publicar el mismo
       // video en redes con audiencias multi-idioma. Si falla, render sale igual.
-      const translateTo = (project as { translateTo?: string }).translateTo;
-      const captionToTranslate = (project as { caption?: string }).caption;
+      const translateTo = project.translateTo;
+      const captionToTranslate = project.caption;
       if (translateTo && captionToTranslate && captionToTranslate.trim().length > 0) {
         try {
           const trRun = await runProcess(
@@ -1005,14 +950,11 @@ async function processJob(job: Job, body: AutoBuildRequest) {
             undefined,
             60_000
           );
-          const okLine = trRun.ok
-            ? trRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
-            : null;
-          const parsed = okLine
-            ? (JSON.parse(okLine) as { ok?: boolean; translated?: string })
+          const parsed = trRun.ok
+            ? parseLastJsonLine<{ ok?: boolean; translated?: string }>(trRun.stdout)
             : null;
           if (parsed?.ok && parsed.translated) {
-            (project as { captionTranslated?: string }).captionTranslated = parsed.translated;
+            project.captionTranslated = parsed.translated;
             console.log(`[auto-build] traducción es→${translateTo} OK`);
           } else {
             console.warn(`[auto-build] translate.py no devolvió texto (${trRun.stderr.slice(-200)})`);
@@ -1148,7 +1090,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // (que sigue solo para cinematic_pro). Si el .cube no existe o ffmpeg falla,
       // se conserva el render sin LUT (no rompe el job). Estilos existentes no setean
       // `lut` → este bloque no corre para ellos (render idéntico).
-      const lutName = (project as { lut?: string | null }).lut;
+      const lutName = project.lut;
       if (lutName) {
         updateStep(job.id, styleId, { progress: 96 });
         try {
