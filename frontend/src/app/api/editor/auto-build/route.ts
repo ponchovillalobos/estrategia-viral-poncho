@@ -968,6 +968,38 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         }
       }
 
+      // === C3 — Traducción de caption (opt-in, ADITIVO) ===
+      // Si project trae `translateTo: "en"` (o "pt", etc.), correr translate.py para
+      // traducir la caption y guardar `captionTranslated`. Útil para publicar el mismo
+      // video en redes con audiencias multi-idioma. Si falla, render sale igual.
+      const translateTo = (project as { translateTo?: string }).translateTo;
+      const captionToTranslate = (project as { caption?: string }).caption;
+      if (translateTo && captionToTranslate && captionToTranslate.trim().length > 0) {
+        try {
+          const trRun = await runProcess(
+            PYTHON_EXE,
+            [path.join(PYTHON_DIR, "translate.py"), captionToTranslate, "--to", translateTo],
+            PYTHON_DIR,
+            undefined,
+            60_000
+          );
+          const okLine = trRun.ok
+            ? trRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
+            : null;
+          const parsed = okLine
+            ? (JSON.parse(okLine) as { ok?: boolean; translated?: string })
+            : null;
+          if (parsed?.ok && parsed.translated) {
+            (project as { captionTranslated?: string }).captionTranslated = parsed.translated;
+            console.log(`[auto-build] traducción es→${translateTo} OK`);
+          } else {
+            console.warn(`[auto-build] translate.py no devolvió texto (${trRun.stderr.slice(-200)})`);
+          }
+        } catch (err) {
+          console.warn("[auto-build] traducción falló:", err);
+        }
+      }
+
       const projectPath = path.join(PROJECTS_DIR, `${projectId}.json`);
       await writeJsonFileAtomic(projectPath, project);
 
