@@ -46,7 +46,7 @@ const PROFILES: TestProfile[] = [
 ];
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __test_ab_runs__: TestAbBatch[] | undefined;
 }
 

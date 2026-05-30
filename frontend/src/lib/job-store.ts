@@ -58,7 +58,7 @@ export interface Job {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __viral_job_store__: Map<string, Job> | undefined;
 }
 
