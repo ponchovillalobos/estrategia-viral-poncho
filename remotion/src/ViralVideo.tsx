@@ -15,7 +15,6 @@ import { CameraMotionBlur } from "@remotion/motion-blur";
 import {
   ImageOverlayLayer,
   FilmGrainLayer,
-  VignetteLayer,
   useCameraMoveTransform,
   imageOverlaySchema,
   cameraMoveSchema,
@@ -778,9 +777,6 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
     </AbsoluteFill>
   );
 };
-
-// Silenciar warning de variable sin usar (VignetteLayer queda exportada para uso futuro)
-void VignetteLayer;
 
 // B5 — Icon sticker: render de un icono lucide con bg circular animado.
 const IconStickerLayer: React.FC<{

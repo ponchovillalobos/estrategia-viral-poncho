@@ -76,11 +76,12 @@ export function TabNav() {
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            className="flex items-center gap-1.5 rounded-md p-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
             title="Configurar cuentas de redes sociales"
-            aria-label="Configurar cuentas"
+            aria-label="Configurar cuentas de redes sociales"
           >
             <Settings className="h-4 w-4" />
+            <span className="hidden lg:inline">Configuración</span>
           </button>
           {/* Hamburguesa (móvil/tablet) */}
           <button

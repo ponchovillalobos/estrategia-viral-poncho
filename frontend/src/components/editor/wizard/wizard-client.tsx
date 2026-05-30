@@ -10,6 +10,7 @@ import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileVid
 import { toast } from "sonner";
 import { CinematicStep } from "@/components/editor/wizard/cinematic-step";
 import { HelpHint } from "@/components/ui/help-hint";
+import { Confetti } from "@/components/ui/confetti";
 
 type StyleId = "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme" | "broll_full" | "broll_pip" | "text_behind";
 type PlatformId = "tiktok" | "instagram" | "linkedin" | "facebook";
@@ -841,7 +842,7 @@ export function WizardClient() {
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full bg-emerald-400 transition-all duration-500"
+                    className="h-full bg-gradient-to-r from-primary via-emerald-400 to-cyan-400 shadow-[0_0_18px_rgba(52,211,153,0.55)] transition-all duration-500"
                     style={{ width: `${jobProgress.overallProgress}%` }}
                   />
                 </div>
@@ -902,13 +903,16 @@ export function WizardClient() {
       {/* STEP 6: resultados — cierre celebratorio */}
       {step === 6 && (
         <Card className="border-border bg-card p-6">
+          {results.some((r) => r.ok) && <Confetti />}
           {(() => {
             const okCount = results.filter((r) => r.ok).length;
             const allOk = okCount === results.length && okCount > 0;
             return (
-              <div className="mb-5 text-center">
-                <div className="mx-auto mb-2 text-4xl">{allOk ? "🎉" : okCount > 0 ? "✅" : "⚠️"}</div>
-                <h2 className="text-2xl font-semibold">
+              <div className="mb-5 px-2 text-center sm:px-0">
+                <div className="mx-auto mb-2 text-3xl sm:text-5xl">
+                  {allOk ? "🎉" : okCount > 0 ? "✅" : "⚠️"}
+                </div>
+                <h2 className="text-xl font-semibold sm:text-2xl">
                   {okCount === 0
                     ? "No se pudo generar el video"
                     : okCount === 1
