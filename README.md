@@ -62,6 +62,18 @@ listo para publicar en **LinkedIn** e **Instagram** desde la misma app.
 
 ---
 
+## Tests
+
+```bash
+cd frontend
+npm test          # vitest run — corre la suite
+npm run test:watch  # vitest watch — TDD
+```
+
+El proyecto tiene tests unitarios para los helpers críticos (parser de stdout de scripts
+Python, etc.) y smoke tests end-to-end de las rutas HTTP. Cada commit del refactor pasó
+`tsc --noEmit` + tests + smoke de rutas (200) antes de mergearse.
+
 ## Inicio rápido (máquina nueva)
 
 ```powershell
@@ -178,6 +190,7 @@ Datos del usuario (separados del repo, en `C:\hermes-data\videos\` por default):
 - [docs/USAGE.md](./docs/USAGE.md) — tutorial de uso
 - [docs/UI.md](./docs/UI.md) — **diseño de la interfaz (pensada para principiantes) + convenciones**
 - [docs/NIVEL_2.md](./docs/NIVEL_2.md) — **sprint nivel-2: FX/Assets/IA agregados (karaoke, auto-reframe, voz IA, etc.)**
+- [docs/LANZAMIENTO.md](./docs/LANZAMIENTO.md) — **sprint lanzamiento: refactor + UI polish + tests (listo para vender)**
 - [docs/EFFECTS.md](./docs/EFFECTS.md) — **estilos + sistema de efectos (CapCut FX, beat-sync, tracking, quitar fondo)**
 - [docs/SOCIAL_PUBLISHING.md](./docs/SOCIAL_PUBLISHING.md) — **conectar y publicar en LinkedIn / Instagram**
 - [docs/STYLES.md](./docs/STYLES.md) — estilos base
