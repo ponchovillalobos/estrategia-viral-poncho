@@ -7,7 +7,7 @@
  *
  * Uso: <Confetti /> dentro del bloque que se renderiza al éxito.
  */
-import { useMemo } from "react";
+import { useState } from "react";
 
 const EMOJIS = ["🎉", "✨", "🔥", "🚀", "💥", "🎊", "⭐", "💫"];
 
@@ -21,19 +21,22 @@ interface Particle {
   swayX: number;       // px (vaivén horizontal)
 }
 
+function createParticles(count: number): Particle[] {
+  return Array.from({ length: count }, (_, i) => ({
+    emoji: EMOJIS[i % EMOJIS.length],
+    left: Math.round(Math.random() * 100),
+    delay: +(Math.random() * 0.6).toFixed(2),
+    duration: +(2.4 + Math.random() * 1.6).toFixed(2),
+    rotate: Math.round((Math.random() - 0.5) * 720),
+    size: Math.round(20 + Math.random() * 22),
+    swayX: Math.round((Math.random() - 0.5) * 120),
+  }));
+}
+
 export function Confetti({ count = 40 }: { count?: number }) {
-  // Determinista por mount: no re-randomiza en re-render.
-  const particles = useMemo<Particle[]>(() => {
-    return Array.from({ length: count }, (_, i) => ({
-      emoji: EMOJIS[i % EMOJIS.length],
-      left: Math.round(Math.random() * 100),
-      delay: +(Math.random() * 0.6).toFixed(2),
-      duration: +(2.4 + Math.random() * 1.6).toFixed(2),
-      rotate: Math.round((Math.random() - 0.5) * 720),
-      size: Math.round(20 + Math.random() * 22),
-      swayX: Math.round((Math.random() - 0.5) * 120),
-    }));
-  }, [count]);
+  // useState con initializer corre UNA vez (en mount), no en cada render — la forma
+  // canónica de fijar randomness al montar. Sin re-randomizar en re-render.
+  const [particles] = useState<Particle[]>(() => createParticles(count));
 
   return (
     <div

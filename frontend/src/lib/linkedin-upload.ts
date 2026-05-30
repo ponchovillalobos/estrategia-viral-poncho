@@ -20,8 +20,6 @@ import {
   getValidLinkedInAccessToken,
 } from "@/lib/linkedin-client";
 
-// LinkedIn acepta chunks de hasta 4 MB. Usamos 4 MB exactos.
-const CHUNK_BYTES = 4 * 1024 * 1024;
 /** Poll cada 3s hasta máximo 120s — la mayoría de videos cortos están AVAILABLE en <30s. */
 const POLL_INTERVAL_MS = 3000;
 const POLL_MAX_ATTEMPTS = 40;

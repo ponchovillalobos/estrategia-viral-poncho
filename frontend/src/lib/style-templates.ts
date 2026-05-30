@@ -638,6 +638,7 @@ function pickRandomMusicTrack(seed: string): string | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require("node:fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require("node:path") as typeof import("node:path");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { MUSIC_DIR } = require("@/lib/paths");
