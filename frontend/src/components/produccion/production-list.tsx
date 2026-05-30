@@ -114,7 +114,7 @@ export function ProductionList() {
     const q = search.toLowerCase().trim();
     return projects.filter((p) => {
       if (filterStatus !== "all" && p.status !== filterStatus) return false;
-      if (filterPlatform !== "all" && !(p.platforms ?? []).includes(filterPlatform)) return false;
+      if (filterPlatform !== "all" && !(p.platforms?.includes(filterPlatform) ?? false)) return false;
       if (q) {
         const haystack = `${p.id} ${p.caption ?? ""}`.toLowerCase();
         if (!haystack.includes(q)) return false;
@@ -509,17 +509,17 @@ export function ProductionList() {
                 </div>
 
                 <div className="flex flex-wrap gap-1">
-                  {(p.platforms ?? []).map((plat) => (
+                  {p.platforms?.map((plat) => (
                     <span
                       key={plat}
-                      className="rounded bg-muted px-1.5 py-0.5 font-mono-tab text-[9px]"
+                      className="rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize"
                     >
                       {plat}
                     </span>
                   ))}
                   {p.source === "long_form" && (
-                    <span className="rounded bg-violet-500/20 px-1.5 py-0.5 font-mono-tab text-[9px] text-violet-300">
-                      long_form
+                    <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-[10px] text-violet-300">
+                      Video largo
                     </span>
                   )}
                 </div>
