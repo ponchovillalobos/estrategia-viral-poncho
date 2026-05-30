@@ -27,18 +27,29 @@ listo para publicar en **LinkedIn** e **Instagram** desde la misma app.
    transcribe (WhisperX, palabra por palabra), corta silencios (silero-vad), agrega
    subtítulos animados, stickers, emojis, zooms rítmicos, jump cuts, **SFX coordinados al
    transcript**, color grading, film grain, vignette y motion blur — con **estilos predefinidos**.
-3. **Efectos "nivel CapCut"** (nativos, headless) — LUTs de color reales (ffmpeg `lut3d`),
-   light leaks / bokeh / dust, transiciones pro (whip / glitch / reveal / flash), tipografía
-   cinética, efectos kaleidoscópicos (mirror / clone / split), **cortar al ritmo de la música
-   (beat-sync)**, **motion tracking** (labels que siguen la cara) y **quitar fondo con IA**.
-   Ver [`docs/EFFECTS.md`](./docs/EFFECTS.md).
-4. **B-roll automático de Pexels** — dos estilos (`B-roll Full` / `B-roll PIP`) que buscan
-   videos en Pexels según las keywords del transcript y los insertan a tiempo.
-5. **Cursos largos → clips virales** — dejás un video de 1h y genera (a) un MP4 limpio sin
+3. **Efectos "nivel CapCut"** (nativos, headless) — LUTs reales (ffmpeg `lut3d`), light leaks /
+   bokeh / dust, **9 transiciones pro** (whip / glitch / reveal / flash / light-streak / swipe-blur / iris / …),
+   **tipografía cinética + karaoke palabra-por-palabra**, mirror / clone / split, **cortar al
+   ritmo (beat-sync)**, **motion tracking** (labels que siguen la cara), **quitar fondo con IA**,
+   **speed ramps** (slow-mo viral), **end-screen / CTA**, marca de agua de tu @handle,
+   barra de progreso, icon stickers (Lucide). Ver [`docs/EFFECTS.md`](./docs/EFFECTS.md) y
+   [`docs/NIVEL_2.md`](./docs/NIVEL_2.md).
+4. **Auto-reframe 16:9 → 9:16** — toma una grabación horizontal y la convierte en short
+   vertical desplazando la cámara para mantener la cara centrada (face-tracking).
+5. **Texto detrás del sujeto** (estilo CapCut clásico) — bake en Python con mediapipe + ffmpeg
+   de la palabra clave detrás de la persona, como un nuevo estilo del wizard.
+6. **B-roll automático de Pexels** — dos estilos (`B-roll Full` / `B-roll PIP`) que buscan
+   videos según las keywords del transcript y los insertan a tiempo.
+7. **Voz IA local (opt-in)** — locución con [Piper](https://github.com/rhasspy/piper) (voz
+   ES default) o **clonar tu propia voz** con XTTS-v2 (Coqui TTS) a partir de una muestra de
+   ~6s. Sin costo, todo local.
+8. **Traducción de captions** (opt-in) — paquetes [argos-translate](https://github.com/argosopentech/argos-translate)
+   ES→EN/PT/… para publicar el mismo video en audiencias multi-idioma. Offline.
+9. **Cursos largos → clips virales** — dejás un video de 1h y genera (a) un MP4 limpio sin
    silencios y (b) varios clips de 30-60s con momentos virales detectados por LLM local.
-6. **Publicación a redes** — **LinkedIn** (API oficial, auto-publicación de video) e
-   **Instagram** (Graph API, Reels). Ver [`docs/SOCIAL_PUBLISHING.md`](./docs/SOCIAL_PUBLISHING.md).
-7. **Métricas** — entrada manual por red con gráficas.
+10. **Publicación a redes** — **LinkedIn** (API oficial, auto-publicación de video) e
+    **Instagram** (Graph API, Reels). Ver [`docs/SOCIAL_PUBLISHING.md`](./docs/SOCIAL_PUBLISHING.md).
+11. **Métricas** — entrada manual por red con gráficas; sync automático de métricas de LinkedIn.
 
 ---
 
