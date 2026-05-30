@@ -385,7 +385,7 @@ function ActiveCaption({ words, time }: { words: Word[]; time: number }) {
   if (words.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        Aún no hay transcripción. Tocá "Transcribir".
+        Aún no hay transcripción. Tocá «Transcribir».
       </p>
     );
   }

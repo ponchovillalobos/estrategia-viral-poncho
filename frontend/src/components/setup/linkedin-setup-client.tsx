@@ -296,7 +296,7 @@ export function LinkedInSetupClient() {
         <p className="text-sm text-muted-foreground">
           En el portal: click <strong>Create app</strong>. Si te pide vincular a una{" "}
           <strong>LinkedIn Page</strong>, podés usar cualquier página que administres (si
-          no tenés, LinkedIn ofrece crear una rápido — tipo "página personal").
+          no tenés, LinkedIn ofrece crear una rápido — tipo «página personal»).
         </p>
         <p className="text-sm text-muted-foreground">
           Pegá estos valores con un click:
@@ -425,7 +425,7 @@ export function LinkedInSetupClient() {
           <p className="rounded-md border border-sky-500/30 bg-sky-500/5 p-2 text-[11px] text-sky-200">
             <Sparkles className="mr-1 inline h-3 w-3" />
             Al guardar, te llevo directo a LinkedIn para que autorices la app. No tenés que
-            tocar nada más — son 2 clicks en la página de LinkedIn ("Allow") y volvés acá
+            tocar nada más — son 2 clicks en la página de LinkedIn («Allow») y volvés acá
             con todo conectado.
           </p>
           <Button

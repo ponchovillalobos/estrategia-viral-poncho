@@ -291,7 +291,7 @@ export function CinematicStep({
                 <ul className="ml-4 mt-1 list-disc space-y-0.5 text-sky-200/80">
                   <li>
                     <strong>Descripción</strong>: escribí palabras clave que estén en el guión hablado
-                    (ej: "Carnegie", "HubSpot", "vendedor de seguros"). La IA busca esas palabras en
+                    (ej: «Carnegie», «HubSpot», «vendedor de seguros»). La IA busca esas palabras en
                     el transcript y muestra la imagen ahí.
                   </li>
                   <li>
