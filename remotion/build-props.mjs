@@ -124,6 +124,7 @@ const mirrorFxRemapped = filterAndRemap(project.mirrorFx || [], ["at"]);
 const trackPathRemapped = filterAndRemap(project.trackPath || [], ["t"]);
 const trackedItemsRemapped = filterAndRemap(project.trackedItems || [], ["at"]);
 const iconStickersRemapped = filterAndRemap(project.iconStickers || [], ["at"]);
+const speedRampsRemapped = filterAndRemap(project.speedRamps || [], ["at"]);
 
 const subtitles =
   project.manualSubtitles && project.manualSubtitles.length > 0
@@ -190,6 +191,7 @@ const props = {
   progressBar: project.progressBar ?? false,
   brandKit: project.brandKit ?? null,
   iconStickers: iconStickersRemapped,
+  speedRamps: speedRampsRemapped,
   autoReframe: project.autoReframe ?? false,
   sourceAspect: project.sourceAspect ?? 16 / 9,
 };

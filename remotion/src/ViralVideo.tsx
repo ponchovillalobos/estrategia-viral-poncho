@@ -134,6 +134,15 @@ const endScreenSchema = z.object({
   accent: z.string().default("#34d399"),
 });
 
+// A4 — Speed ramp: ventana donde se overlay-ea el source playing a `rate` < 1 (slow-mo)
+// o > 1 (acelerado). El video base sigue corriendo a 1x debajo; al terminar la ventana
+// reaparece. La duración total del video NO cambia.
+const speedRampSchema = z.object({
+  at: z.number(),
+  duration: z.number().default(1.5),
+  rate: z.number().default(0.5),
+});
+
 // B5 — Icon sticker: aparece N segundos con un icono del ICON_MAP + bg circular opcional.
 const iconStickerSchema = z.object({
   at: z.number(),
@@ -220,6 +229,7 @@ export const viralVideoSchema = z.object({
   progressBar: z.boolean().default(false),
   brandKit: brandKitSchema.nullable().default(null),
   iconStickers: z.array(iconStickerSchema).default([]),
+  speedRamps: z.array(speedRampSchema).default([]),
   // A2 — Auto-reframe 16:9 → 9:16 siguiendo al sujeto. Si autoReframe=true y hay trackPath
   // poblado, ViralVideo desplaza el video horizontalmente para mantener la cara centrada
   // sin perder altura. sourceAspect = ancho/alto del source (default 16/9).
@@ -269,6 +279,7 @@ export const defaultProps: ViralVideoProps = {
   progressBar: false,
   brandKit: null,
   iconStickers: [],
+  speedRamps: [],
   autoReframe: false,
   sourceAspect: 16 / 9,
   width: 1080,
@@ -310,6 +321,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   progressBar,
   brandKit,
   iconStickers,
+  speedRamps,
   autoReframe,
   sourceAspect,
 }) => {
@@ -462,6 +474,37 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           )
         )}
       </AbsoluteFill>
+
+      {/* A4 — Speed ramps: ventanas donde se overlay-ea el source a rate < 1 (slow-mo)
+          o > 1 (acelerado), tapando el base 1x debajo. Audio mute para no doblar. */}
+      {speedRamps.map((r, i) => {
+        const fromFrame = Math.round(r.at * fps);
+        const winFrames = Math.max(1, Math.round(r.duration * fps));
+        return (
+          <Sequence key={`sr-${i}`} from={fromFrame} durationInFrames={winFrames}>
+            <AbsoluteFill
+              style={{
+                transform: `scale(${baseScale}) translate(${baseTranslateX}px, ${baseTranslateY}px)`,
+              }}
+            >
+              {rawVideoUrl && (
+                <OffthreadVideo
+                  src={rawVideoUrl}
+                  startFrom={fromFrame}
+                  playbackRate={r.rate}
+                  muted
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    filter: videoFilter,
+                  }}
+                />
+              )}
+            </AbsoluteFill>
+          </Sequence>
+        );
+      })}
 
       {fullscreenBRoll &&
         bRoll.map((clip, i) => (

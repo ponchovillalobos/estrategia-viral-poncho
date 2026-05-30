@@ -278,6 +278,23 @@ export function generateIconStickers(ctx: BuildContext): Array<{
   }));
 }
 
+/**
+ * A4 — Genera 2 speed ramps (slow-mo 0.5x de ~1.2s) en los keywords más visuales.
+ * Cada ventana de slow-mo no extiende la duración total: tapa el video base a 1x.
+ */
+export function generateSpeedRamps(ctx: BuildContext): Array<{
+  at: number;
+  duration: number;
+  rate: number;
+}> {
+  const kws = pickKeywords(ctx, 2);
+  return kws.map((kw) => ({
+    at: +Math.max(0.5, kw.start - 0.05).toFixed(2),
+    duration: 1.2,
+    rate: 0.5,
+  }));
+}
+
 type KineticPresetName = "none" | "pop" | "slide_up" | "type_on" | "bounce" | "glow_pulse" | "karaoke";
 
 /**
@@ -300,12 +317,13 @@ function applyCapcutFx<T extends object>(
     transitions?: boolean;
     mirror?: boolean;
     tracking?: boolean;
-    // A6/A8/B5/B6/A2 — opt-in: end-screen, barra, marca, iconos y auto-reframe.
+    // A6/A8/B5/B6/A2/A4 — opt-in.
     endScreen?: boolean;
     progressBar?: boolean;
     brandKit?: boolean;
     iconStickers?: boolean;
     autoReframe?: boolean;
+    speedRamps?: boolean;
   } = {}
 ) {
   return {
@@ -343,6 +361,7 @@ function applyCapcutFx<T extends object>(
           ...(opts.tracking ? {} : { tracking: true, trackedItems: [], trackPath: [] as unknown[] }),
         }
       : {}),
+    ...(opts.speedRamps ? { speedRamps: generateSpeedRamps(ctx) } : {}),
   };
 }
 
@@ -766,7 +785,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         stutterMarks: pickKeywords(ctx, 2).map((kw) => ({ at: Math.max(0, kw.start - 0.15), duration: 0.18 })),
       },
       ctx,
-      { lut: "cyberpunk.cube", kinetic: "bounce", mirror: true }
+      { lut: "cyberpunk.cube", kinetic: "bounce", mirror: true, speedRamps: true }
     );
   }
 
@@ -810,6 +829,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
       progressBar: true,
       brandKit: true,
       iconStickers: true,
+      speedRamps: true,
     });
   }
 
