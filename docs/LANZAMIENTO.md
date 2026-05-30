@@ -58,22 +58,79 @@ Audit de UI lanzado (20+ items). HIGH priority shipped:
 
 - `remotion/src/icon-map.ts` — 30 imports lucide + el mapa de iconos extraído de ViralVideo.
 
+## 6. Splits de archivos pesados (ola 2)
+
+### ViralVideo.tsx (Remotion)
+8 capas inline extraídas a `remotion/src/layers/` + zod schemas a `remotion/src/schemas.ts`
++ icon-map a `remotion/src/icon-map.ts`. Cada extracción su propio commit con `tsc 0` +
+bundle Remotion verificado.
+
+| # | Capa | Archivo |
+|---|---|---|
+| 1 | BrandWatermarkLayer | `layers/brand-watermark-layer.tsx` |
+| 2 | IconStickerLayer | `layers/icon-sticker-layer.tsx` |
+| 3 | EndScreenLayer | `layers/end-screen-layer.tsx` |
+| 4 | PipBRollLayer | `layers/pip-broll-layer.tsx` |
+| 5 | FloatingEmojiLayer | `layers/floating-emoji-layer.tsx` |
+| 6 | WordStickerLayer | `layers/word-sticker-layer.tsx` |
+| 7 | EmphasisCardLayer | `layers/emphasis-card-layer.tsx` |
+| 8 | SubtitleLayer | `layers/subtitle-layer.tsx` |
+
+**Resultado:** ViralVideo.tsx ~1100 → **641 líneas (-42%)**.
+
+### production-list.tsx (Producción UI)
+Split en componentes + lib helpers, commit por commit con smoke 200 verificado.
+
+| Pieza | A archivo |
+|---|---|
+| Constants + types + `pickCaptionForPlatform` | `components/produccion/produccion-types.ts` |
+| `ScheduleStatusBadge` | `components/produccion/schedule-status-badge.tsx` |
+| `FilterChip` | `components/produccion/filter-chip.tsx` |
+| `CaptionTabs` + `PLATFORM_TABS` | `components/produccion/caption-tabs.tsx` |
+| `ProjectPreviewDialog` | `components/produccion/project-preview-dialog.tsx` |
+| 5 publish/regenerate actions | `lib/produccion/publish-actions.ts` |
+| `loadSchedule` + types | `lib/produccion/schedule-helpers.ts` |
+| `loadTranscript` + `copyTranscript` | `lib/produccion/transcript-helpers.ts` |
+
+**Resultado:** production-list.tsx 991 → **512 líneas (-48%)**.
+
+## 7. Tests adicionales
+
+Cobertura subida de 26 → **39 tests** (+50%):
+
+- `schedule-helpers` — 5 tests (agrupación por projectId, último gana, default a tiktok,
+  network error, lista vacía).
+- `transcript-helpers` — 8 tests (cache hit, ensamble del texto, trim, HTTP/network errors,
+  finally setLoading, copy noop, copy success).
+
+Total: **5 archivos de test, 39 tests pasando**.
+
+## 8. Más limpieza de lint
+
+ESLint: **85 → 54 problems (-37%); errors 53 → 22 (-58%)**.
+
+- 28 `react/no-unescaped-entities` arreglados con guillemets españoles «» (ortográficamente
+  correctos para ES, sin escape).
+- `<a href>` interno → `<Link>` en stats-cards.
+- `Date.now()` en useState → lazy initializer.
+- Reorden de `a.onended` en music-picker para evitar mutación post-setter.
+
 ## Lo que NO se hizo (próximas olas)
 
 Refactors mayores que requieren su propia ola con verificación visual exhaustiva:
 
 - Split de `auto-build/route.ts` (1100 líneas) en 9 módulos por etapa de pipeline.
-- Split de `ViralVideo.tsx` (~47KB) — sacar las 8 sub-componentes de capa a
-  `remotion/src/layers/` + schemas a `remotion/src/schemas.ts`.
-- Split de `production-list.tsx` (991 líneas) — hooks + tarjeta + dialog + acciones.
+- 21 errores `react-hooks/set-state-in-effect` restantes — cada uno necesita análisis caso
+  por caso para no romper sincronización con el server.
 - UI MED items restantes (mono-tab leakage en más labels, focus rings táctiles,
   ilustraciones de empty states, badges status con transición de color).
+- Cobertura de tests para `publish-actions` (mocks de `fetch` + `window.open`).
 
 ## Cómo verificar
 
 ```bash
 cd frontend
-npm test        # 6/6 tests pasan
+npm test        # 39/39 tests pasan
 npx tsc --noEmit  # 0 errores
 cd ../remotion
 npx tsc --noEmit  # 0 errores
