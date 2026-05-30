@@ -15,6 +15,7 @@ import { FilterChip } from "@/components/produccion/filter-chip";
 import { ProjectPreviewDialog } from "@/components/produccion/project-preview-dialog";
 import * as publishActions from "@/lib/produccion/publish-actions";
 import * as scheduleHelpers from "@/lib/produccion/schedule-helpers";
+import * as transcriptHelpers from "@/lib/produccion/transcript-helpers";
 import {
   STATUS_COLOR,
   STATUS_OPTIONS,
@@ -97,37 +98,15 @@ export function ProductionList() {
     publishActions.regenerate(p, setRegenerating, load, provider);
 
   // Carga el transcript del video. Cacheado por videoId.
-  async function loadTranscript(videoId: string) {
-    if (transcriptByVideoId[videoId] !== undefined) return; // ya cargado
-    setLoadingTranscript(true);
-    try {
-      const res = await fetch(
-        `/api/videos/transcribe?videoId=${encodeURIComponent(videoId)}`
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const words = data.transcript?.words ?? [];
-      const text = words.map((w: { word: string }) => w.word).join(" ").trim();
-      setTranscriptByVideoId((prev) => ({ ...prev, [videoId]: text }));
-    } catch {
-      setTranscriptByVideoId((prev) => ({ ...prev, [videoId]: "" }));
-    } finally {
-      setLoadingTranscript(false);
-    }
-  }
-
-  async function copyTranscript(videoId: string) {
-    const t = transcriptByVideoId[videoId];
-    if (!t) return;
-    try {
-      await navigator.clipboard.writeText(t);
-      setTranscriptCopied(true);
-      toast.success("Transcript copiado");
-      setTimeout(() => setTranscriptCopied(false), 1800);
-    } catch {
-      toast.error("No se pudo copiar");
-    }
-  }
+  const loadTranscript = (videoId: string) =>
+    transcriptHelpers.loadTranscript(
+      videoId,
+      transcriptByVideoId,
+      setLoadingTranscript,
+      setTranscriptByVideoId
+    );
+  const copyTranscript = (videoId: string) =>
+    transcriptHelpers.copyTranscript(videoId, transcriptByVideoId, setTranscriptCopied);
 
   const loadSchedule = () => scheduleHelpers.loadSchedule(setScheduledByProjectId);
 
