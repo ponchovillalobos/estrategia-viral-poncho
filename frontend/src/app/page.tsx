@@ -45,13 +45,21 @@ export default function Home() {
   return (
     <div className="space-y-10">
       {/* Hero */}
-      <header className="space-y-3 pt-4">
+      <header className="relative space-y-3 pt-4">
+        {/* Resplandor sutil detrás del título — eleva el "preciosa visualmente" sin distraer. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-10 left-0 -z-10 h-64 w-[28rem] max-w-full rounded-full bg-primary/20 opacity-50 blur-3xl"
+        />
         <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
           Hola 👋 ¿Qué querés hacer hoy?
         </h1>
         <p className="max-w-2xl text-lg text-muted-foreground">
-          Convertí tus videos en <strong className="text-foreground">shorts virales</strong> y
-          publicalos en tus redes — sin saber editar. Elegí una opción para empezar.
+          Convertí tus videos en{" "}
+          <strong className="bg-gradient-to-r from-primary via-emerald-300 to-cyan-300 bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(52,211,153,0.35)]">
+            shorts virales
+          </strong>{" "}
+          y publicalos en tus redes — sin saber editar. Elegí una opción para empezar.
         </p>
       </header>
 

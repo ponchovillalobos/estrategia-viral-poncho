@@ -15,6 +15,7 @@
  * (sceneFx/proTransitions con length>0) o si kineticPreset !== "none". Con los
  * defaults vacíos, el render sale IDÉNTICO al de hoy.
  */
+import { useMemo } from "react";
 import {
   AbsoluteFill,
   spring,
@@ -457,6 +458,23 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
   color,
   highlight,
 }) => {
+  // PERF: agrupar palabras en líneas + mapa palabra→línea SOLO cuando cambia `words`,
+  // no en cada frame. Sin esto, KineticSubtitleLayer en modo "karaoke" hacía
+  // groupWordsIntoLines + lines.find() cada frame (~360k iteraciones de más a 30fps × 60s).
+  const lines = useMemo(
+    () => (preset === "karaoke" ? groupWordsIntoLines(words) : null),
+    [words, preset]
+  );
+  const wordToLine = useMemo(() => {
+    const map: Record<number, number> = {};
+    if (lines) {
+      for (let li = 0; li < lines.length; li++) {
+        for (const wi of lines[li]) map[wi] = li;
+      }
+    }
+    return map;
+  }, [lines]);
+
   let activeIndex = -1;
   for (let idx = 0; idx < words.length; idx++) {
     if (words[idx].start <= currentTime + 0.05) activeIndex = idx;
@@ -466,8 +484,9 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
 
   // ── Modo KARAOKE: línea completa con la palabra activa resaltada ──
   if (preset === "karaoke") {
-    const lines = groupWordsIntoLines(words);
-    const line = lines.find((l) => l.includes(activeIndex)) ?? [activeIndex];
+    // `lines` y `wordToLine` se memoizan a nivel componente (ver useMemo arriba),
+    // así no se recalculan en CADA frame (~360k iteraciones menos a 30fps × 60s × 200 words).
+    const line = (lines && lines[wordToLine[activeIndex] ?? 0]) ?? [activeIndex];
     const lineStart = words[line[0]].start;
     const lineEntry = currentTime - lineStart;
     const sLine = spring({
