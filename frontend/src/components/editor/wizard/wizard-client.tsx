@@ -423,7 +423,7 @@ export function WizardClient() {
                 No hay videos en tu carpeta de grabaciones.
               </p>
               <p className="mt-1 font-mono-tab text-[10px] text-muted-foreground">
-                Usá <strong className="text-foreground">"importar desde mi compu"</strong> arriba a la derecha o copiá MP4s a{" "}
+                Usá <strong className="text-foreground">«importar desde mi compu»</strong> arriba a la derecha o copiá MP4s a{" "}
                 <span className="text-foreground">{rawDir || "raw/"}</span>
               </p>
             </div>

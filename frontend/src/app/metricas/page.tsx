@@ -43,22 +43,22 @@ export default function MetricasPage() {
           <li>
             <span className="font-mono-tab text-foreground">TikTok</span> · App
             → tu video → ··· → Datos del video. Copiá views, likes, comments,
-            shares, saves. Para watch time → "Análisis" → "Tiempo promedio
-            visualizado".
+            shares, saves. Para watch time → «Análisis» → «Tiempo promedio
+            visualizado».
           </li>
           <li>
             <span className="font-mono-tab text-foreground">Instagram</span> ·
             App → tu reel → ver Insights. Anotá reach (como views), likes, comments, saves,
-            shares. Watch time → "Tiempo de reproducción promedio".
+            shares. Watch time → «Tiempo de reproducción promedio».
           </li>
           <li>
             <span className="font-mono-tab text-foreground">LinkedIn</span> ·
-            Tu post → "ver analytics". Anotá impresiones (como views), reacciones (likes),
-            comments, reposts (shares). LinkedIn ahora muestra "tiempo de reproducción promedio".
+            Tu post → «ver analytics». Anotá impresiones (como views), reacciones (likes),
+            comments, reposts (shares). LinkedIn ahora muestra «tiempo de reproducción promedio».
           </li>
           <li>
             <span className="font-mono-tab text-foreground">Facebook</span> ·
-            Post → "ver insights". Views (alcance), likes, comments, shares.
+            Post → «ver insights». Views (alcance), likes, comments, shares.
           </li>
         </ul>
       </section>
