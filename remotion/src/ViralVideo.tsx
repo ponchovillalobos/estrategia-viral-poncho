@@ -32,6 +32,7 @@ import { TrackedLayer, trackPointSchema, trackedItemSchema } from "./tracked-lay
 import { BrandWatermarkLayer } from "./layers/brand-watermark-layer";
 import { IconStickerLayer } from "./layers/icon-sticker-layer";
 import { EndScreenLayer } from "./layers/end-screen-layer";
+import { PipBRollLayer } from "./layers/pip-broll-layer";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -671,53 +672,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
 
 // EndScreenLayer vive ahora en ./layers/end-screen-layer.
 
-const PipBRollLayer: React.FC<{ url: string; accent: string }> = ({
-  url,
-  accent,
-}) => {
-  // Layout responsivo: en 1080×1920 (vertical) → PiP de 540×720 con padding-bottom 480.
-  // En 16:9 (1920×1080) escala proporcionalmente para que el PiP quede en posición útil.
-  const { width: compWidth, height: compHeight } = useVideoConfig();
-  const pipWidth = Math.min(compWidth * 0.5, 540);
-  const pipHeight = Math.min(compHeight * 0.375, 720);
-  const paddingBottom = compHeight * 0.25;
-  return (
-    <AbsoluteFill
-      style={{
-        justifyContent: "flex-end",
-        alignItems: "center",
-        paddingBottom,
-      }}
-    >
-      <div
-        style={{
-          width: pipWidth,
-          height: pipHeight,
-          borderRadius: 28,
-          overflow: "hidden",
-          border: `5px solid ${accent}`,
-          boxShadow: `0 0 60px ${accent}55, 0 12px 40px rgba(0,0,0,0.7)`,
-          background: "#000",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <OffthreadVideo
-          src={url}
-          muted
-          style={{
-            maxWidth: "100%",
-            maxHeight: "100%",
-            width: "auto",
-            height: "auto",
-            objectFit: "contain",
-          }}
-        />
-      </div>
-    </AbsoluteFill>
-  );
-};
+// PipBRollLayer vive ahora en ./layers/pip-broll-layer.
 
 const FloatingEmojiLayer: React.FC<{
   emoji: z.infer<typeof floatingEmojiSchema>;
