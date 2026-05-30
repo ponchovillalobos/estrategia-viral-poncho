@@ -147,6 +147,27 @@ const iconStickerSchema = z.object({
   size: z.number().default(120),
 });
 
+/**
+ * A2 — Interpolación lineal de la posición X de la cara a un tiempo dado, en el espacio
+ * normalizado 0..1 del trackPath. Igual lógica que sampleAt() en tracked-layer, pero
+ * inline para no acoplar este archivo al otro.
+ */
+function sampleTrackX(path: { t: number; x: number }[], t: number): number {
+  if (path.length === 0) return 0.5;
+  if (t <= path[0].t) return path[0].x;
+  const last = path[path.length - 1];
+  if (t >= last.t) return last.x;
+  for (let i = 1; i < path.length; i++) {
+    if (t <= path[i].t) {
+      const a = path[i - 1];
+      const b = path[i];
+      const f = (t - a.t) / Math.max(0.0001, b.t - a.t);
+      return a.x + (b.x - a.x) * f;
+    }
+  }
+  return last.x;
+}
+
 // B6 — Brand kit / marca de agua: handle (y/o logo) sutil en una esquina, todo el video.
 const brandKitSchema = z.object({
   handle: z.string().default(""),
@@ -199,6 +220,11 @@ export const viralVideoSchema = z.object({
   progressBar: z.boolean().default(false),
   brandKit: brandKitSchema.nullable().default(null),
   iconStickers: z.array(iconStickerSchema).default([]),
+  // A2 — Auto-reframe 16:9 → 9:16 siguiendo al sujeto. Si autoReframe=true y hay trackPath
+  // poblado, ViralVideo desplaza el video horizontalmente para mantener la cara centrada
+  // sin perder altura. sourceAspect = ancho/alto del source (default 16/9).
+  autoReframe: z.boolean().default(false),
+  sourceAspect: z.number().default(16 / 9),
   // Dimensiones del composition — Root.tsx las lee vía calculateMetadata.
   // Default vertical 9:16. Pasar {width:1920, height:1080} para horizontal 16:9.
   width: z.number().default(1080),
@@ -243,6 +269,8 @@ export const defaultProps: ViralVideoProps = {
   progressBar: false,
   brandKit: null,
   iconStickers: [],
+  autoReframe: false,
+  sourceAspect: 16 / 9,
   width: 1080,
   height: 1920,
 };
@@ -282,6 +310,8 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   progressBar,
   brandKit,
   iconStickers,
+  autoReframe,
+  sourceAspect,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -295,9 +325,27 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   const isCinematicMode =
     subtitleStyle === "cinematic" || filmGrain || imageOverlays.length > 0;
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { fps, durationInFrames, width: compWidth, height: compHeight } = useVideoConfig();
   const currentTime = frame / fps;
   const totalDuration = durationInFrames / fps;
+
+  // A2 — Auto-reframe: si el source es más ancho que el frame, desplazar horizontalmente
+  // para mantener la cara centrada. Sólo aplica con autoReframe=true + trackPath poblado +
+  // frame vertical (9:16) + source más ancho que el frame.
+  let autoReframeTranslateX = 0;
+  if (
+    autoReframe &&
+    trackPath.length > 0 &&
+    compHeight > compWidth &&
+    sourceAspect > compWidth / compHeight
+  ) {
+    const faceX = sampleTrackX(trackPath, currentTime);
+    // objectFit:cover escala el source para que el alto = compHeight; el ancho excede.
+    const renderedSourceWidth = compHeight * sourceAspect;
+    const maxOffset = (renderedSourceWidth - compWidth) / 2;
+    const desired = -(faceX - 0.5) * renderedSourceWidth;
+    autoReframeTranslateX = Math.max(-maxOffset, Math.min(maxOffset, desired));
+  }
 
   const activeAnim = animations.find(
     (a) => currentTime >= a.at && currentTime <= a.at + 0.5
@@ -351,7 +399,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   // useCameraMoveTransform respeta la regla de hooks: siempre llamar.
   const cameraMove = useCameraMoveTransform(isCinematicMode ? cameraMoves : []);
   const baseScale = scale * cameraMove.scale;
-  const baseTranslateX = shake + cameraMove.translateX;
+  const baseTranslateX = shake + cameraMove.translateX + autoReframeTranslateX;
   const baseTranslateY = cameraMove.translateY;
 
   // F3 SUPREME — Color grading PROFESIONAL según densidad (mood-aware).

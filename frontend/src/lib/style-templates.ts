@@ -300,11 +300,12 @@ function applyCapcutFx<T extends object>(
     transitions?: boolean;
     mirror?: boolean;
     tracking?: boolean;
-    // A6/A8/B5/B6 — opt-in: end-screen/CTA, barra de progreso, marca de agua e icon stickers.
+    // A6/A8/B5/B6/A2 — opt-in: end-screen, barra, marca, iconos y auto-reframe.
     endScreen?: boolean;
     progressBar?: boolean;
     brandKit?: boolean;
     iconStickers?: boolean;
+    autoReframe?: boolean;
   } = {}
 ) {
   return {
@@ -334,6 +335,14 @@ function applyCapcutFx<T extends object>(
     // Si no hay handle configurado, ViralVideo no la renderiza (queda igual).
     ...(opts.brandKit ? { brandKit: { handle: "", position: "bottom-right" } } : {}),
     ...(opts.iconStickers ? { iconStickers: generateIconStickers(ctx) } : {}),
+    // A2 — autoReframe necesita tracking activo para tener trackPath. Si el estilo
+    // ya pidió tracking (vía opts.tracking) o lo activamos acá, el trackPath se llena.
+    ...(opts.autoReframe
+      ? {
+          autoReframe: true,
+          ...(opts.tracking ? {} : { tracking: true, trackedItems: [], trackPath: [] as unknown[] }),
+        }
+      : {}),
   };
 }
 
@@ -732,7 +741,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         zoomMarks: pickKeywords(ctx, 5).map((kw) => ({ at: kw.start, duration: 0.6, scale: 1.14 })),
       },
       ctx,
-      { lut: "teal_orange.cube", kinetic: "pop", tracking: true }
+      { lut: "teal_orange.cube", kinetic: "pop", tracking: true, autoReframe: true }
     );
   }
 
