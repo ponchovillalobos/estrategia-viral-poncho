@@ -230,6 +230,11 @@ export const viralVideoSchema = z.object({
   brandKit: brandKitSchema.nullable().default(null),
   iconStickers: z.array(iconStickerSchema).default([]),
   speedRamps: z.array(speedRampSchema).default([]),
+  // C1 — Voz IA (Piper). Opt-in: si voiceoverUrl viene, se monta una pista de audio
+  // extra (encima de music+sfx+raw). Default null = sin voiceover, render idéntico.
+  voiceoverUrl: z.string().nullable().default(null),
+  voiceoverVolume: z.number().default(0.7),
+  voiceoverStartSec: z.number().default(0),
   // A2 — Auto-reframe 16:9 → 9:16 siguiendo al sujeto. Si autoReframe=true y hay trackPath
   // poblado, ViralVideo desplaza el video horizontalmente para mantener la cara centrada
   // sin perder altura. sourceAspect = ancho/alto del source (default 16/9).
@@ -280,6 +285,9 @@ export const defaultProps: ViralVideoProps = {
   brandKit: null,
   iconStickers: [],
   speedRamps: [],
+  voiceoverUrl: null,
+  voiceoverVolume: 0.7,
+  voiceoverStartSec: 0,
   autoReframe: false,
   sourceAspect: 16 / 9,
   width: 1080,
@@ -322,6 +330,9 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   brandKit,
   iconStickers,
   speedRamps,
+  voiceoverUrl,
+  voiceoverVolume,
+  voiceoverStartSec,
   autoReframe,
   sourceAspect,
 }) => {
@@ -702,6 +713,13 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       })}
 
       {musicUrl && <Audio src={musicUrl} volume={musicVolume} />}
+
+      {/* C1 — Voz IA (Piper): pista de audio extra. Arranca en voiceoverStartSec. */}
+      {voiceoverUrl && (
+        <Sequence from={Math.max(0, Math.round(voiceoverStartSec * fps))}>
+          <Audio src={voiceoverUrl} volume={voiceoverVolume} />
+        </Sequence>
+      )}
 
       {/* === Modo cinematográfico (opt-in vía imageOverlays/filmGrain/vignette) === */}
       {/* Cuando isCinematicMode=true → imágenes FULLSCREEN + TV grain siempre + Ken Burns amplio */}

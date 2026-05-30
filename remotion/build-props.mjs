@@ -192,6 +192,10 @@ const props = {
   brandKit: project.brandKit ?? null,
   iconStickers: iconStickersRemapped,
   speedRamps: speedRampsRemapped,
+  // C1 — Voz IA (Piper) opt-in. auto-build rellena voiceoverUrl tras correr tts.py.
+  voiceoverUrl: project.voiceoverUrl ?? null,
+  voiceoverVolume: project.voiceoverVolume ?? 0.7,
+  voiceoverStartSec: project.voiceoverStartSec ?? 0,
   autoReframe: project.autoReframe ?? false,
   sourceAspect: project.sourceAspect ?? 16 / 9,
 };
