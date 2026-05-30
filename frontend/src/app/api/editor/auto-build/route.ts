@@ -23,7 +23,7 @@ import { enqueue } from "@/lib/job-queue";
 import { autoMatchBroll, type BrollClip } from "@/lib/pexels";
 import { writeJsonFileAtomic } from "@/lib/atomic-write";
 import { readSettings } from "@/lib/user-settings";
-import { runProcess } from "@/lib/run-process";
+import { runProcess, parseLastJsonLine } from "@/lib/run-process";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -800,10 +800,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
               undefined,
               600_000 // 10 min — segmentación por frame puede tardar en videos largos
             );
-            const okLine = bgRun.ok
-              ? bgRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
-              : null;
-            const okFlag = okLine ? (JSON.parse(okLine) as { ok?: boolean }).ok : false;
+            const parsedBg = bgRun.ok ? parseLastJsonLine<{ ok?: boolean }>(bgRun.stdout) : null;
+            const okFlag = parsedBg?.ok === true;
             if (okFlag && (await fs.access(fgPath).then(() => true).catch(() => false))) {
               (project as { foregroundVideoId?: string }).foregroundVideoId = fgId;
               console.log(`[auto-build] quitar fondo IA: ${fgId}.mp4 generado`);
@@ -856,10 +854,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
             undefined,
             ttsTimeout
           );
-          const okLine = ttsRun.ok
-            ? ttsRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
-            : null;
-          const parsed = okLine ? (JSON.parse(okLine) as { ok?: boolean }) : null;
+          const parsed = ttsRun.ok ? parseLastJsonLine<{ ok?: boolean }>(ttsRun.stdout) : null;
           if (parsed?.ok && (await fs.access(voPath).then(() => true).catch(() => false))) {
             const apiHost = process.env.VIRAL_API_HOST ?? "http://localhost:3000";
             (project as {
@@ -908,10 +903,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
               undefined,
               600_000 // 10 min — segmentación por frame
             );
-            const okLine = tbRun.ok
-              ? tbRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
-              : null;
-            const okFlag = okLine ? (JSON.parse(okLine) as { ok?: boolean }).ok : false;
+            const parsedTb = tbRun.ok ? parseLastJsonLine<{ ok?: boolean }>(tbRun.stdout) : null;
+            const okFlag = parsedTb?.ok === true;
             if (okFlag && (await fs.access(tbPath).then(() => true).catch(() => false))) {
               (project as { foregroundVideoId?: string }).foregroundVideoId = tbId;
               console.log(`[auto-build] texto-detrás-del-sujeto: ${tbId}.mp4 generado`);
@@ -939,11 +932,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
             undefined,
             60_000
           );
-          const okLine = trRun.ok
-            ? trRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
-            : null;
-          const parsed = okLine
-            ? (JSON.parse(okLine) as { ok?: boolean; translated?: string })
+          const parsed = trRun.ok
+            ? parseLastJsonLine<{ ok?: boolean; translated?: string }>(trRun.stdout)
             : null;
           if (parsed?.ok && parsed.translated) {
             (project as { captionTranslated?: string }).captionTranslated = parsed.translated;
