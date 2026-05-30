@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { CinematicStep } from "@/components/editor/wizard/cinematic-step";
 import { HelpHint } from "@/components/ui/help-hint";
 
-type StyleId = "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme" | "broll_full" | "broll_pip";
+type StyleId = "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme" | "broll_full" | "broll_pip" | "text_behind";
 type PlatformId = "tiktok" | "instagram" | "linkedin" | "facebook";
 
 interface VideoEntry {
@@ -51,6 +51,7 @@ const STYLES: { id: StyleId; name: string; tagline: string; emoji: string; recom
   { id: "silent", name: "Limpio", tagline: "Solo subtítulos, sin efectos. Sobrio y profesional.", emoji: "🤍" },
   { id: "broll_full", name: "Con videos de apoyo", tagline: "Agrega clips de archivo a pantalla completa según lo que decís.", emoji: "🎞️" },
   { id: "broll_pip", name: "Videos de apoyo (chico)", tagline: "Muestra clips de archivo en pequeño sobre tu video.", emoji: "🖼️" },
+  { id: "text_behind", name: "Texto detrás de vos", tagline: "Efecto CapCut clásico: una palabra grande queda DETRÁS del sujeto.", emoji: "🧍" },
 ];
 
 // Nombre humano de un estilo a partir de su id (acepta "videoId::style" del progreso).

@@ -11,6 +11,7 @@ import {
   PYTHON_EXE,
   PYTHON_DIR,
   MUSIC_DIR,
+  VOICEOVER_DIR,
 } from "@/lib/paths";
 import {
   buildProjectForStyle,
@@ -21,6 +22,7 @@ import { createJob, updateStep, setCurrentStyle, type Job } from "@/lib/job-stor
 import { enqueue } from "@/lib/job-queue";
 import { autoMatchBroll, type BrollClip } from "@/lib/pexels";
 import { writeJsonFileAtomic } from "@/lib/atomic-write";
+import { readSettings } from "@/lib/user-settings";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -173,6 +175,7 @@ const STYLE_SHORT_LABEL: Record<StyleId, string> = {
   cinematic_pro: "Cine",
   broll_full: "Broll",
   broll_pip: "BrollPIP",
+  text_behind: "TextoDetras",
 };
 
 const TITLE_STOPWORDS = new Set([
@@ -656,6 +659,22 @@ async function processJob(job: Job, body: AutoBuildRequest) {
   // de salida sea identificable: "<Título> <Estilo>.mp4". Cae al videoId si no hay nada útil.
   const contentTitle = sanitizeForFilename(generateContentTitle(transcript.words)) || videoId;
 
+  // B6 — Handle para la marca de agua: prioridad instagram → linkedin → tiktok → facebook.
+  // Si no hay ninguno configurado en settings, el watermark queda vacío y ViralVideo no lo
+  // renderiza (render idéntico). Se lee una sola vez por job, no por estilo.
+  let brandHandle = "";
+  try {
+    const s = await readSettings();
+    brandHandle =
+      s.handles?.instagram ||
+      s.handles?.linkedin ||
+      s.handles?.tiktok ||
+      s.handles?.facebook ||
+      "";
+  } catch {
+    /* sin settings → sin watermark, no rompe */
+  }
+
   // 4. Procesar cada estilo
   for (const styleId of job.styles) {
     setCurrentStyle(job.id, styleId);
@@ -712,6 +731,15 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         videoId,
         title: contentTitle,
         styleId,
+        // B6 — Si el estilo activó brandKit y hay handle en settings, rellenarlo. Si el
+        // estilo no lo activó (no hay brandKit en baseProject), esto no hace nada.
+        ...(() => {
+          const bk = (baseProject as { brandKit?: { handle?: string } }).brandKit;
+          if (bk && !bk.handle && brandHandle) {
+            return { brandKit: { ...bk, handle: brandHandle } };
+          }
+          return {};
+        })(),
         platforms: platforms ?? (baseProject as { platforms?: string[] }).platforms ?? [],
         captionMeta: captionMeta ?? (baseProject as { captionMeta?: unknown }).captionMeta ?? null,
       };
@@ -758,10 +786,22 @@ async function processJob(job: Job, body: AutoBuildRequest) {
               const beatTrans = top
                 .filter((_, i) => i % 2 === 0)
                 .map((b) => ({ at: +b.t.toFixed(2), kind: "flash" as const, durationFrames: 5, color: "#ffffff" }));
-              const p = project as { zoomMarks?: unknown[]; proTransitions?: unknown[] };
+              // A7 — "cortar al ritmo": en los 5 beats MÁS fuertes, un reaction-zoom punch
+              // (golpe rápido de cámara) para que se sienta un corte al beat, no solo brillo.
+              const beatPunches = top
+                .slice()
+                .sort((a, b) => b.strength - a.strength)
+                .slice(0, 5)
+                .map((b) => ({ at: +b.t.toFixed(2), intensity: 1.18, duration: 0.22 }));
+              const p = project as {
+                zoomMarks?: unknown[];
+                proTransitions?: unknown[];
+                reactionZooms?: unknown[];
+              };
               p.zoomMarks = [...(p.zoomMarks ?? []), ...beatZooms];
               p.proTransitions = [...(p.proTransitions ?? []), ...beatTrans];
-              console.log(`[auto-build] beat-sync: ${top.length} beats → zooms+flashes`);
+              p.reactionZooms = [...(p.reactionZooms ?? []), ...beatPunches];
+              console.log(`[auto-build] beat-sync: ${top.length} beats → zooms+flashes+${beatPunches.length} punches`);
             }
           }
         } catch (err) {
@@ -839,6 +879,146 @@ async function processJob(job: Job, body: AutoBuildRequest) {
           }
         } catch (err) {
           console.warn("[auto-build] quitar fondo falló:", err);
+        }
+      }
+
+      // === C1/C2 — Voz IA (Piper o XTTS-clon, opt-in, ADITIVO) ===
+      // Si project trae `voiceover: { text }`, sintetizar la locución:
+      //   - Con `speakerWav` definido → C2 (XTTS-v2 clona tu voz, ~1.8GB modelo).
+      //   - Sin `speakerWav`         → C1 (Piper, voz ES default, ~63MB).
+      // Si falla o no hay modelo, el render sale sin voz extra (no rompe).
+      const vo = (project as {
+        voiceover?: {
+          text?: string;
+          volume?: number;
+          startSec?: number;
+          speakerWav?: string;
+          lang?: string;
+        };
+      }).voiceover;
+      if (vo && vo.text && vo.text.trim().length > 0) {
+        try {
+          await fs.mkdir(VOICEOVER_DIR, { recursive: true });
+          const voFile = `${projectId}.wav`;
+          const voPath = path.join(VOICEOVER_DIR, voFile);
+          const useXtts = Boolean(vo.speakerWav);
+          const scriptArgs = useXtts
+            ? [
+                path.join(PYTHON_DIR, "xtts.py"),
+                vo.text,
+                voPath,
+                "--speaker",
+                vo.speakerWav!,
+                "--lang",
+                vo.lang ?? "es",
+              ]
+            : [path.join(PYTHON_DIR, "tts.py"), vo.text, voPath];
+          // XTTS es CPU-intensivo + descarga el modelo la primera vez → timeout más amplio.
+          const ttsTimeout = useXtts ? 900_000 : 180_000;
+          const ttsRun = await runProcess(
+            PYTHON_EXE,
+            scriptArgs,
+            PYTHON_DIR,
+            undefined,
+            ttsTimeout
+          );
+          const okLine = ttsRun.ok
+            ? ttsRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
+            : null;
+          const parsed = okLine ? (JSON.parse(okLine) as { ok?: boolean }) : null;
+          if (parsed?.ok && (await fs.access(voPath).then(() => true).catch(() => false))) {
+            const apiHost = process.env.VIRAL_API_HOST ?? "http://localhost:3000";
+            (project as {
+              voiceoverUrl?: string;
+              voiceoverVolume?: number;
+              voiceoverStartSec?: number;
+            }).voiceoverUrl = `${apiHost}/api/voiceover/stream?file=${encodeURIComponent(voFile)}`;
+            (project as { voiceoverVolume?: number }).voiceoverVolume = vo.volume ?? 0.7;
+            (project as { voiceoverStartSec?: number }).voiceoverStartSec = vo.startSec ?? 0;
+            console.log(`[auto-build] voz IA (${useXtts ? "XTTS clon" : "Piper"}): ${voFile}`);
+          } else {
+            console.warn("[auto-build] tts.py no generó WAV; render sin voz");
+          }
+        } catch (err) {
+          console.warn("[auto-build] voz IA falló:", err);
+        }
+      }
+
+      // === A3 — Texto detrás del sujeto (opt-in, ADITIVO) ===
+      // Si el project trae `textBehind`, correr text_behind_subject.py para bake-ar el
+      // efecto en un nuevo mp4. Luego seteamos foregroundVideoId para que build-props
+      // use ese mp4 como base del render. Si falla, sigue con el raw normal (no rompe).
+      const tb = (project as { textBehind?: { phrase?: string; color?: string } }).textBehind;
+      if (tb && tb.phrase) {
+        try {
+          let rawVideo = path.join(RAW_DIR, `${videoId}.mp4`);
+          let rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
+          if (!rawExists) {
+            rawVideo = path.join(RAW_DIR, `${videoId}.mov`);
+            rawExists = await fs.access(rawVideo).then(() => true).catch(() => false);
+          }
+          if (rawExists) {
+            const tbId = `${videoId}_textbehind`;
+            const tbPath = path.join(RAW_DIR, `${tbId}.mp4`);
+            const tbRun = await runProcess(
+              PYTHON_EXE,
+              [
+                path.join(PYTHON_DIR, "text_behind_subject.py"),
+                rawVideo,
+                tbPath,
+                tb.phrase,
+                "--color",
+                tb.color || "ffffff",
+              ],
+              PYTHON_DIR,
+              undefined,
+              600_000 // 10 min — segmentación por frame
+            );
+            const okLine = tbRun.ok
+              ? tbRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
+              : null;
+            const okFlag = okLine ? (JSON.parse(okLine) as { ok?: boolean }).ok : false;
+            if (okFlag && (await fs.access(tbPath).then(() => true).catch(() => false))) {
+              (project as { foregroundVideoId?: string }).foregroundVideoId = tbId;
+              console.log(`[auto-build] texto-detrás-del-sujeto: ${tbId}.mp4 generado`);
+            } else {
+              console.warn("[auto-build] texto-detrás: no se generó, sigo con el raw");
+            }
+          }
+        } catch (err) {
+          console.warn("[auto-build] texto-detrás-del-sujeto falló:", err);
+        }
+      }
+
+      // === C3 — Traducción de caption (opt-in, ADITIVO) ===
+      // Si project trae `translateTo: "en"` (o "pt", etc.), correr translate.py para
+      // traducir la caption y guardar `captionTranslated`. Útil para publicar el mismo
+      // video en redes con audiencias multi-idioma. Si falla, render sale igual.
+      const translateTo = (project as { translateTo?: string }).translateTo;
+      const captionToTranslate = (project as { caption?: string }).caption;
+      if (translateTo && captionToTranslate && captionToTranslate.trim().length > 0) {
+        try {
+          const trRun = await runProcess(
+            PYTHON_EXE,
+            [path.join(PYTHON_DIR, "translate.py"), captionToTranslate, "--to", translateTo],
+            PYTHON_DIR,
+            undefined,
+            60_000
+          );
+          const okLine = trRun.ok
+            ? trRun.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop()
+            : null;
+          const parsed = okLine
+            ? (JSON.parse(okLine) as { ok?: boolean; translated?: string })
+            : null;
+          if (parsed?.ok && parsed.translated) {
+            (project as { captionTranslated?: string }).captionTranslated = parsed.translated;
+            console.log(`[auto-build] traducción es→${translateTo} OK`);
+          } else {
+            console.warn(`[auto-build] translate.py no devolvió texto (${trRun.stderr.slice(-200)})`);
+          }
+        } catch (err) {
+          console.warn("[auto-build] traducción falló:", err);
         }
       }
 

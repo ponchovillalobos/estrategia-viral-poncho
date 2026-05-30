@@ -30,6 +30,23 @@ import {
 } from "./scene-fx";
 import { MirrorFxLayer, mirrorFxSchema } from "./mirror-fx";
 import { TrackedLayer, trackPointSchema, trackedItemSchema } from "./tracked-layer";
+import {
+  Flame, Rocket, Target, Lightbulb, Heart, Star, Zap, TrendingUp, ThumbsUp, Eye,
+  Crown, Sparkles, Brain, MessageCircle, DollarSign, Award, Bell, CheckCircle,
+  AlertTriangle, Music, Camera, Film, Hash, Bookmark, Share2, Play, Coffee, Smile,
+  Gem, Sun,
+} from "lucide-react";
+
+// B5 — Iconos curados (lucide-react, offline, MIT). Cualquier sticker puede pedir un
+// icono por NOMBRE — si no está en el mapa, se cae a un fallback (Sparkles).
+const ICON_MAP: Record<string, React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>> = {
+  fire: Flame, rocket: Rocket, target: Target, lightbulb: Lightbulb, heart: Heart,
+  star: Star, zap: Zap, trending: TrendingUp, thumbsup: ThumbsUp, eye: Eye,
+  crown: Crown, sparkles: Sparkles, brain: Brain, message: MessageCircle,
+  money: DollarSign, award: Award, bell: Bell, check: CheckCircle, warn: AlertTriangle,
+  music: Music, camera: Camera, film: Film, hash: Hash, bookmark: Bookmark,
+  share: Share2, play: Play, coffee: Coffee, smile: Smile, gem: Gem, sun: Sun,
+};
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -107,6 +124,70 @@ const sfxMarkSchema = z.object({
   volume: z.number().default(0.4),
 });
 
+// A6 — End-screen / CTA: tarjeta animada en los últimos `durationSec` del video.
+const endScreenSchema = z.object({
+  text: z.string().default("Seguime para más"),
+  handle: z.string().default(""),
+  emoji: z.string().default("🔥"),
+  durationSec: z.number().default(2.5),
+  bg: z.string().default("#0a0a0a"),
+  accent: z.string().default("#34d399"),
+});
+
+// A4 — Speed ramp: ventana donde se overlay-ea el source playing a `rate` < 1 (slow-mo)
+// o > 1 (acelerado). El video base sigue corriendo a 1x debajo; al terminar la ventana
+// reaparece. La duración total del video NO cambia.
+const speedRampSchema = z.object({
+  at: z.number(),
+  duration: z.number().default(1.5),
+  rate: z.number().default(0.5),
+});
+
+// B5 — Icon sticker: aparece N segundos con un icono del ICON_MAP + bg circular opcional.
+const iconStickerSchema = z.object({
+  at: z.number(),
+  duration: z.number().default(1.1),
+  icon: z.string().default("sparkles"),
+  position: z
+    .enum(["top-left", "top-right", "bottom-left", "bottom-right", "top-center"])
+    .default("top-right"),
+  color: z.string().default("#0a0a0a"),
+  bg: z.string().default("#fbbf24"),
+  size: z.number().default(120),
+});
+
+/**
+ * A2 — Interpolación lineal de la posición X de la cara a un tiempo dado, en el espacio
+ * normalizado 0..1 del trackPath. Igual lógica que sampleAt() en tracked-layer, pero
+ * inline para no acoplar este archivo al otro.
+ */
+function sampleTrackX(path: { t: number; x: number }[], t: number): number {
+  if (path.length === 0) return 0.5;
+  if (t <= path[0].t) return path[0].x;
+  const last = path[path.length - 1];
+  if (t >= last.t) return last.x;
+  for (let i = 1; i < path.length; i++) {
+    if (t <= path[i].t) {
+      const a = path[i - 1];
+      const b = path[i];
+      const f = (t - a.t) / Math.max(0.0001, b.t - a.t);
+      return a.x + (b.x - a.x) * f;
+    }
+  }
+  return last.x;
+}
+
+// B6 — Brand kit / marca de agua: handle (y/o logo) sutil en una esquina, todo el video.
+const brandKitSchema = z.object({
+  handle: z.string().default(""),
+  logoUrl: z.string().default(""),
+  position: z
+    .enum(["top-left", "top-right", "bottom-left", "bottom-right"])
+    .default("bottom-right"),
+  opacity: z.number().default(0.55),
+  color: z.string().default("#ffffff"),
+});
+
 export const viralVideoSchema = z.object({
   rawVideoUrl: z.string(),
   videoDurationSec: z.number().default(30),
@@ -143,6 +224,22 @@ export const viralVideoSchema = z.object({
   mirrorFx: z.array(mirrorFxSchema).default([]),
   trackPath: z.array(trackPointSchema).default([]),
   trackedItems: z.array(trackedItemSchema).default([]),
+  // A6/A8/B6/B5 — opt-in. null/false/[] = render idéntico.
+  endScreen: endScreenSchema.nullable().default(null),
+  progressBar: z.boolean().default(false),
+  brandKit: brandKitSchema.nullable().default(null),
+  iconStickers: z.array(iconStickerSchema).default([]),
+  speedRamps: z.array(speedRampSchema).default([]),
+  // C1 — Voz IA (Piper). Opt-in: si voiceoverUrl viene, se monta una pista de audio
+  // extra (encima de music+sfx+raw). Default null = sin voiceover, render idéntico.
+  voiceoverUrl: z.string().nullable().default(null),
+  voiceoverVolume: z.number().default(0.7),
+  voiceoverStartSec: z.number().default(0),
+  // A2 — Auto-reframe 16:9 → 9:16 siguiendo al sujeto. Si autoReframe=true y hay trackPath
+  // poblado, ViralVideo desplaza el video horizontalmente para mantener la cara centrada
+  // sin perder altura. sourceAspect = ancho/alto del source (default 16/9).
+  autoReframe: z.boolean().default(false),
+  sourceAspect: z.number().default(16 / 9),
   // Dimensiones del composition — Root.tsx las lee vía calculateMetadata.
   // Default vertical 9:16. Pasar {width:1920, height:1080} para horizontal 16:9.
   width: z.number().default(1080),
@@ -183,6 +280,16 @@ export const defaultProps: ViralVideoProps = {
   mirrorFx: [],
   trackPath: [],
   trackedItems: [],
+  endScreen: null,
+  progressBar: false,
+  brandKit: null,
+  iconStickers: [],
+  speedRamps: [],
+  voiceoverUrl: null,
+  voiceoverVolume: 0.7,
+  voiceoverStartSec: 0,
+  autoReframe: false,
+  sourceAspect: 16 / 9,
   width: 1080,
   height: 1920,
 };
@@ -218,6 +325,16 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   mirrorFx,
   trackPath,
   trackedItems,
+  endScreen,
+  progressBar,
+  brandKit,
+  iconStickers,
+  speedRamps,
+  voiceoverUrl,
+  voiceoverVolume,
+  voiceoverStartSec,
+  autoReframe,
+  sourceAspect,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -231,8 +348,27 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   const isCinematicMode =
     subtitleStyle === "cinematic" || filmGrain || imageOverlays.length > 0;
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames, width: compWidth, height: compHeight } = useVideoConfig();
   const currentTime = frame / fps;
+  const totalDuration = durationInFrames / fps;
+
+  // A2 — Auto-reframe: si el source es más ancho que el frame, desplazar horizontalmente
+  // para mantener la cara centrada. Sólo aplica con autoReframe=true + trackPath poblado +
+  // frame vertical (9:16) + source más ancho que el frame.
+  let autoReframeTranslateX = 0;
+  if (
+    autoReframe &&
+    trackPath.length > 0 &&
+    compHeight > compWidth &&
+    sourceAspect > compWidth / compHeight
+  ) {
+    const faceX = sampleTrackX(trackPath, currentTime);
+    // objectFit:cover escala el source para que el alto = compHeight; el ancho excede.
+    const renderedSourceWidth = compHeight * sourceAspect;
+    const maxOffset = (renderedSourceWidth - compWidth) / 2;
+    const desired = -(faceX - 0.5) * renderedSourceWidth;
+    autoReframeTranslateX = Math.max(-maxOffset, Math.min(maxOffset, desired));
+  }
 
   const activeAnim = animations.find(
     (a) => currentTime >= a.at && currentTime <= a.at + 0.5
@@ -286,7 +422,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   // useCameraMoveTransform respeta la regla de hooks: siempre llamar.
   const cameraMove = useCameraMoveTransform(isCinematicMode ? cameraMoves : []);
   const baseScale = scale * cameraMove.scale;
-  const baseTranslateX = shake + cameraMove.translateX;
+  const baseTranslateX = shake + cameraMove.translateX + autoReframeTranslateX;
   const baseTranslateY = cameraMove.translateY;
 
   // F3 SUPREME — Color grading PROFESIONAL según densidad (mood-aware).
@@ -349,6 +485,37 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           )
         )}
       </AbsoluteFill>
+
+      {/* A4 — Speed ramps: ventanas donde se overlay-ea el source a rate < 1 (slow-mo)
+          o > 1 (acelerado), tapando el base 1x debajo. Audio mute para no doblar. */}
+      {speedRamps.map((r, i) => {
+        const fromFrame = Math.round(r.at * fps);
+        const winFrames = Math.max(1, Math.round(r.duration * fps));
+        return (
+          <Sequence key={`sr-${i}`} from={fromFrame} durationInFrames={winFrames}>
+            <AbsoluteFill
+              style={{
+                transform: `scale(${baseScale}) translate(${baseTranslateX}px, ${baseTranslateY}px)`,
+              }}
+            >
+              {rawVideoUrl && (
+                <OffthreadVideo
+                  src={rawVideoUrl}
+                  startFrom={fromFrame}
+                  playbackRate={r.rate}
+                  muted
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    filter: videoFilter,
+                  }}
+                />
+              )}
+            </AbsoluteFill>
+          </Sequence>
+        );
+      })}
 
       {fullscreenBRoll &&
         bRoll.map((clip, i) => (
@@ -517,6 +684,13 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           />
         ))}
 
+      {/* B5 — Icon stickers: aparecen N segundos con un icono del ICON_MAP. Aditivo. */}
+      {iconStickers
+        .filter((s) => currentTime >= s.at - 0.05 && currentTime <= s.at + s.duration)
+        .map((s, i) => (
+          <IconStickerLayer key={`is-${i}-${s.at}`} sticker={s} currentTime={currentTime} />
+        ))}
+
       {activeEmphasis && (
         <EmphasisCardLayer
           card={activeEmphasis}
@@ -539,6 +713,13 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       })}
 
       {musicUrl && <Audio src={musicUrl} volume={musicVolume} />}
+
+      {/* C1 — Voz IA (Piper): pista de audio extra. Arranca en voiceoverStartSec. */}
+      {voiceoverUrl && (
+        <Sequence from={Math.max(0, Math.round(voiceoverStartSec * fps))}>
+          <Audio src={voiceoverUrl} volume={voiceoverVolume} />
+        </Sequence>
+      )}
 
       {/* === Modo cinematográfico (opt-in vía imageOverlays/filmGrain/vignette) === */}
       {/* Cuando isCinematicMode=true → imágenes FULLSCREEN + TV grain siempre + Ken Burns amplio */}
@@ -564,12 +745,226 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           fontFamily={fontFamily}
         />
       )}
+
+      {/* A8 — Barra de progreso (opt-in). Encima de todo, no tapa nada. */}
+      {progressBar && (
+        <AbsoluteFill style={{ pointerEvents: "none", justifyContent: "flex-start" }}>
+          <div
+            style={{
+              height: 8,
+              width: `${Math.min(100, (frame / Math.max(1, durationInFrames)) * 100)}%`,
+              background: subtitleHighlight,
+              boxShadow: `0 0 16px ${subtitleHighlight}`,
+            }}
+          />
+        </AbsoluteFill>
+      )}
+
+      {/* A6 — End-screen / CTA en los últimos segundos. Encima de todo. Aditivo. */}
+      {endScreen && (
+        <EndScreenLayer
+          config={endScreen}
+          currentTime={currentTime}
+          totalDuration={totalDuration}
+          fps={fps}
+          fontFamily={fontFamily}
+        />
+      )}
+
+      {/* B6 — Marca de agua (handle/logo) sutil en una esquina, todo el video. Aditivo. */}
+      {brandKit && (brandKit.handle || brandKit.logoUrl) && (
+        <BrandWatermarkLayer config={brandKit} fontFamily={fontFamily} />
+      )}
     </AbsoluteFill>
   );
 };
 
 // Silenciar warning de variable sin usar (VignetteLayer queda exportada para uso futuro)
 void VignetteLayer;
+
+// B5 — Icon sticker: render de un icono lucide con bg circular animado.
+const IconStickerLayer: React.FC<{
+  sticker: z.infer<typeof iconStickerSchema>;
+  currentTime: number;
+}> = ({ sticker, currentTime }) => {
+  const elapsed = currentTime - sticker.at;
+  const enter = spring({
+    frame: Math.max(0, elapsed * 30),
+    fps: 30,
+    config: { damping: 10, stiffness: 260, mass: 0.5 },
+  });
+  const exitStart = sticker.duration - 0.2;
+  const exitProgress = elapsed > exitStart ? (elapsed - exitStart) / 0.2 : 0;
+  const opacity = interpolate(exitProgress, [0, 1], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const Icon = ICON_MAP[sticker.icon.toLowerCase()] ?? Sparkles;
+  const floatY = Math.sin(elapsed * 2.2) * 5;
+  const wobbleRot = Math.sin(elapsed * 1.6) * 3;
+  // Posicionamiento por esquina/center con padding seguro.
+  const pad = 80;
+  const isTop = sticker.position.startsWith("top");
+  const isLeft = sticker.position.endsWith("left");
+  const isCenter = sticker.position === "top-center";
+  const justify = isCenter ? "center" : isLeft ? "flex-start" : "flex-end";
+  const align = isTop ? "flex-start" : "flex-end";
+  const padTop = isCenter ? 160 : pad;
+  const diameter = sticker.size + 36;
+  return (
+    <AbsoluteFill
+      style={{
+        pointerEvents: "none",
+        justifyContent: align,
+        alignItems: justify,
+        padding: pad,
+        paddingTop: padTop,
+        opacity,
+      }}
+    >
+      <div
+        style={{
+          width: diameter,
+          height: diameter,
+          borderRadius: "50%",
+          background: sticker.bg,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 16px 40px rgba(0,0,0,0.55), 0 0 0 4px rgba(255,255,255,0.1) inset",
+          transform: `translateY(${floatY}px) scale(${enter}) rotate(${wobbleRot}deg)`,
+        }}
+      >
+        <Icon size={sticker.size} color={sticker.color} strokeWidth={2.4} />
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// B6 — Marca de agua: handle (y/o logo) fijo en una esquina, opacidad sutil.
+const BrandWatermarkLayer: React.FC<{
+  config: z.infer<typeof brandKitSchema>;
+  fontFamily: string;
+}> = ({ config, fontFamily }) => {
+  const isTop = config.position.startsWith("top");
+  const isLeft = config.position.endsWith("left");
+  return (
+    <AbsoluteFill
+      style={{
+        pointerEvents: "none",
+        justifyContent: isTop ? "flex-start" : "flex-end",
+        alignItems: isLeft ? "flex-start" : "flex-end",
+        padding: 48,
+        opacity: config.opacity,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {config.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={config.logoUrl} alt="" style={{ height: 56, width: "auto" }} />
+        ) : null}
+        {config.handle ? (
+          <span
+            style={{
+              fontFamily,
+              fontSize: 36,
+              fontWeight: 700,
+              color: config.color,
+              letterSpacing: "0.04em",
+              textShadow: "0 2px 12px rgba(0,0,0,0.8)",
+            }}
+          >
+            {config.handle.startsWith("@") ? config.handle : `@${config.handle}`}
+          </span>
+        ) : null}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// A6 — End-screen / CTA: aparece en los últimos `durationSec` con entrada animada.
+const EndScreenLayer: React.FC<{
+  config: z.infer<typeof endScreenSchema>;
+  currentTime: number;
+  totalDuration: number;
+  fps: number;
+  fontFamily: string;
+}> = ({ config, currentTime, totalDuration, fps, fontFamily }) => {
+  const startAt = totalDuration - config.durationSec;
+  if (currentTime < startAt) return null;
+  const elapsed = currentTime - startAt;
+  const enter = spring({
+    frame: Math.max(0, elapsed * fps),
+    fps,
+    config: { damping: 16, stiffness: 140, mass: 0.7 },
+  });
+  const scale = 0.7 + enter * 0.3;
+  return (
+    <AbsoluteFill
+      style={{
+        background: `${config.bg}f2`,
+        backdropFilter: "blur(14px)",
+        justifyContent: "center",
+        alignItems: "center",
+        opacity: Math.min(1, elapsed / 0.25),
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 32,
+          transform: `scale(${scale})`,
+        }}
+      >
+        <div style={{ fontSize: 200, lineHeight: 1, filter: `drop-shadow(0 12px 50px ${config.accent}66)` }}>
+          {config.emoji}
+        </div>
+        <div
+          style={{
+            fontFamily,
+            fontSize: 120,
+            fontWeight: 900,
+            color: "#ffffff",
+            textTransform: "uppercase",
+            letterSpacing: "0.02em",
+            lineHeight: 1.0,
+            textAlign: "center",
+            padding: "0 60px",
+            maxWidth: 980,
+            textShadow: `0 0 70px ${config.accent}88`,
+          }}
+        >
+          {config.text}
+        </div>
+        {config.handle ? (
+          <div
+            style={{
+              fontFamily,
+              fontSize: 56,
+              fontWeight: 700,
+              color: config.accent,
+              letterSpacing: "0.04em",
+            }}
+          >
+            {config.handle.startsWith("@") ? config.handle : `@${config.handle}`}
+          </div>
+        ) : null}
+        <div
+          style={{
+            height: 8,
+            width: 220 * enter,
+            background: config.accent,
+            borderRadius: 4,
+            boxShadow: `0 0 30px ${config.accent}`,
+          }}
+        />
+      </div>
+    </AbsoluteFill>
+  );
+};
 
 const PipBRollLayer: React.FC<{ url: string; accent: string }> = ({
   url,
@@ -720,6 +1115,11 @@ const WordStickerLayer: React.FC<{
     Math.max(56, Math.floor(sizeByWidth))
   );
 
+  // A8 — animación post-entrada: el sticker flota suave (drift Y) y oscila apenas su
+  // rotación, en vez de quedar congelado tras la entrada. Sutil para no distraer.
+  const floatY = Math.sin(elapsed * 2.2) * 6;
+  const wobbleRot = Math.sin(elapsed * 1.6) * 2;
+
   return (
     <div
       style={{
@@ -728,7 +1128,7 @@ const WordStickerLayer: React.FC<{
         opacity,
         transform: `${
           positionStyles.transform ?? ""
-        } scale(${enter}) rotate(${sticker.rotation}deg)`,
+        } translateY(${floatY}px) scale(${enter}) rotate(${sticker.rotation + wobbleRot}deg)`,
         transformOrigin: "center",
       }}
     >

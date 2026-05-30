@@ -123,6 +123,8 @@ const proTransitionsRemapped = filterAndRemap(project.proTransitions || [], ["at
 const mirrorFxRemapped = filterAndRemap(project.mirrorFx || [], ["at"]);
 const trackPathRemapped = filterAndRemap(project.trackPath || [], ["t"]);
 const trackedItemsRemapped = filterAndRemap(project.trackedItems || [], ["at"]);
+const iconStickersRemapped = filterAndRemap(project.iconStickers || [], ["at"]);
+const speedRampsRemapped = filterAndRemap(project.speedRamps || [], ["at"]);
 
 const subtitles =
   project.manualSubtitles && project.manualSubtitles.length > 0
@@ -184,6 +186,18 @@ const props = {
   mirrorFx: mirrorFxRemapped,
   trackPath: trackPathRemapped,
   trackedItems: trackedItemsRemapped,
+  // A6/A8/B5/B6/A2 — opt-in. null/false/[] = render idéntico.
+  endScreen: project.endScreen ?? null,
+  progressBar: project.progressBar ?? false,
+  brandKit: project.brandKit ?? null,
+  iconStickers: iconStickersRemapped,
+  speedRamps: speedRampsRemapped,
+  // C1 — Voz IA (Piper) opt-in. auto-build rellena voiceoverUrl tras correr tts.py.
+  voiceoverUrl: project.voiceoverUrl ?? null,
+  voiceoverVolume: project.voiceoverVolume ?? 0.7,
+  voiceoverStartSec: project.voiceoverStartSec ?? 0,
+  autoReframe: project.autoReframe ?? false,
+  sourceAspect: project.sourceAspect ?? 16 / 9,
 };
 
 const outFile = path.join(__dirname, "props.json");

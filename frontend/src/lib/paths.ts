@@ -37,6 +37,8 @@ export const PROJECTS_DIR = path.join(DATA_ROOT, "projects");
 export const BROLL_DIR = path.join(DATA_ROOT, "assets", "broll");
 export const MUSIC_DIR = path.join(DATA_ROOT, "assets", "music");
 export const SFX_DIR = path.join(DATA_ROOT, "assets", "sfx", "curated");
+// C1 — Voz IA (Piper): WAVs por proyecto.
+export const VOICEOVER_DIR = path.join(DATA_ROOT, "assets", "voiceovers");
 
 export const LF_ROOT = path.join(DATA_ROOT, "long_form");
 export const LF_RAW = path.join(LF_ROOT, "raw");
