@@ -38,10 +38,10 @@ export function MusicPicker({ selected, volume, onSelect, onVolumeChange }: Prop
     audio?.pause();
     const a = new Audio(t.url);
     a.volume = 0.6;
+    a.onended = () => setPlaying(null);
     a.play();
     setAudio(a);
     setPlaying(t.filename);
-    a.onended = () => setPlaying(null);
   }
 
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { useRealMetrics } from "@/hooks/use-real-metrics";
 import { resolveStats } from "@/lib/metrics-resolver";
@@ -63,7 +64,7 @@ export function StatsCards({ platform }: StatsCardsProps) {
           <span>
             <strong>Datos de ejemplo (demo).</strong> Estos números son inventados para mostrar
             el formato del dashboard — no son tus métricas reales. Cargalas a mano en{" "}
-            <a href="/metricas" className="underline hover:text-amber-100">/metricas</a>.{" "}
+            <Link href="/metricas" className="underline hover:text-amber-100">/metricas</Link>.{" "}
             Conectar la cuenta sirve para <em>publicar</em>; LinkedIn/Instagram no exponen las
             analíticas de tus posts por API para apps de terceros.
           </span>
