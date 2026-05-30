@@ -23,6 +23,7 @@ import { enqueue } from "@/lib/job-queue";
 import { autoMatchBroll, type BrollClip } from "@/lib/pexels";
 import { writeJsonFileAtomic } from "@/lib/atomic-write";
 import { readSettings } from "@/lib/user-settings";
+import { runProcess } from "@/lib/run-process";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -78,74 +79,7 @@ interface TranscriptWord {
   score?: number;
 }
 
-function runProcess(
-  cmd: string,
-  args: string[],
-  cwd?: string,
-  onProgress?: (data: string) => void,
-  timeoutMs?: number,
-  // Timeout por INACTIVIDAD: si el proceso no emite NADA por este tiempo, se considera
-  // colgado y se mata. Ideal para procesos largos pero "habladores" (render de Remotion,
-  // pipeline): un render que avanza emite progreso seguido, así que sólo se mata si de
-  // verdad se trabó — sin matar renders largos legítimos.
-  idleTimeoutMs?: number
-): Promise<{ ok: boolean; stdout: string; stderr: string }> {
-  return new Promise((resolve) => {
-    // Node 17+ rechaza .cmd/.bat con shell:false en Windows (CVE-2024-27980 → EINVAL).
-    // npx.cmd y otros wrappers necesitan shell:true. Para .exe nativos mantenemos shell:false.
-    const isWindowsScript = process.platform === "win32" && /\.(cmd|bat|ps1)$/i.test(cmd);
-    const proc = spawn(cmd, args, { cwd, shell: isWindowsScript });
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    const timer = timeoutMs
-      ? setTimeout(() => {
-          timedOut = true;
-          stderr += `\n[runProcess] TIMEOUT ${timeoutMs}ms — killing\n`;
-          try {
-            proc.kill("SIGKILL");
-          } catch {}
-        }, timeoutMs)
-      : null;
-    let idleTimer: ReturnType<typeof setTimeout> | null = null;
-    const armIdle = () => {
-      if (!idleTimeoutMs) return;
-      if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => {
-        timedOut = true;
-        stderr += `\n[runProcess] IDLE TIMEOUT ${idleTimeoutMs}ms sin salida — proceso colgado, killing\n`;
-        try {
-          proc.kill("SIGKILL");
-        } catch {}
-      }, idleTimeoutMs);
-    };
-    armIdle();
-    const clearTimers = () => {
-      if (timer) clearTimeout(timer);
-      if (idleTimer) clearTimeout(idleTimer);
-    };
-    proc.stdout.on("data", (d) => {
-      armIdle();
-      const s = d.toString();
-      stdout += s;
-      onProgress?.(s);
-    });
-    proc.stderr.on("data", (d) => {
-      armIdle();
-      const s = d.toString();
-      stderr += s;
-      onProgress?.(s);
-    });
-    proc.on("close", (code) => {
-      clearTimers();
-      resolve({ ok: !timedOut && code === 0, stdout, stderr });
-    });
-    proc.on("error", () => {
-      clearTimers();
-      resolve({ ok: false, stdout, stderr });
-    });
-  });
-}
+// runProcess vive ahora en `lib/run-process.ts` (centralizado, sin cambio de semántica).
 
 function pickTopKeywords(words: TranscriptWord[], count = 7): TranscriptWord[] {
   const filtered = words.filter((w) => {
