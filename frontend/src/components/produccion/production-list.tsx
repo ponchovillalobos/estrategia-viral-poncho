@@ -373,7 +373,7 @@ export function ProductionList() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nombre o caption…"
-              className="w-full rounded-md border border-border bg-card pl-8 pr-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/20"
+              className="w-full rounded-md border border-border bg-card pl-8 pr-3 py-1.5 text-sm placeholder:text-foreground/55 focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
           <div className="flex items-center justify-between gap-2 sm:justify-end">
@@ -579,7 +579,7 @@ export function ProductionList() {
                         title="Copiar caption completo"
                       >
                         {copiedId === p.id ? (
-                          <Check className="h-3 w-3 text-emerald-400" />
+                          <Check className="h-3 w-3 animate-in zoom-in-50 duration-200 text-primary" />
                         ) : (
                           <Copy className="h-3 w-3" />
                         )}
@@ -974,7 +974,7 @@ function CaptionTabs({ project }: { project: ProjectExt }) {
           className="flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-emerald-400"
         >
           {copied === active ? (
-            <Check className="h-3 w-3 text-emerald-400" />
+            <Check className="h-3 w-3 animate-in zoom-in-50 duration-200 text-primary" />
           ) : (
             <Copy className="h-3 w-3" />
           )}
