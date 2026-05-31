@@ -242,17 +242,18 @@ export function ProductionList() {
                 type="button"
                 onClick={() => setPreviewProject(p)}
                 title="Click para reproducir"
-                className="group relative aspect-[9/16] cursor-pointer bg-zinc-900 text-left focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                className="group relative aspect-[9/16] cursor-pointer overflow-hidden bg-zinc-900 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <img
                   src={`/api/videos/${encodeURIComponent(p.videoId)}/thumbnail`}
                   alt={p.id}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   loading="lazy"
                 />
-                {/* Play overlay on hover */}
-                <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/40">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 opacity-0 transition-opacity group-hover:opacity-100">
+                {/* Play overlay on hover: backdrop oscuro + botón con scale-in. */}
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="flex h-11 w-11 scale-75 items-center justify-center rounded-full bg-white/95 opacity-0 shadow-lg transition-all duration-300 group-hover:scale-100 group-hover:opacity-100">
                     <Play className="h-5 w-5 fill-black text-black" />
                   </div>
                 </div>
@@ -285,13 +286,13 @@ export function ProductionList() {
                   {p.platforms?.map((plat) => (
                     <span
                       key={plat}
-                      className="rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize"
+                      className="rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize transition-colors hover:bg-muted/80"
                     >
                       {plat}
                     </span>
                   ))}
                   {p.source === "long_form" && (
-                    <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-[10px] text-violet-300">
+                    <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-[10px] text-violet-300 ring-1 ring-inset ring-violet-500/20">
                       Video largo
                     </span>
                   )}
