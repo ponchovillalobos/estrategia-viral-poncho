@@ -10,7 +10,6 @@ import {
   RENDERS_DIR,
   PYTHON_EXE,
   PYTHON_DIR,
-  MUSIC_DIR,
   VOICEOVER_DIR,
 } from "@/lib/paths";
 import {
@@ -42,6 +41,7 @@ import {
 } from "./lib/helpers";
 import { enrichCinematic } from "./lib/enrich-cinematic";
 import { resolveImageOverlays } from "./lib/resolve-overlays";
+import { applyBeatSync } from "./lib/beat-sync";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -215,65 +215,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         captionMeta: captionMeta ?? (baseProject as { captionMeta?: unknown }).captionMeta ?? null,
       };
 
-      // === Beat-sync: "cortar al ritmo" (solo si beatSync + música) ===
-      // Detecta los beats del track con detect_beats.py y agrega zoomMarks + flashes
-      // en los más fuertes. Si no hay música o falla, no agrega nada (no rompe).
-      // Nota: solo en estilos SIN jump cuts (broll_*), para que los tiempos de beat
-      // (en el timeline final) no se desfasen del remapeo de build-props.
-      const beatSyncOn = project.beatSync === true;
-      const musicTrack = project.musicTrack;
-      if (beatSyncOn && musicTrack && !project.enableJumpCuts) {
-        try {
-          const fileParam = new URL(musicTrack, "http://x").searchParams.get("file");
-          const musicPath = fileParam ? path.join(MUSIC_DIR, fileParam) : null;
-          const musicExists = musicPath
-            ? await fs.access(musicPath).then(() => true).catch(() => false)
-            : false;
-          if (musicPath && musicExists) {
-            const beatRun = await runProcess(
-              PYTHON_EXE,
-              [path.join(PYTHON_DIR, "detect_beats.py"), musicPath],
-              PYTHON_DIR,
-              undefined,
-              90_000
-            );
-            if (beatRun.ok) {
-              const line = beatRun.stdout
-                .split(/\r?\n/)
-                .filter((l) => l.trim().startsWith("{"))
-                .pop();
-              const parsed = line
-                ? (JSON.parse(line) as { beats?: { t: number; strength: number }[] })
-                : null;
-              const beats = (parsed?.beats ?? []).filter(
-                (b) => b.t > 0.5 && b.t < transcript.duration - 0.3
-              );
-              const top = beats
-                .slice()
-                .sort((a, b) => b.strength - a.strength)
-                .slice(0, 12)
-                .sort((a, b) => a.t - b.t);
-              const beatZooms = top.map((b) => ({ at: +b.t.toFixed(2), duration: 0.4, scale: 1.12 }));
-              const beatTrans = top
-                .filter((_, i) => i % 2 === 0)
-                .map((b) => ({ at: +b.t.toFixed(2), kind: "flash" as const, durationFrames: 5, color: "#ffffff" }));
-              // A7 — "cortar al ritmo": en los 5 beats MÁS fuertes, un reaction-zoom punch
-              // (golpe rápido de cámara) para que se sienta un corte al beat, no solo brillo.
-              const beatPunches = top
-                .slice()
-                .sort((a, b) => b.strength - a.strength)
-                .slice(0, 5)
-                .map((b) => ({ at: +b.t.toFixed(2), intensity: 1.18, duration: 0.22 }));
-              project.zoomMarks = [...(project.zoomMarks ?? []), ...beatZooms];
-              project.proTransitions = [...(project.proTransitions ?? []), ...beatTrans];
-              project.reactionZooms = [...(project.reactionZooms ?? []), ...beatPunches];
-              console.log(`[auto-build] beat-sync: ${top.length} beats → zooms+flashes+${beatPunches.length} punches`);
-            }
-          }
-        } catch (err) {
-          console.warn("[auto-build] beat-sync falló:", err);
-        }
-      }
+      await applyBeatSync(project, transcript.duration);
 
       // === Motion tracking: correr track_subject.py si el estilo lo pide ===
       // Detecta la cara del sujeto en el raw y rellena trackPath → TrackedLayer pega
