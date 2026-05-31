@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -422,16 +423,12 @@ export function WizardClient() {
           </div>
 
           {videos.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border bg-muted/20 p-6 text-center">
-              <FileVideo className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                No hay videos en tu carpeta de grabaciones.
-              </p>
-              <p className="mt-1 font-mono-tab text-[10px] text-muted-foreground">
-                Usá <strong className="text-foreground">«importar desde mi compu»</strong> arriba a la derecha o copiá MP4s a{" "}
-                <span className="text-foreground">{rawDir || "raw/"}</span>
-              </p>
-            </div>
+            <EmptyState
+              icon={FileVideo}
+              tone="amber"
+              title="No hay videos en tu carpeta de grabaciones"
+              description={`Usá «importar desde mi compu» arriba a la derecha o copiá MP4s a ${rawDir || "raw/"}.`}
+            />
           ) : (
             <>
               <div className="mb-3 flex items-center gap-2 text-[11px]">
