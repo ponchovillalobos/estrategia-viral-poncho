@@ -119,7 +119,10 @@ export function ResearchWorkspace() {
     }
   }, []);
 
+  // Load on mount + polling cada 3s. Patrón válido; el lint quiere `use(promise)` pero
+  // no aplica para polling. No migramos.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     const id = setInterval(refresh, 3000);
     return () => clearInterval(id);

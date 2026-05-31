@@ -40,8 +40,9 @@ export function BatchAdaptPanel({ readyWithoutAdapt, onComplete }: BatchAdaptPan
     }
   }, []);
 
-  // Polling cuando hay un batch activo
+  // Polling cuando hay un batch activo. Patrón válido; el lint no acepta polling.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     const isActive = progress.status === "running";
     const interval = setInterval(refresh, isActive ? 2500 : 8000);

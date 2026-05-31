@@ -104,7 +104,10 @@ export function CinematicStep({
     }
   }, [videoId, onChange]);
 
+  // Refresh la lista de overlays cuando se enciende el modo cinematic. refresh()
+  // dispara setState; set-state-in-effect es el patrón válido aquí.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (value.enabled) refresh();
   }, [value.enabled, refresh]);
 

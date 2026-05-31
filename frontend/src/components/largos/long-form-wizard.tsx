@@ -212,11 +212,25 @@ export function LongFormWizard() {
     });
   }
 
+  // Load on mount + tick cada 1s para "hace N segundos". Patrón válido.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshList();
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, [refreshList]);
+
+  async function loadProposals(videoId: string) {
+    try {
+      const r = await fetch(`/api/long_form/proposals/${encodeURIComponent(videoId)}`);
+      if (r.ok) {
+        const data = (await r.json()) as ProposalsResponse;
+        setProposals(data);
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   // Polling del job activo
   useEffect(() => {
@@ -247,18 +261,6 @@ export function LongFormWizard() {
       }
     };
   }, [activeJob]);
-
-  async function loadProposals(videoId: string) {
-    try {
-      const r = await fetch(`/api/long_form/proposals/${encodeURIComponent(videoId)}`);
-      if (r.ok) {
-        const data = (await r.json()) as ProposalsResponse;
-        setProposals(data);
-      }
-    } catch {
-      // ignore
-    }
-  }
 
   function toggleStyle(s: StyleId) {
     setSelectedStyles((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
