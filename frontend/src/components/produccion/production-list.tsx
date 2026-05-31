@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { RefreshCcw, FileVideo, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Play, Calendar, Camera } from "lucide-react";
 import { ScheduleDialog } from "@/components/produccion/schedule-dialog";
 import { UploadHelperDialog } from "@/components/produccion/upload-helper-dialog";
@@ -202,34 +203,23 @@ export function ProductionList() {
       </div>
 
       {projects.length === 0 && !loading && (
-        <Card className="border-dashed border-border bg-card p-10 text-center">
-          <FileVideo className="mx-auto mb-3 h-10 w-10 text-muted-foreground opacity-60" />
-          <p className="text-base font-medium text-foreground">Todavía no tenés videos generados</p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-            Acá van a aparecer tus shorts ya editados, listos para publicar. Creá el primero
-            eligiendo un video y un estilo.
-          </p>
-          <Link
-            href="/editor"
-            className="mt-4 inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
-          >
-            Crear mi primer video
-          </Link>
-        </Card>
+        <EmptyState
+          icon={Sparkles}
+          tone="emerald"
+          title="Todavía no tenés videos generados"
+          description="Acá van a aparecer tus shorts ya editados, listos para publicar. Creá el primero eligiendo un video y un estilo."
+          cta={{ label: "Crear mi primer video", href: "/editor" }}
+        />
       )}
 
       {projects.length > 0 && filtered.length === 0 && (
-        <Card className="border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          <Search className="mx-auto mb-3 h-8 w-8 opacity-50" />
-          <p>Sin coincidencias para los filtros actuales.</p>
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="mt-2 font-mono-tab text-[10px] uppercase tracking-wider text-emerald-400 hover:underline"
-          >
-            Limpiar filtros
-          </button>
-        </Card>
+        <EmptyState
+          icon={Search}
+          tone="muted"
+          title="Sin coincidencias para los filtros actuales"
+          description="Probá cambiar el término de búsqueda o el filtro de estado/plataforma."
+          cta={{ label: "Limpiar filtros", onClick: clearFilters }}
+        />
       )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-2">
