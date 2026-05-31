@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -366,28 +367,44 @@ export function WizardClient() {
 
   return (
     <div className="space-y-6">
-      {/* Stepper visual — muestra el recorrido completo para que el usuario sepa dónde está */}
+      {/* Stepper visual — muestra el recorrido completo para que el usuario sepa dónde está.
+          Pasos hechos: check verde, paso actual: bg primary con glow, futuros: gris. */}
       <div className="flex items-start gap-1 text-xs sm:gap-2">
         {["Video", "Estilo", "Color", "Redes", "Generar"].map((label, i) => {
           const n = i + 1;
+          const done = step > n;
+          const current = step === n;
           return (
             <div key={n} className="flex items-start gap-1 sm:gap-2">
-              <div className="flex flex-col items-center gap-1">
+              <div className="flex flex-col items-center gap-1.5">
                 <div
-                  className={`flex h-7 w-7 items-center justify-center rounded-full border ${
-                    step >= n
-                      ? "border-primary bg-primary/20 text-primary"
-                      : "border-border bg-card text-muted-foreground"
-                  }`}
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-all duration-300",
+                    current && "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/40 scale-110",
+                    done && "border-primary/60 bg-primary/15 text-primary",
+                    !current && !done && "border-border bg-card text-muted-foreground"
+                  )}
                 >
-                  {step > n ? <CheckCircle2 className="h-3.5 w-3.5" /> : n}
+                  {done ? <CheckCircle2 className="h-4 w-4" /> : n}
                 </div>
-                <span className={`text-[10px] ${step >= n ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+                <span
+                  className={cn(
+                    "text-[10px] transition-colors",
+                    current && "font-semibold text-foreground",
+                    done && "font-medium text-foreground/80",
+                    !current && !done && "text-muted-foreground"
+                  )}
+                >
                   {label}
                 </span>
               </div>
               {n < TOTAL_STEPS && (
-                <div className={`mt-3.5 h-px w-5 sm:w-8 ${step > n ? "bg-primary" : "bg-border"}`} />
+                <div
+                  className={cn(
+                    "mt-4 h-0.5 w-5 rounded-full transition-colors duration-300 sm:w-8",
+                    done ? "bg-gradient-to-r from-primary to-primary/60" : "bg-border"
+                  )}
+                />
               )}
             </div>
           );
