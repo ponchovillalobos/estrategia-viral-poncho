@@ -40,6 +40,7 @@ import {
   findRawVideo,
   uniqueProjectId,
 } from "./lib/helpers";
+import { enrichCinematic } from "./lib/enrich-cinematic";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -386,54 +387,13 @@ async function processJob(job: Job, body: AutoBuildRequest) {
   // Cuando hay imageOverlays, generar auto SFX + camera moves + jump cuts.
   // Densidad configurable (default medium). En tests A/B/C cambia entre low/medium/high.
   const cinematicDensity = (body.cinematic?.density as "low" | "medium" | "high") ?? "medium";
-  let autoSfxMarks: { at: number; sound: string; volume: number; url?: string }[] | undefined;
-  let autoCameraMoves: { at: number; duration: number; type: string; intensity: number }[] | undefined;
-  let autoStutterMarks: { at: number; duration: number }[] | undefined;
-
-  if (imageOverlaysForCtx && imageOverlaysForCtx.length > 0) {
-    const { generateCameraMoves, generateJumpCuts } = await import("@/lib/style-templates");
-    autoCameraMoves = generateCameraMoves(transcript.duration, cinematicDensity);
-    autoStutterMarks = generateJumpCuts(transcript.words, cinematicDensity);
-
-    // SFX matcher determinístico (rápido, sin LLM)
-    try {
-      const osMod = await import("node:os");
-      const fsMod = (await import("node:fs")).promises;
-      const tmpSfx = path.join(osMod.tmpdir(), `sfx_${videoId}_${Date.now()}.json`);
-      const sfxResult = await new Promise<{ sfxMarks?: typeof autoSfxMarks } | null>((resolve) => {
-        const args = [
-          path.join(PYTHON_DIR, "match_sfx_to_transcript.py"),
-          "--transcript-file", transcriptPath,
-          "--duration", String(transcript.duration),
-          "--density", cinematicDensity,
-          "--out", tmpSfx,
-        ];
-        const proc = spawn(PYTHON_EXE, args, { cwd: PYTHON_DIR, shell: false });
-        let stdout = "";
-        proc.stdout.on("data", (c: Buffer) => (stdout += c.toString("utf-8")));
-        proc.stderr.on("data", (c: Buffer) =>
-          process.stdout.write(`[sfx-matcher] ${c.toString("utf-8")}`)
-        );
-        proc.on("close", async () => {
-          await fsMod.unlink(tmpSfx).catch(() => {});
-          try {
-            const lines = stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{"));
-            const last = lines[lines.length - 1];
-            resolve(last ? JSON.parse(last) : null);
-          } catch {
-            resolve(null);
-          }
-        });
-        proc.on("error", () => resolve(null));
-      });
-      if (sfxResult?.sfxMarks) {
-        autoSfxMarks = sfxResult.sfxMarks;
-        console.log(`[auto-build] SFX matcher: ${autoSfxMarks.length} marks density=${cinematicDensity}`);
-      }
-    } catch (err) {
-      console.error("[auto-build] sfx matcher falló:", err);
-    }
-  }
+  const { autoSfxMarks, autoCameraMoves, autoStutterMarks } = await enrichCinematic({
+    density: cinematicDensity,
+    imageOverlays: imageOverlaysForCtx,
+    transcript,
+    transcriptPath,
+    videoId,
+  });
 
   const ctx: BuildContext = {
     videoId,
