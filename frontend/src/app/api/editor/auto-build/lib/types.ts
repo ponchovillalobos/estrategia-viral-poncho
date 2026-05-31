@@ -1,0 +1,80 @@
+// Types compartidos por auto-build/route.ts y sus helpers/módulos auxiliares.
+// Extraído del archivo monolítico para mantener una sola fuente de verdad.
+
+import type { StyleId } from "@/lib/style-templates";
+
+export interface CinematicConfig {
+  /** IDs de imageOverlays subidos a /api/overlays/upload */
+  overlayIds: string[];
+  filmGrain?: boolean;
+  vignette?: boolean;
+  /** Si true, usa subtitleStyle="cinematic" en lugar del default del estilo */
+  subtitleCinematic?: boolean;
+  /**
+   * Perfil de densidad cinematográfica:
+   *   low    → 3 camera moves, 4-8 SFX, 0 jump cuts (suave)
+   *   medium → 6 camera moves, 6-12 SFX, 3 jump cuts (default)
+   *   high   → 10 camera moves, 10-18 SFX, 6 jump cuts (intenso)
+   * Usado en tests A/B/C.
+   */
+  density?: "low" | "medium" | "high";
+}
+
+export interface AutoBuildRequest {
+  /** Single-video (legacy). Si viene videoIds[] se ignora. */
+  videoId?: string;
+  /** Multi-video (preferido). Cada videoId crea un job propio. */
+  videoIds?: string[];
+  styles: StyleId[];
+  accentColor: string;
+  caption?: string;
+  captionMeta?: Record<string, unknown>;
+  platforms?: string[];
+  day?: number;
+  /** Aspecto del output. "9:16" → 1080×1920 (vertical, default). "16:9" → 1920×1080 (horizontal). */
+  aspectRatio?: "9:16" | "16:9";
+  /** Modo cinematográfico opt-in. Si undefined, render sale idéntico a antes. */
+  cinematic?: CinematicConfig;
+  /**
+   * Sufijo opcional para el projectId — usado por test-ab para diferenciar
+   * renders A/B/C del mismo video+estilo. Ej: "_test_A" → projectId = "Video Imagen_hype_max_sfx_test_A".
+   */
+  projectIdSuffix?: string;
+}
+
+/**
+ * Forma "wide" del project que arma processJob: la base (buildProjectForStyle) ya viene
+ * con sceneFx/proTransitions/etc pero muchos campos opt-in se agregan o leen en este
+ * archivo. Antes había ~17 `(project as { foo? }).foo` repartidos; con este tipo y un
+ * solo cast al construir el project, todos los accesos quedan tipados.
+ */
+export interface ResolvedProject {
+  id: string;
+  videoId: string;
+  title?: string;
+  styleId: StyleId;
+  caption?: string;
+  captionTranslated?: string;
+  platforms?: string[];
+  captionMeta?: unknown;
+  // FX y assets opt-in
+  beatSync?: boolean;
+  enableJumpCuts?: boolean;
+  musicTrack?: string | null;
+  tracking?: boolean;
+  trackPath?: unknown[];
+  removeBg?: boolean;
+  foregroundVideoId?: string;
+  voiceover?: { text?: string; volume?: number; startSec?: number; speakerWav?: string; lang?: string };
+  voiceoverUrl?: string;
+  voiceoverVolume?: number;
+  voiceoverStartSec?: number;
+  textBehind?: { phrase?: string; color?: string };
+  translateTo?: string;
+  lut?: string | null;
+  zoomMarks?: unknown[];
+  proTransitions?: unknown[];
+  reactionZooms?: unknown[];
+  brandKit?: { handle?: string; logoUrl?: string; position?: string; opacity?: number; color?: string };
+  bRoll?: unknown[];
+}

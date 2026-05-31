@@ -30,147 +30,24 @@ import {
   generateContentTitle,
   type TranscriptWord,
 } from "@/lib/content-title";
+import {
+  type AutoBuildRequest,
+  type ResolvedProject,
+} from "./lib/types";
+import {
+  STYLE_SHORT_LABEL,
+  dimensionsFromAspect,
+  findRawVideo,
+  uniqueProjectId,
+} from "./lib/helpers";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
 
-interface CinematicConfig {
-  /** IDs de imageOverlays subidos a /api/overlays/upload */
-  overlayIds: string[];
-  filmGrain?: boolean;
-  vignette?: boolean;
-  /** Si true, usa subtitleStyle="cinematic" en lugar del default del estilo */
-  subtitleCinematic?: boolean;
-  /**
-   * Perfil de densidad cinematográfica:
-   *   low    → 3 camera moves, 4-8 SFX, 0 jump cuts (suave)
-   *   medium → 6 camera moves, 6-12 SFX, 3 jump cuts (default)
-   *   high   → 10 camera moves, 10-18 SFX, 6 jump cuts (intenso)
-   * Usado en tests A/B/C.
-   */
-  density?: "low" | "medium" | "high";
-}
-
-interface AutoBuildRequest {
-  /** Single-video (legacy). Si viene videoIds[] se ignora. */
-  videoId?: string;
-  /** Multi-video (preferido). Cada videoId crea un job propio. */
-  videoIds?: string[];
-  styles: StyleId[];
-  accentColor: string;
-  caption?: string;
-  captionMeta?: Record<string, unknown>;
-  platforms?: string[];
-  day?: number;
-  /** Aspecto del output. "9:16" → 1080×1920 (vertical, default). "16:9" → 1920×1080 (horizontal). */
-  aspectRatio?: "9:16" | "16:9";
-  /** Modo cinematográfico opt-in. Si undefined, render sale idéntico a antes. */
-  cinematic?: CinematicConfig;
-  /**
-   * Sufijo opcional para el projectId — usado por test-ab para diferenciar
-   * renders A/B/C del mismo video+estilo. Ej: "_test_A" → projectId = "Video Imagen_hype_max_sfx_test_A".
-   */
-  projectIdSuffix?: string;
-}
-
-function dimensionsFromAspect(ratio: AutoBuildRequest["aspectRatio"]): { width: number; height: number } {
-  if (ratio === "16:9") return { width: 1920, height: 1080 };
-  return { width: 1080, height: 1920 }; // default 9:16
-}
-
-// TranscriptWord se importa de @/lib/content-title.
-
-// runProcess vive ahora en `lib/run-process.ts` (centralizado, sin cambio de semántica).
-
-// pickTopKeywords vive en @/lib/content-title.
-
-// Etiqueta corta y legible del estilo, para el nombre del archivo de salida.
-const STYLE_SHORT_LABEL: Record<StyleId, string> = {
-  silent: "Limpio",
-  punch: "Punch",
-  hype: "Viral",
-  hype_max: "ViralMax",
-  hype_max_sfx: "ViralSFX",
-  supreme: "Premium",
-  cinematic_pro: "Cine",
-  broll_full: "Broll",
-  broll_pip: "BrollPIP",
-  text_behind: "TextoDetras",
-};
-
-// TITLE_STOPWORDS, normForFreq, titleCaseWord ahora viven en @/lib/content-title.
-
-/**
- * Forma "wide" del project que arma processJob: la base (buildProjectForStyle) ya viene
- * con sceneFx/proTransitions/etc pero muchos campos opt-in se agregan o leen en este
- * archivo. Antes había ~17 `(project as { foo? }).foo` repartidos; con este tipo y un
- * solo cast al construir el project, todos los accesos quedan tipados.
- */
-interface ResolvedProject {
-  id: string;
-  videoId: string;
-  title?: string;
-  styleId: StyleId;
-  caption?: string;
-  captionTranslated?: string;
-  platforms?: string[];
-  captionMeta?: unknown;
-  // FX y assets opt-in
-  beatSync?: boolean;
-  enableJumpCuts?: boolean;
-  musicTrack?: string | null;
-  tracking?: boolean;
-  trackPath?: unknown[];
-  removeBg?: boolean;
-  foregroundVideoId?: string;
-  voiceover?: { text?: string; volume?: number; startSec?: number; speakerWav?: string; lang?: string };
-  voiceoverUrl?: string;
-  voiceoverVolume?: number;
-  voiceoverStartSec?: number;
-  textBehind?: { phrase?: string; color?: string };
-  translateTo?: string;
-  lut?: string | null;
-  zoomMarks?: unknown[];
-  proTransitions?: unknown[];
-  reactionZooms?: unknown[];
-  brandKit?: { handle?: string; logoUrl?: string; position?: string; opacity?: number; color?: string };
-  bRoll?: unknown[];
-}
-
-/**
- * Encuentra el video raw de un videoId, probando .mp4 primero y .mov como fallback.
- * Devuelve la ruta absoluta o `null` si ninguno existe. Centraliza el patrón que se
- * repetía 3 veces (tracking, bg-removal, text-behind).
- */
-async function findRawVideo(videoId: string): Promise<string | null> {
-  const mp4 = path.join(RAW_DIR, `${videoId}.mp4`);
-  if (await fs.access(mp4).then(() => true).catch(() => false)) return mp4;
-  const mov = path.join(RAW_DIR, `${videoId}.mov`);
-  if (await fs.access(mov).then(() => true).catch(() => false)) return mov;
-  return null;
-}
-
-// sanitizeForFilename y generateContentTitle viven en @/lib/content-title.
-
-/**
- * Devuelve un projectId único basado en `${titulo} ${EstiloLabel}`. Si ya existe un proyecto
- * con ese id pero de OTRO video, agrega un número para no pisarlo. Si es el mismo video
- * (re-render del mismo estilo), reusa el id (sobrescribe a propósito).
- */
-async function uniqueProjectId(base: string, videoId: string, suffix: string): Promise<string> {
-  for (let n = 0; n < 50; n++) {
-    const id = (n === 0 ? base : `${base} ${n + 1}`) + suffix;
-    const jsonPath = path.join(PROJECTS_DIR, `${id}.json`);
-    try {
-      const existing = JSON.parse(await fs.readFile(jsonPath, "utf-8"));
-      if (existing?.videoId === videoId) return id; // mismo video → reusar/sobrescribir
-      // distinto video con ese id → probar el siguiente número
-    } catch {
-      return id; // no existe → libre
-    }
-  }
-  return `${base} ${Date.now()}${suffix}`;
-}
+// CinematicConfig, AutoBuildRequest, ResolvedProject viven en ./lib/types.
+// dimensionsFromAspect, findRawVideo, uniqueProjectId, STYLE_SHORT_LABEL viven en ./lib/helpers.
+// TranscriptWord, pickTopKeywords, sanitizeForFilename, generateContentTitle viven en @/lib/content-title.
+// runProcess + parseLastJsonLine viven en @/lib/run-process.
 
 async function processJob(job: Job, body: AutoBuildRequest) {
   // Usar job.videoId (siempre string) en lugar de body.videoId (opcional ahora con batch)
