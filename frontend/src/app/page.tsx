@@ -69,25 +69,34 @@ export default function Home() {
           <Link
             key={href}
             href={href}
-            className={`group flex flex-col gap-3 rounded-xl border p-6 transition-all hover:-translate-y-0.5 hover:shadow-lg ${
+            className={`group relative flex flex-col gap-3 overflow-hidden rounded-xl border p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
               primary
-                ? "border-primary/40 bg-primary/10 hover:border-primary"
-                : "border-border bg-card hover:border-foreground/30"
+                ? "border-primary/40 bg-primary/10 hover:border-primary hover:shadow-primary/20"
+                : "border-border bg-card hover:border-primary/40 hover:shadow-primary/10"
             }`}
           >
+            {/* Sheen sutil que aparece al pasar el mouse — efecto "preciosa". */}
             <span
-              className={`flex h-11 w-11 items-center justify-center rounded-lg ${
-                primary ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+              aria-hidden
+              className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/5 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+            />
+
+            <span
+              className={`relative flex h-11 w-11 items-center justify-center rounded-lg transition-transform duration-300 group-hover:scale-110 ${
+                primary
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30"
+                  : "bg-muted text-foreground group-hover:bg-primary/15 group-hover:text-primary"
               }`}
             >
               <Icon className="h-5 w-5" />
             </span>
-            <div className="space-y-1">
+            <div className="relative space-y-1">
               <h2 className="text-lg font-semibold">{title}</h2>
               <p className="text-sm text-muted-foreground">{desc}</p>
             </div>
-            <span className="mt-auto flex items-center gap-1 text-sm font-medium text-primary">
-              Empezar <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            <span className="relative mt-auto flex items-center gap-1 text-sm font-medium text-primary">
+              Empezar
+              <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </span>
           </Link>
         ))}
@@ -102,16 +111,16 @@ export default function Home() {
           {FLOW.map(({ icon: Icon, label }, i) => (
             <div key={label} className="flex flex-1 items-center gap-3">
               <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/25 to-primary/5 text-sm font-semibold text-primary ring-1 ring-primary/30 shadow-sm shadow-primary/10">
                   {i + 1}
                 </span>
                 <span className="flex items-center gap-1.5 text-sm">
-                  <Icon className="h-4 w-4 text-muted-foreground" />
+                  <Icon className="h-4 w-4 text-primary/80" />
                   {label}
                 </span>
               </div>
               {i < FLOW.length - 1 && (
-                <ArrowRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/50 sm:block" />
+                <ArrowRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/40 sm:block" />
               )}
             </div>
           ))}
@@ -127,9 +136,9 @@ export default function Home() {
           <Link
             key={href}
             href={href}
-            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/50"
+            className="group inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/50 hover:text-foreground hover:shadow-md hover:shadow-primary/5"
           >
-            <Icon className="h-4 w-4" />
+            <Icon className="h-4 w-4 transition-colors group-hover:text-primary" />
             {label}
           </Link>
         ))}
