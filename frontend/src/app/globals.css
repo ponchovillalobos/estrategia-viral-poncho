@@ -155,4 +155,43 @@ body {
   html {
     @apply font-sans;
   }
+
+  /* Focus visible global: anillo emerald sutil con offset para que se vea
+     tanto sobre bg oscuro como sobre tarjetas. Aplica sólo al usar teclado
+     (`:focus-visible`), no al click — esa es la convención accesible que
+     respeta el mouse. */
+  *:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: calc(var(--radius) * 0.5);
+  }
+
+  /* Selección de texto con el color de marca al 25% para que se sienta
+     parte del producto y no del UA. */
+  ::selection {
+    background-color: oklch(0.78 0.15 162 / 0.35);
+    color: var(--foreground);
+  }
+
+  /* Scrollbar fina y discreta — Firefox + WebKit. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(1 0 0 / 0.18) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: oklch(1 0 0 / 0.15);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: oklch(1 0 0 / 0.28);
+  }
 }
