@@ -34,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { AdaptDialog } from "@/components/research/adapt-dialog";
 import { CookiesPanel } from "@/components/research/cookies-panel";
 import { BatchAdaptPanel } from "@/components/research/batch-adapt-panel";
+import { SectionHeader } from "@/components/ui/section-header";
+import { SECTION_COLORS } from "@/lib/section-colors";
 
 type Platform = "tiktok" | "instagram" | "youtube";
 type Status = "queued" | "downloading" | "transcribing" | "ready" | "failed";
@@ -212,20 +214,12 @@ export function ResearchWorkspace() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">
-          Inspiración · ideas que ya funcionaron
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          De un viral ajeno a tu propio guión
-        </h1>
-        <p className="max-w-3xl text-muted-foreground">
-          Pegá el link de un video de TikTok, Instagram Reels o YouTube Shorts. El sistema lo
-          descarga, saca el texto de lo que dice y los hashtags. Después, con{" "}
-          <strong className="text-foreground">✨ Adaptar con IA</strong>, te genera una versión
-          con tu propia voz para que la regrabes.
-        </p>
-      </header>
+      <SectionHeader
+        eyebrow="Inspiración · ideas que ya funcionaron"
+        title="De un viral ajeno a tu propio guión"
+        description="Pegá el link de un video de TikTok, Instagram Reels o YouTube Shorts. El sistema lo descarga, saca el texto de lo que dice y los hashtags. Después, con «✨ Adaptar con IA», te genera una versión con tu propia voz para que la regrabes."
+        color={SECTION_COLORS.research}
+      />
 
       {/* Panel cookies para IG/TT */}
       <CookiesPanel />
