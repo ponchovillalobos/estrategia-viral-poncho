@@ -3,28 +3,20 @@ import { MetricsTable } from "@/components/metricas/metrics-table";
 import { BackupActions } from "@/components/metricas/backup-actions";
 import { MetricsInsights } from "@/components/metricas/metrics-insights";
 import { LinkedInSyncButton } from "@/components/metricas/linkedin-sync-button";
+import { SectionHeader } from "@/components/ui/section-header";
+import { SECTION_COLORS } from "@/lib/section-colors";
 
 export default function MetricasPage() {
   return (
     <div className="space-y-8">
-      <header className="space-y-2">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <p className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
-              Métricas reales · server-persisted · insights cross-plataforma
-            </p>
-            <h1 className="text-4xl font-semibold tracking-tight">Mis métricas</h1>
-          </div>
-          <LinkedInSyncButton />
-        </div>
-        <p className="max-w-2xl text-muted-foreground">
-          Pegá las métricas de tus posts (o usá <strong>Sincronizar LinkedIn</strong> para traer
-          las reales de tus posts publicados desde la app). Los datos se guardan en{" "}
-          <code>C:\hermes-data\metrics.json</code>. Si cargás <strong>project ID</strong> +{" "}
-          <strong>avg watch time</strong> + <strong>duración</strong>, el dashboard rankea
-          qué hooks y captions performaron mejor.
-        </p>
-      </header>
+      <SectionHeader
+        eyebrow="Métricas reales · server-persisted"
+        title="Mis métricas"
+        description="Pegá las métricas de tus posts o usá «Sincronizar LinkedIn» para traer las reales de tus posts publicados desde la app. Si cargás project ID + avg watch time + duración, se rankean qué hooks y captions performaron mejor."
+        color={SECTION_COLORS.metricas}
+      >
+        <LinkedInSyncButton />
+      </SectionHeader>
 
       <MetricsInsights />
 
