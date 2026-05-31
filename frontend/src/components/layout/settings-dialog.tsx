@@ -80,8 +80,11 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Cargar settings cuando se abre el diálogo. Patrón válido pero el lint quiere
+  // `use(promise)` con Suspense; no migramos para no romper el flujo de error/finally.
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetch("/api/settings")
       .then((r) => r.json())

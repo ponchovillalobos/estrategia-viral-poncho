@@ -119,12 +119,14 @@ export function AdaptDialog({
     }
   }
 
-  // Si abre sin adaptación previa, generar automáticamente al abrir
+  // Si abre sin adaptación previa, generar automáticamente al abrir.
+  // generate() dispara setState (loading/result); set-state-in-effect es esperado aquí.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (open && !initialAdapted && !loading && !adapted) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       generate(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   return (

@@ -51,7 +51,9 @@ export function CookiesPanel() {
     }
   }
 
+  // Load on mount: status de cookies por plataforma. No migramos a use(promise).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, []);
 

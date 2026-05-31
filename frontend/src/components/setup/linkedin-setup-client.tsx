@@ -130,7 +130,10 @@ export function LinkedInSetupClient() {
     }
   }
 
+  // Load on mount — patrón válido pero el lint quiere `use(promise)` (React 19).
+  // No migramos: pantalla de setup, abre pocas veces, un render extra es invisible.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSettings();
   }, []);
 

@@ -125,7 +125,9 @@ export function WizardClient() {
     if (d.rawDir) setRawDir(d.rawDir);
   }
 
+  // Load on mount: lista de videos raw. Patrón válido aunque el lint quiera use(promise).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadVideos();
   }, []);
 

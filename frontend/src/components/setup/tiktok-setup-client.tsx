@@ -73,7 +73,12 @@ export function TikTokSetupClient() {
     setClientKey(d.tiktok?.clientKey ?? "");
   }
 
+  // Carga inicial de settings desde el server. Patrón "load on mount" estándar:
+  // el lint react-hooks/set-state-in-effect querría React 19 `use(promise)` o SWR,
+  // pero el costo de migrarlo no se justifica para una pantalla de setup que se abre
+  // contadas veces y donde un render extra es invisible.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSettings();
   }, []);
 
