@@ -125,14 +125,14 @@ export function ResearchWorkspace() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  // Si el item seleccionado se actualiza desde el polling, refrescamos su data
-  useEffect(() => {
-    if (!selected) return;
+  // Si el item seleccionado se actualiza desde el polling, refrescamos su data.
+  // Patrón store-and-compare: el guard por updatedAt evita el loop infinito.
+  if (selected) {
     const updated = items.find((it) => it.id === selected.id);
     if (updated && updated.updatedAt !== selected.updatedAt) {
       setSelected(updated);
     }
-  }, [items, selected]);
+  }
 
   async function addUrl() {
     const u = url.trim();

@@ -49,12 +49,16 @@ export function AdaptDialog({
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    setAdapted(initialAdapted ?? "");
-    setHook(initialHook ?? "");
-    setHashtags(initialHashtags ?? []);
-  }, [open, initialAdapted, initialHook, initialHashtags]);
+  // Reset on open: patrón store-and-compare.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
+    if (open) {
+      setAdapted(initialAdapted ?? "");
+      setHook(initialHook ?? "");
+      setHashtags(initialHashtags ?? []);
+    }
+  }
 
   async function generate(regenerate = false) {
     if (loading) return;

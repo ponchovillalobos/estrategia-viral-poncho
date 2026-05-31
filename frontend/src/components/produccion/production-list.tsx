@@ -126,14 +126,15 @@ export function ProductionList() {
       .catch(() => {});
   }, []);
 
-  // Cuando se abre el preview, cargá el transcript correspondiente.
-  useEffect(() => {
-    if (previewProject?.videoId) {
-      loadTranscript(previewProject.videoId);
-    }
+  // Cuando se abre el preview, cargá el transcript y reseteá el feedback de copiado.
+  // Patrón store-and-compare en vez de useEffect+setState.
+  const previewVideoId = previewProject?.videoId;
+  const [prevPreviewVideoId, setPrevPreviewVideoId] = useState<string | undefined>(previewVideoId);
+  if (prevPreviewVideoId !== previewVideoId) {
+    setPrevPreviewVideoId(previewVideoId);
     setTranscriptCopied(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewProject?.videoId]);
+    if (previewVideoId) loadTranscript(previewVideoId);
+  }
 
   return (
     <div className="space-y-4">

@@ -48,20 +48,20 @@ export function BatchAdaptPanel({ readyWithoutAdapt, onComplete }: BatchAdaptPan
     return () => clearInterval(interval);
   }, [refresh, progress.status]);
 
-  // Detectar cuando el batch termina y disparar onComplete
-  useEffect(() => {
-    if (
-      progress.status === "done" &&
-      progress.batchId &&
-      progress.batchId !== lastNotifiedId
-    ) {
-      setLastNotifiedId(progress.batchId);
-      toast.success(
-        `Adaptación lista · ${progress.success}/${progress.total} guiones generados`
-      );
-      onComplete?.();
-    }
-  }, [progress.status, progress.batchId, progress.success, progress.total, lastNotifiedId, onComplete]);
+  // Detectar cuando el batch termina y disparar onComplete. Patrón store-and-compare:
+  // el batchId actúa como guard contra repetir el toast/onComplete; comparar+actualizar
+  // en render evita el render-cascada del patrón useEffect+setState.
+  if (
+    progress.status === "done" &&
+    progress.batchId &&
+    progress.batchId !== lastNotifiedId
+  ) {
+    setLastNotifiedId(progress.batchId);
+    toast.success(
+      `Adaptación lista · ${progress.success}/${progress.total} guiones generados`
+    );
+    onComplete?.();
+  }
 
   async function start() {
     setStarting(true);
