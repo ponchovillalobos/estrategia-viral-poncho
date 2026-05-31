@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import {
   PROJECTS_DIR,
   RAW_DIR,
@@ -13,7 +12,6 @@ import {
 } from "@/lib/paths";
 import {
   buildProjectForStyle,
-  type StyleId,
   type BuildContext,
 } from "@/lib/style-templates";
 import { createJob, updateStep, setCurrentStyle, type Job } from "@/lib/job-store";

@@ -1,5 +1,10 @@
 "use client";
 
+// Thumbnails dinámicos de /api/videos/[id]/thumbnail. next/image requeriría
+// width/height fijos por video y reservar layout, lo que choca con el aspect-9:16
+// flexible que usamos. <img> con loading="lazy" cubre la performance bien.
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";

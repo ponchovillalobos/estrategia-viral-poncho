@@ -1,12 +1,13 @@
 "use client";
 
+// Thumbnails dinámicos de /api/videos/[id]/thumbnail.
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCcw, FileVideo, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Upload, Play, Calendar, AlertCircle, Camera } from "lucide-react";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { RefreshCcw, FileVideo, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Play, Calendar, Camera } from "lucide-react";
 import { ScheduleDialog } from "@/components/produccion/schedule-dialog";
 import { UploadHelperDialog } from "@/components/produccion/upload-helper-dialog";
 import { InstagramHelperDialog } from "@/components/produccion/instagram-helper-dialog";
@@ -32,14 +33,12 @@ export function ProductionList() {
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [postingToTikTok, setPostingToTikTok] = useState<string | null>(null);
   const [previewProject, setPreviewProject] = useState<ProjectExt | null>(null);
   const [uploadHelperTarget, setUploadHelperTarget] = useState<ProjectExt | null>(null);
   const [instagramHelperTarget, setInstagramHelperTarget] = useState<ProjectExt | null>(null);
   const [publishingToLinkedin, setPublishingToLinkedin] = useState<string | null>(null);
   const [scheduleTarget, setScheduleTarget] = useState<ProjectExt | null>(null);
   const [tiktokHandle, setTiktokHandle] = useState<string>("");
-  const [tiktokConnected, setTiktokConnected] = useState<boolean>(false);
   const [instagramHandle, setInstagramHandle] = useState<string>("");
   const [instagramConnected, setInstagramConnected] = useState<boolean>(false);
   const [publishingToInstagram, setPublishingToInstagram] = useState<string | null>(null);
@@ -92,8 +91,6 @@ export function ProductionList() {
     publishActions.publishToLinkedIn(p, setPublishingToLinkedin);
   const publishToInstagram = (p: ProjectExt) =>
     publishActions.publishToInstagram(p, setPublishingToInstagram);
-  const postToTikTok = (p: ProjectExt) =>
-    publishActions.postToTikTok(p, setPostingToTikTok, tiktokHandle);
   const regenerate = (p: ProjectExt, provider: string = "auto") =>
     publishActions.regenerate(p, setRegenerating, load, provider);
 
@@ -121,7 +118,6 @@ export function ProductionList() {
       .then((r) => r.json())
       .then((d) => {
         setTiktokHandle(d.handles?.tiktok ?? "");
-        setTiktokConnected(Boolean(d.tiktok?.hasAccessToken));
         setInstagramHandle(d.handles?.instagram ?? "");
         setInstagramConnected(Boolean(d.instagram?.hasAccessToken));
         setLinkedinHandle(d.handles?.linkedin ?? "");

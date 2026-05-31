@@ -124,7 +124,8 @@ export async function GET(
       proc.on("error", (e) => { clearTimeout(timer); reject(e); });
       proc.on("close", (code) => {
         clearTimeout(timer);
-        code === 0 ? resolve() : reject(new Error("ffmpeg failed"));
+        if (code === 0) resolve();
+        else reject(new Error("ffmpeg failed"));
       });
     });
 

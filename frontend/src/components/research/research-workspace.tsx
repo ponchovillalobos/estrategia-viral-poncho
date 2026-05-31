@@ -1,5 +1,8 @@
 "use client";
 
+// Thumbnails dinámicos de /api/research/[id]/thumb.
+/* eslint-disable @next/next/no-img-element */
+
 import { useCallback, useEffect, useState } from "react";
 import {
   Dialog,
