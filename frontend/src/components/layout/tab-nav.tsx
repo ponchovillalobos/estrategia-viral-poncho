@@ -47,13 +47,13 @@ export function TabNav() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
       <nav className="mx-auto flex w-full max-w-7xl items-center gap-1 px-4 py-3 sm:px-6">
-        <Link href="/" className="mr-2 flex items-center gap-2 sm:mr-4">
-          <div className="h-6 w-6 rounded-full bg-emerald-400" />
+        <Link href="/" className="group mr-2 flex items-center gap-2 sm:mr-4">
+          <div className="h-6 w-6 rounded-full bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.5)] transition-transform group-hover:scale-110" />
           <span className="text-sm font-semibold tracking-tight">Estrategia Viral</span>
         </Link>
 
         {/* Links inline (desktop) */}
-        <div className="hidden items-center gap-1 lg:flex">
+        <div className="hidden items-center gap-0.5 lg:flex">
           {links.map(({ href, label, icon: Icon, color }) => {
             const active = pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
             return (
@@ -61,14 +61,25 @@ export function TabNav() {
                 key={href}
                 href={href}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors",
+                  "relative flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors",
                   active
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                 )}
               >
                 <Icon className="h-4 w-4" style={{ color: active ? color : undefined }} />
                 <span>{label}</span>
+                {/* Underline animado al estilo "tab activo" — más fino y elegante que el bg pill. */}
+                {active && (
+                  <span
+                    aria-hidden
+                    className="absolute -bottom-[13px] left-3 right-3 h-[2px] rounded-full"
+                    style={{
+                      backgroundColor: color,
+                      boxShadow: `0 0 10px ${color}`,
+                    }}
+                  />
+                )}
               </Link>
             );
           })}
