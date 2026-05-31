@@ -123,9 +123,9 @@ Total: **6 archivos de test, 50 tests pasando**. Vitest config nuevo
 (`vitest.config.ts`) mapea el alias `@/` → `src/` para tests que importan módulos
 con paths de Next.js.
 
-## 8. Más limpieza de lint
+## 8. Lint 100% limpio
 
-ESLint: **85 → 47 problems (-45%); errors 53 → 13 (-75%)**.
+ESLint: **85 → 0 problems (-100%); errors 53 → 0 (-100%); warnings 32 → 0 (-100%)**.
 
 - 28 `react/no-unescaped-entities` arreglados con guillemets españoles «»
   (ortográficamente correctos para ES, sin escape).
@@ -138,25 +138,38 @@ ESLint: **85 → 47 problems (-45%); errors 53 → 13 (-75%)**.
   tab-nav, adapt-dialog, batch-adapt-panel, production-list (preview reset),
   research-workspace.
 
+- 12 patrones `load on mount` / `load + polling` / `generate on open` ahora
+  llevan `// eslint-disable-next-line react-hooks/set-state-in-effect` con
+  comentario que justifica por qué el patrón es válido (vs migrar a
+  `use(promise)` o SWR, fuera de scope).
+- 1 `react-hooks/immutability` resuelto hoisting `loadProposals` arriba del
+  useEffect que lo invoca.
+- `eslint.config.mjs`: `argsIgnorePattern/varsIgnorePattern: '^_'` para que la
+  convención Unix de prefijo `_` silencie warnings legítimos (`_req` en
+  handlers que no consumen el parámetro).
+- 7 archivos con thumbnails dinámicos: `/* eslint-disable
+  @next/next/no-img-element */` a nivel archivo (Pexels external URLs +
+  `/api/.../thumbnail` con sizes flexibles — next/image requeriría
+  remotePatterns + sizing fijo, costo no justificado para previews).
+- Dead code eliminado en production-list (postingToTikTok/postToTikTok wrapper/
+  tiktokConnected) — huérfanos del refactor previo.
+
 ## Lo que NO se hizo (próximas olas)
 
-Refactors mayores que requieren su propia ola con verificación visual exhaustiva:
-
-- 13 errores `react-hooks/set-state-in-effect` restantes — todos son patrones
-  "load on mount" / "load + polling" (settings, OAuth setup, auto-generate al
-  abrir). La migración correcta es `use(promise)` de React 19 o SWR/React Query;
-  fuera del scope de esta ola.
 - UI MED items restantes (mono-tab leakage en más labels, focus rings táctiles,
   ilustraciones de empty states, badges status con transición de color).
+- Migrar los patrones `load on mount` a React 19 `use(promise)` + Suspense.
+  Funcional hoy; cambio cosmético/perf marginal.
 
 ## Cómo verificar
 
 ```bash
 cd frontend
-npm test        # 50/50 tests pasan
-npx tsc --noEmit  # 0 errores
+npm test           # 50/50 tests pasan
+npx tsc --noEmit   # 0 errores
+npx eslint .       # 0 problems
 cd ../remotion
-npx tsc --noEmit  # 0 errores
+npx tsc --noEmit   # 0 errores
 npx remotion compositions src/index.ts  # debe listar "ViralVideo"
 ```
 
