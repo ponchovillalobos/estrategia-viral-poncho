@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { TabNav } from "@/components/layout/tab-nav";
 import { Toaster } from "@/components/ui/sonner";
 import { NotificationPoller } from "@/components/layout/notification-poller";
 import { QueuePanel } from "@/components/jobs/queue-panel";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Inter — sans-serif moderna y muy legible, estándar de UI (Figma, Linear, Notion).
+// Cargamos los weights variables para títulos (700/800) y cuerpo (400/500/600).
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
+// Geist Mono se mantiene para `.font-mono-tab` (números tabulares en métricas,
+// timestamps, IDs). Tiene tnum y un look monospaceado coherente.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -29,7 +35,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <TabNav />
