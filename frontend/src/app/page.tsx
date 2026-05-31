@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Scissors, FolderKanban, Share2, ArrowRight, Upload, Wand2, Sparkles, Send, LineChart, Telescope, CalendarDays } from "lucide-react";
+import { Scissors, FolderKanban, Share2, ArrowRight, Upload, Wand2, Sparkles, Send, LineChart, Telescope, Film } from "lucide-react";
 import { GettingStarted } from "@/components/home/getting-started";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,7 @@ const FLOW = [
 const SECONDARY = [
   { href: "/metricas", label: "Ver resultados", icon: LineChart },
   { href: "/research", label: "Buscar inspiración", icon: Telescope },
-  { href: "/master", label: "Plan de 30 días", icon: CalendarDays },
+  { href: "/largos", label: "Videos largos", icon: Film },
 ] as const;
 
 export default function Home() {
