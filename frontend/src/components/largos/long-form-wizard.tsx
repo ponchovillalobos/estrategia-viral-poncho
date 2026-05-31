@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SectionHeader } from "@/components/ui/section-header";
+import { SECTION_COLORS } from "@/lib/section-colors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -923,17 +925,12 @@ export function LongFormWizard() {
 
 function WizardHeader() {
   return (
-    <header className="space-y-2">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">
-        Videos largos → clips cortos
-      </p>
-      <h1 className="text-3xl font-semibold tracking-tight">De un video largo a varios clips virales</h1>
-      <p className="max-w-3xl text-muted-foreground">
-        Subí un video largo (un curso, charla o entrevista) y el sistema encuentra los{" "}
-        <strong className="text-foreground">5 a 7 mejores momentos</strong> y los recorta en
-        clips de 30 a 60 segundos, con el estilo que elijas.
-      </p>
-    </header>
+    <SectionHeader
+      eyebrow="Videos largos → clips cortos"
+      title="De un video largo a varios clips virales"
+      description="Subí un video largo (un curso, charla o entrevista) y el sistema encuentra los 5 a 7 mejores momentos y los recorta en clips de 30 a 60 segundos, con el estilo que elijas."
+      color={SECTION_COLORS.largos}
+    />
   );
 }
 
