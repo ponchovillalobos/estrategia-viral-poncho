@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ProjectCardSkeleton } from "@/components/ui/skeleton";
 import { RefreshCcw, FileVideo, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Play, Calendar, Camera } from "lucide-react";
 import { ScheduleDialog } from "@/components/produccion/schedule-dialog";
 import { UploadHelperDialog } from "@/components/produccion/upload-helper-dialog";
@@ -201,6 +202,14 @@ export function ProductionList() {
           )}
         </div>
       </div>
+
+      {projects.length === 0 && loading && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <ProjectCardSkeleton key={i} />
+          ))}
+        </div>
+      )}
 
       {projects.length === 0 && !loading && (
         <EmptyState
