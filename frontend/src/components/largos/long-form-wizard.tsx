@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -392,9 +393,12 @@ export function LongFormWizard() {
 
           {list && list.videos.length === 0 ? (
             <div className="space-y-3">
-              <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-200">
-                No hay videos largos en <code>{list.rawDir}</code>. Copiá un .mp4/.mov/.mkv ahí y refrescá.
-              </p>
+              <EmptyState
+                icon={FolderOpen}
+                tone="amber"
+                title="No hay videos largos en tu carpeta"
+                description={`Copiá un .mp4/.mov/.mkv a la carpeta de abajo y tocá «recargar» arriba.`}
+              />
               <CopyableText label="Path para copiar tus videos" value={list.rawDir} />
             </div>
           ) : (
