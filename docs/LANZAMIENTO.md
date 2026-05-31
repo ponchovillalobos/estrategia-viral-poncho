@@ -154,12 +154,48 @@ ESLint: **85 → 0 problems (-100%); errors 53 → 0 (-100%); warnings 32 → 0 
 - Dead code eliminado en production-list (postingToTikTok/postToTikTok wrapper/
   tiktokConnected) — huérfanos del refactor previo.
 
-## Lo que NO se hizo (próximas olas)
+## 9. UI "preciosa" — polish visual final
 
-- UI MED items restantes (mono-tab leakage en más labels, focus rings táctiles,
-  ilustraciones de empty states, badges status con transición de color).
+Componentes nuevos reusables:
+
+- `components/ui/empty-state.tsx` — empty state con halo radial detrás del icono,
+  ring tintado en el icono, CTA con shadow + hover-lift. 5 tonos
+  (emerald/amber/sky/violet/muted). Adoptado en `/produccion` (2 estados),
+  `/editor/wizard` (sin videos) y `/largos` (sin videos largos).
+- `components/ui/skeleton.tsx` — `Skeleton` primitive + `ProjectCardSkeleton`.
+  Mostramos 4 skeletons en `/produccion` mientras carga, en vez de pantalla
+  blanca → feedback inmediato.
+
+Estilos globales (`globals.css`):
+
+- `*:focus-visible`: anillo emerald (var(--primary)) 2px con offset 2px, sólo
+  con teclado (convención accesible). Reemplaza el `outline-ring/50` default
+  gris.
+- `::selection`: bg emerald al 35% en vez del del user agent.
+- Scrollbar fino (10px), blanco al 15%, hover 28% — Firefox + WebKit.
+
+Micro-interactions por pantalla:
+
+- **Inicio (hero + acciones)**: las 3 cards principales tienen `sheen` que
+  cruza al hover (gradient blanco 5%) + icono escala 1.1 + sombra emerald.
+  El flow numérico pasa de gris a degradé radial emerald-25→5 con ring +
+  glow. Accesos secundarios con hover-lift + tinte de icono.
+- **Nav (tab-nav)**: tab activo ahora con underline animado de 2px en el
+  color del tab + glow del mismo color (más elegante que el bg-pill).
+  Logo dot con halo emerald y scale al hover.
+- **Producción (cards)**: thumb con zoom suave (scale 1.05, 500ms) al hover
+  + gradient overlay desde abajo + botón play con scale-in (0.75 → 1) +
+  shadow grande. Focus-visible primary.
+- **Wizard (stepper)**: paso actual destacado (bg primary, scale-110, sombra
+  emerald), pasos hechos con check + tinte primary, connectors con
+  gradient primary → primary/60.
+
+## Lo que NO se hizo (queda para futuro)
+
 - Migrar los patrones `load on mount` a React 19 `use(promise)` + Suspense.
   Funcional hoy; cambio cosmético/perf marginal.
+- Ilustraciones SVG custom para empty states (los iconos lucide cumplen).
+- Tema light/dark toggle (hoy hardcode dark via `html { color-scheme: dark }`).
 
 ## Cómo verificar
 
@@ -174,4 +210,5 @@ npx remotion compositions src/index.ts  # debe listar "ViralVideo"
 ```
 
 Y en la app: abrí http://localhost:3000 — fijate el glow del hero, hover en las cards
-de Producción, y al terminar un render el confetti.
+de Producción, el sheen de las cards de acciones, el underline glow al cambiar de
+tab, el zoom en el thumbnail al pasar el mouse, y al terminar un render el confetti.
