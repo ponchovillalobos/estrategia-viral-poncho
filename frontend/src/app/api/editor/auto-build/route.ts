@@ -10,7 +10,6 @@ import {
   RENDERS_DIR,
   PYTHON_EXE,
   PYTHON_DIR,
-  VOICEOVER_DIR,
 } from "@/lib/paths";
 import {
   buildProjectForStyle,
@@ -22,7 +21,7 @@ import { enqueue } from "@/lib/job-queue";
 import { autoMatchBroll, type BrollClip } from "@/lib/pexels";
 import { writeJsonFileAtomic } from "@/lib/atomic-write";
 import { readSettings } from "@/lib/user-settings";
-import { runProcess, parseLastJsonLine } from "@/lib/run-process";
+import { runProcess } from "@/lib/run-process";
 import {
   pickTopKeywords,
   sanitizeForFilename,
@@ -36,12 +35,18 @@ import {
 import {
   STYLE_SHORT_LABEL,
   dimensionsFromAspect,
-  findRawVideo,
   uniqueProjectId,
 } from "./lib/helpers";
 import { enrichCinematic } from "./lib/enrich-cinematic";
 import { resolveImageOverlays } from "./lib/resolve-overlays";
 import { applyBeatSync } from "./lib/beat-sync";
+import {
+  applyTracking,
+  applyRemoveBg,
+  applyVoiceover,
+  applyTextBehind,
+  applyTranslate,
+} from "./lib/fx-enrichments";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -217,181 +222,13 @@ async function processJob(job: Job, body: AutoBuildRequest) {
 
       await applyBeatSync(project, transcript.duration);
 
-      // === Motion tracking: correr track_subject.py si el estilo lo pide ===
-      // Detecta la cara del sujeto en el raw y rellena trackPath → TrackedLayer pega
-      // labels que la siguen. Solo estilos con tracking=true (ej. hype). Si falla o no
-      // hay raw, queda vacío y el render sale sin tracking (no rompe).
-      if (project.tracking) {
-        try {
-          const rawVideo = await findRawVideo(videoId);
-          if (rawVideo) {
-            const trackRun = await runProcess(
-              PYTHON_EXE,
-              [path.join(PYTHON_DIR, "track_subject.py"), rawVideo, "0.15"],
-              PYTHON_DIR,
-              undefined,
-              180_000
-            );
-            if (trackRun.ok) {
-              const line = trackRun.stdout
-                .split(/\r?\n/)
-                .filter((l) => l.trim().startsWith("{"))
-                .pop();
-              const parsed = line ? (JSON.parse(line) as { points?: unknown[] }) : null;
-              const pts = parsed?.points ?? [];
-              project.trackPath = pts;
-              console.log(`[auto-build] motion tracking: ${pts.length} puntos de cara`);
-            }
-          }
-        } catch (err) {
-          console.warn("[auto-build] tracking falló:", err);
-        }
-      }
-
-      // === Quitar fondo con IA (opt-in): compone la persona sobre fondo desenfocado ===
-      // Genera {videoId}_fg.mp4 en RAW_DIR y lo marca como video base (build-props lo usa).
-      // Pesado (segmentación por frame); solo estilos con removeBg=true (ej. broll_pip).
-      if (project.removeBg) {
-        try {
-          const rawVideo = await findRawVideo(videoId);
-          if (rawVideo) {
-            const fgId = `${videoId}_fg`;
-            const fgPath = path.join(RAW_DIR, `${fgId}.mp4`);
-            const bgRun = await runProcess(
-              PYTHON_EXE,
-              [path.join(PYTHON_DIR, "remove_background.py"), rawVideo, fgPath, "blur"],
-              PYTHON_DIR,
-              undefined,
-              600_000 // 10 min — segmentación por frame puede tardar en videos largos
-            );
-            const parsedBg = bgRun.ok ? parseLastJsonLine<{ ok?: boolean }>(bgRun.stdout) : null;
-            const okFlag = parsedBg?.ok === true;
-            if (okFlag && (await fs.access(fgPath).then(() => true).catch(() => false))) {
-              project.foregroundVideoId = fgId;
-              console.log(`[auto-build] quitar fondo IA: ${fgId}.mp4 generado`);
-            } else {
-              console.warn("[auto-build] quitar fondo: no se generó el compuesto, sigo con el raw");
-            }
-          }
-        } catch (err) {
-          console.warn("[auto-build] quitar fondo falló:", err);
-        }
-      }
-
-      // === C1/C2 — Voz IA (Piper o XTTS-clon, opt-in, ADITIVO) ===
-      // Si project trae `voiceover: { text }`, sintetizar la locución:
-      //   - Con `speakerWav` definido → C2 (XTTS-v2 clona tu voz, ~1.8GB modelo).
-      //   - Sin `speakerWav`         → C1 (Piper, voz ES default, ~63MB).
-      // Si falla o no hay modelo, el render sale sin voz extra (no rompe).
-      const vo = project.voiceover;
-      if (vo && vo.text && vo.text.trim().length > 0) {
-        try {
-          await fs.mkdir(VOICEOVER_DIR, { recursive: true });
-          const voFile = `${projectId}.wav`;
-          const voPath = path.join(VOICEOVER_DIR, voFile);
-          const useXtts = Boolean(vo.speakerWav);
-          const scriptArgs = useXtts
-            ? [
-                path.join(PYTHON_DIR, "xtts.py"),
-                vo.text,
-                voPath,
-                "--speaker",
-                vo.speakerWav!,
-                "--lang",
-                vo.lang ?? "es",
-              ]
-            : [path.join(PYTHON_DIR, "tts.py"), vo.text, voPath];
-          // XTTS es CPU-intensivo + descarga el modelo la primera vez → timeout más amplio.
-          const ttsTimeout = useXtts ? 900_000 : 180_000;
-          const ttsRun = await runProcess(
-            PYTHON_EXE,
-            scriptArgs,
-            PYTHON_DIR,
-            undefined,
-            ttsTimeout
-          );
-          const parsed = ttsRun.ok ? parseLastJsonLine<{ ok?: boolean }>(ttsRun.stdout) : null;
-          if (parsed?.ok && (await fs.access(voPath).then(() => true).catch(() => false))) {
-            const apiHost = process.env.VIRAL_API_HOST ?? "http://localhost:3000";
-            project.voiceoverUrl = `${apiHost}/api/voiceover/stream?file=${encodeURIComponent(voFile)}`;
-            project.voiceoverVolume = vo.volume ?? 0.7;
-            project.voiceoverStartSec = vo.startSec ?? 0;
-            console.log(`[auto-build] voz IA (${useXtts ? "XTTS clon" : "Piper"}): ${voFile}`);
-          } else {
-            console.warn("[auto-build] tts.py no generó WAV; render sin voz");
-          }
-        } catch (err) {
-          console.warn("[auto-build] voz IA falló:", err);
-        }
-      }
-
-      // === A3 — Texto detrás del sujeto (opt-in, ADITIVO) ===
-      // Si el project trae `textBehind`, correr text_behind_subject.py para bake-ar el
-      // efecto en un nuevo mp4. Luego seteamos foregroundVideoId para que build-props
-      // use ese mp4 como base del render. Si falla, sigue con el raw normal (no rompe).
-      const tb = project.textBehind;
-      if (tb && tb.phrase) {
-        try {
-          const rawVideo = await findRawVideo(videoId);
-          if (rawVideo) {
-            const tbId = `${videoId}_textbehind`;
-            const tbPath = path.join(RAW_DIR, `${tbId}.mp4`);
-            const tbRun = await runProcess(
-              PYTHON_EXE,
-              [
-                path.join(PYTHON_DIR, "text_behind_subject.py"),
-                rawVideo,
-                tbPath,
-                tb.phrase,
-                "--color",
-                tb.color || "ffffff",
-              ],
-              PYTHON_DIR,
-              undefined,
-              600_000 // 10 min — segmentación por frame
-            );
-            const parsedTb = tbRun.ok ? parseLastJsonLine<{ ok?: boolean }>(tbRun.stdout) : null;
-            const okFlag = parsedTb?.ok === true;
-            if (okFlag && (await fs.access(tbPath).then(() => true).catch(() => false))) {
-              project.foregroundVideoId = tbId;
-              console.log(`[auto-build] texto-detrás-del-sujeto: ${tbId}.mp4 generado`);
-            } else {
-              console.warn("[auto-build] texto-detrás: no se generó, sigo con el raw");
-            }
-          }
-        } catch (err) {
-          console.warn("[auto-build] texto-detrás-del-sujeto falló:", err);
-        }
-      }
-
-      // === C3 — Traducción de caption (opt-in, ADITIVO) ===
-      // Si project trae `translateTo: "en"` (o "pt", etc.), correr translate.py para
-      // traducir la caption y guardar `captionTranslated`. Útil para publicar el mismo
-      // video en redes con audiencias multi-idioma. Si falla, render sale igual.
-      const translateTo = project.translateTo;
-      const captionToTranslate = project.caption;
-      if (translateTo && captionToTranslate && captionToTranslate.trim().length > 0) {
-        try {
-          const trRun = await runProcess(
-            PYTHON_EXE,
-            [path.join(PYTHON_DIR, "translate.py"), captionToTranslate, "--to", translateTo],
-            PYTHON_DIR,
-            undefined,
-            60_000
-          );
-          const parsed = trRun.ok
-            ? parseLastJsonLine<{ ok?: boolean; translated?: string }>(trRun.stdout)
-            : null;
-          if (parsed?.ok && parsed.translated) {
-            project.captionTranslated = parsed.translated;
-            console.log(`[auto-build] traducción es→${translateTo} OK`);
-          } else {
-            console.warn(`[auto-build] translate.py no devolvió texto (${trRun.stderr.slice(-200)})`);
-          }
-        } catch (err) {
-          console.warn("[auto-build] traducción falló:", err);
-        }
-      }
+      // FX enrichments opt-in: tracking, bg-removal, voz IA, texto-detrás, traducción.
+      // Cada uno muta `project` si su flag está activo; ninguno rompe si falla.
+      await applyTracking(project, videoId);
+      await applyRemoveBg(project, videoId);
+      await applyVoiceover(project, projectId);
+      await applyTextBehind(project, videoId);
+      await applyTranslate(project);
 
       const projectPath = path.join(PROJECTS_DIR, `${projectId}.json`);
       await writeJsonFileAtomic(projectPath, project);
