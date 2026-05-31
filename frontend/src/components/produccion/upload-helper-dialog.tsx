@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -43,14 +43,17 @@ export function UploadHelperDialog({
   const [step2Done, setStep2Done] = useState(false);
   const [busy, setBusy] = useState<"start" | "openTiktok" | "copyPath" | "copyCaption" | null>(null);
 
-  // Reset on open
-  useEffect(() => {
+  // Reset on open: patrón "store-and-compare" (recomendado por React docs) en
+  // vez de useEffect+setState para evitar el render cascada.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
     if (open) {
       setStep1Done(false);
       setStep2Done(false);
       setBusy(null);
     }
-  }, [open]);
+  }
 
   // Llama al endpoint que (a) copia el archivo al portapapeles, (b) abre Explorer
   // con el archivo seleccionado. Esto se hace en un solo click para que el usuario

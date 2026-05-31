@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { PLATFORMS, PLATFORM_ORDER } from "@/lib/platforms";
 import { LayoutDashboard, Music2, Camera, Briefcase, Users, LineChart, Scissors, FolderKanban, Settings, Film, Telescope, Menu, X } from "lucide-react";
@@ -20,10 +20,12 @@ export function TabNav() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Cerrar el menú móvil al navegar
-  useEffect(() => {
+  // Cerrar el menú móvil al navegar (store-and-compare para evitar setState-in-effect).
+  const [prevPath, setPrevPath] = useState(pathname);
+  if (prevPath !== pathname) {
+    setPrevPath(pathname);
     setMenuOpen(false);
-  }, [pathname]);
+  }
 
   // Orden por el flujo real de un principiante: empezar → crear → ver lo creado → resultados,
   // y al final lo de referencia (videos largos, inspiración, planes por red).

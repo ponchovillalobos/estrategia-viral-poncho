@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -45,13 +45,16 @@ export function InstagramHelperDialog({
     null
   );
 
-  useEffect(() => {
+  // Reset on open: patrón store-and-compare en vez de useEffect+setState.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
     if (open) {
       setStep1Done(false);
       setStep2Done(false);
       setBusy(null);
     }
-  }, [open]);
+  }
 
   async function startUpload() {
     setBusy("start");
