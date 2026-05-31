@@ -94,43 +94,66 @@ Split en componentes + lib helpers, commit por commit con smoke 200 verificado.
 
 **Resultado:** production-list.tsx 991 → **512 líneas (-48%)**.
 
+### auto-build/route.ts (server pipeline)
+
+Pasos por etapa, cada commit con `tsc 0` + smoke 200 verificado.
+
+| Pieza | A archivo |
+|---|---|
+| Constants + types | `lib/types.ts`, `lib/helpers.ts` |
+| Auto-enriquecimiento cinematográfico (SFX + camera moves + jump cuts) | `lib/enrich-cinematic.ts` |
+| Resolver de imageOverlays (matcher Python → asamblea LLM → fallback) | `lib/resolve-overlays.ts` |
+| Beat-sync (zooms + flashes + punches al beat) | `lib/beat-sync.ts` |
+| 5 FX enrichments (tracking, bg-removal, voz IA, texto-detrás, traducción) | `lib/fx-enrichments.ts` |
+
+**Resultado:** auto-build/route.ts 1145 → **472 líneas (-59%)**.
+
 ## 7. Tests adicionales
 
-Cobertura subida de 26 → **39 tests** (+50%):
+Cobertura subida de 26 → **50 tests** (+92%):
 
 - `schedule-helpers` — 5 tests (agrupación por projectId, último gana, default a tiktok,
   network error, lista vacía).
 - `transcript-helpers` — 8 tests (cache hit, ensamble del texto, trim, HTTP/network errors,
   finally setLoading, copy noop, copy success).
+- `publish-actions` — 11 tests (copy + 4 publish handlers + regenerate, con mocks de
+  `fetch`/`clipboard`/`window.open` vía `vi.stubGlobal`).
 
-Total: **5 archivos de test, 39 tests pasando**.
+Total: **6 archivos de test, 50 tests pasando**. Vitest config nuevo
+(`vitest.config.ts`) mapea el alias `@/` → `src/` para tests que importan módulos
+con paths de Next.js.
 
 ## 8. Más limpieza de lint
 
-ESLint: **85 → 54 problems (-37%); errors 53 → 22 (-58%)**.
+ESLint: **85 → 47 problems (-45%); errors 53 → 13 (-75%)**.
 
-- 28 `react/no-unescaped-entities` arreglados con guillemets españoles «» (ortográficamente
-  correctos para ES, sin escape).
+- 28 `react/no-unescaped-entities` arreglados con guillemets españoles «»
+  (ortográficamente correctos para ES, sin escape).
 - `<a href>` interno → `<Link>` en stats-cards.
 - `Date.now()` en useState → lazy initializer.
 - Reorden de `a.onended` en music-picker para evitar mutación post-setter.
+- 9 `react-hooks/set-state-in-effect` resueltos con patrón **store-and-compare**
+  (recomendado por React docs) en vez de `useEffect(() => setX(...), [openProp])`:
+  rename-dialog, upload-helper-dialog, instagram-helper-dialog, schedule-dialog,
+  tab-nav, adapt-dialog, batch-adapt-panel, production-list (preview reset),
+  research-workspace.
 
 ## Lo que NO se hizo (próximas olas)
 
 Refactors mayores que requieren su propia ola con verificación visual exhaustiva:
 
-- Split de `auto-build/route.ts` (1100 líneas) en 9 módulos por etapa de pipeline.
-- 21 errores `react-hooks/set-state-in-effect` restantes — cada uno necesita análisis caso
-  por caso para no romper sincronización con el server.
+- 13 errores `react-hooks/set-state-in-effect` restantes — todos son patrones
+  "load on mount" / "load + polling" (settings, OAuth setup, auto-generate al
+  abrir). La migración correcta es `use(promise)` de React 19 o SWR/React Query;
+  fuera del scope de esta ola.
 - UI MED items restantes (mono-tab leakage en más labels, focus rings táctiles,
   ilustraciones de empty states, badges status con transición de color).
-- Cobertura de tests para `publish-actions` (mocks de `fetch` + `window.open`).
 
 ## Cómo verificar
 
 ```bash
 cd frontend
-npm test        # 39/39 tests pasan
+npm test        # 50/50 tests pasan
 npx tsc --noEmit  # 0 errores
 cd ../remotion
 npx tsc --noEmit  # 0 errores
