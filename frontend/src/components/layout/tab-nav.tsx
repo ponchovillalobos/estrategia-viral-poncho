@@ -4,16 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { PLATFORMS, PLATFORM_ORDER } from "@/lib/platforms";
-import { LayoutDashboard, Music2, Camera, Briefcase, Users, LineChart, Scissors, FolderKanban, Settings, Film, Telescope, Menu, X } from "lucide-react";
+import { LayoutDashboard, LineChart, Scissors, FolderKanban, Settings, Film, Telescope, Menu, X } from "lucide-react";
 import { SettingsDialog } from "@/components/layout/settings-dialog";
-
-const ICONS = {
-  tiktok: Music2,
-  instagram: Camera,
-  linkedin: Briefcase,
-  facebook: Users,
-} as const;
 
 export function TabNav() {
   const pathname = usePathname();
@@ -27,21 +19,16 @@ export function TabNav() {
     setMenuOpen(false);
   }
 
-  // Orden por el flujo real de un principiante: empezar → crear → ver lo creado → resultados,
-  // y al final lo de referencia (videos largos, inspiración, planes por red).
+  // Cada tab tiene su propio color para que la UI tenga variedad y el usuario
+  // ubique visualmente dónde está. Orden por flujo de principiante:
+  // empezar → crear → ver lo creado → resultados → referencia (largos / inspiración).
   const links = [
-    { href: "/", label: "Inicio", icon: LayoutDashboard, color: "var(--accent-emerald)" },
-    { href: "/editor", label: "Crear video", icon: Scissors, color: "var(--accent-emerald)" },
-    { href: "/produccion", label: "Mis videos", icon: FolderKanban, color: "var(--phase-amplificacion)" },
-    { href: "/metricas", label: "Resultados", icon: LineChart, color: "var(--accent-emerald)" },
-    { href: "/largos", label: "Videos largos", icon: Film, color: "var(--accent-violet, #a78bfa)" },
-    { href: "/research", label: "Inspiración", icon: Telescope, color: "var(--accent-cyan, #06b6d4)" },
-    ...PLATFORM_ORDER.map((p) => ({
-      href: `/${p}`,
-      label: PLATFORMS[p].label,
-      icon: ICONS[p],
-      color: PLATFORMS[p].color,
-    })),
+    { href: "/", label: "Inicio", icon: LayoutDashboard, color: "#34d399" },         // emerald
+    { href: "/editor", label: "Crear video", icon: Scissors, color: "#06b6d4" },     // cyan
+    { href: "/produccion", label: "Mis videos", icon: FolderKanban, color: "#f59e0b" }, // amber
+    { href: "/metricas", label: "Resultados", icon: LineChart, color: "#a78bfa" },   // violet
+    { href: "/largos", label: "Videos largos", icon: Film, color: "#ec4899" },       // fuchsia
+    { href: "/research", label: "Inspiración", icon: Telescope, color: "#fb7185" },  // rose
   ];
 
   return (
@@ -52,7 +39,8 @@ export function TabNav() {
           <span className="text-sm font-semibold tracking-tight">Estrategia Viral</span>
         </Link>
 
-        {/* Links inline (desktop) */}
+        {/* Links inline (desktop) — cada tab con su color: icono tintado siempre,
+            label más fuerte y underline glow cuando está activo. */}
         <div className="hidden items-center gap-0.5 lg:flex">
           {links.map(({ href, label, icon: Icon, color }) => {
             const active = pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
@@ -61,15 +49,22 @@ export function TabNav() {
                 key={href}
                 href={href}
                 className={cn(
-                  "relative flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors",
+                  "relative flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-all duration-200",
                   active
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                 )}
               >
-                <Icon className="h-4 w-4" style={{ color: active ? color : undefined }} />
+                <Icon
+                  className="h-4 w-4 transition-transform"
+                  style={{
+                    color,
+                    opacity: active ? 1 : 0.7,
+                    filter: active ? `drop-shadow(0 0 6px ${color}88)` : undefined,
+                  }}
+                />
                 <span>{label}</span>
-                {/* Underline animado al estilo "tab activo" — más fino y elegante que el bg pill. */}
+                {/* Underline animado del color del tab cuando está activo. */}
                 {active && (
                   <span
                     aria-hidden
@@ -109,7 +104,7 @@ export function TabNav() {
         </div>
       </nav>
 
-      {/* Panel de navegación móvil */}
+      {/* Panel de navegación móvil — mismo color-coding por tab. */}
       {menuOpen && (
         <div className="border-t border-border bg-background lg:hidden">
           <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-1 px-4 py-3 sm:grid-cols-3">
@@ -122,11 +117,23 @@ export function TabNav() {
                   className={cn(
                     "flex items-center gap-2 rounded-md px-3 py-2.5 text-sm transition-colors",
                     active
-                      ? "bg-muted text-foreground"
+                      ? "text-foreground"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
+                  style={
+                    active
+                      ? {
+                          backgroundColor: `${color}1f`,
+                          borderLeft: `3px solid ${color}`,
+                          paddingLeft: 10,
+                        }
+                      : undefined
+                  }
                 >
-                  <Icon className="h-4 w-4" style={{ color: active ? color : undefined }} />
+                  <Icon
+                    className="h-4 w-4"
+                    style={{ color, opacity: active ? 1 : 0.75 }}
+                  />
                   <span>{label}</span>
                 </Link>
               );

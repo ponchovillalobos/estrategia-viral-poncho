@@ -54,10 +54,9 @@ export const PLATFORMS: Record<PlatformKey, Platform> = {
   },
 };
 
-// El dashboard muestra solo las redes con publicación conectable: Instagram y LinkedIn.
-// TikTok y Facebook quedan en el modelo de datos (tipo + calendario/hashtags/métricas) y,
-// en el caso de TikTok, con todo su código OAuth/upload intacto pero oculto del UI
-// (pendiente de la auditoría de TikTok). Re-agregar acá para volver a mostrarlos.
+// Plataformas listables en /metricas (dropdown del form + columnas de la tabla).
+// TikTok y Facebook quedan en el tipo + clientes OAuth/upload por si más adelante se
+// reactivan, pero hoy no aparecen en ningún selector de UI.
 export const PLATFORM_ORDER: PlatformKey[] = ["instagram", "linkedin"];
 
 export function isPlatformKey(value: string): value is PlatformKey {
