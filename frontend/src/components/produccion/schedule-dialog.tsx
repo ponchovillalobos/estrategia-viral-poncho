@@ -61,10 +61,6 @@ function defaultScheduledAtLocalISO(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function captionKeyFor(p: SchedulePlatform): keyof CaptionMap {
-  return p === "instagram_bridge" ? "instagram" : p;
-}
-
 export function ScheduleDialog({
   open,
   onOpenChange,

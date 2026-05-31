@@ -12,7 +12,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  ExternalLink,
   FileVideo,
   FolderOpen,
   Loader2,
@@ -24,7 +23,6 @@ import {
   Music2,
   Camera,
   Briefcase,
-  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -328,10 +326,9 @@ export function LongFormWizard() {
     refreshList();
   }
 
-  // "selected" antes era el único video; ahora usamos el primero del set para
-  // mostrar el toggle "skipTranscribe" condicional al transcript.
+  // Filtra los videos seleccionados; usamos el toggle "skipTranscribe" condicional
+  // sólo cuando TODOS tienen transcript ya hecho.
   const selectedList = list?.videos.filter((v) => selectedIds.has(v.videoId)) ?? [];
-  const selected = selectedList[0];
   const allSelectedHaveTranscript = selectedList.length > 0 && selectedList.every((v) => v.hasTranscript);
 
   // ─── Render: si hay job activo, mostrar JobView (panel dedicado) ────────

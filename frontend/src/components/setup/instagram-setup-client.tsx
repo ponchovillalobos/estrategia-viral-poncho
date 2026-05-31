@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ExternalLink, Copy, Check, Loader2, CheckCircle2, ArrowRight, Camera, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 /**
  * Wizard guiado para conectar Instagram (Graph API de Meta).

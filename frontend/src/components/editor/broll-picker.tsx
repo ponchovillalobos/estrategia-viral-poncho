@@ -1,5 +1,9 @@
 "use client";
 
+// Thumbnails de Pexels (URLs externas dinámicas). next/image requeriría width/height
+// fijos y remotePatterns por cada dominio; el costo no se justifica para previews.
+/* eslint-disable @next/next/no-img-element */
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

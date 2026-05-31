@@ -19,7 +19,7 @@
 
 import { getJob as getEditorJob, updateStep } from "@/lib/job-store";
 import { getLongFormJob, updateLongFormStep } from "@/lib/long-form-job-store";
-import { getResearch, updateResearch } from "@/lib/research-store";
+import { updateResearch } from "@/lib/research-store";
 
 export type JobKind = "editor" | "long_form" | "research";
 
@@ -91,12 +91,6 @@ function markRunning(kind: JobKind, jobId: string) {
     // acá solo dejamos "downloading" como marca de arranque, no "running".
     updateResearch(jobId, { status: "downloading" }).catch(() => {});
   }
-}
-
-/** Posición visible para un job pendiente (1-indexed). */
-function positionOf(jobId: string): number {
-  const idx = QUEUE.pending.findIndex((e) => e.jobId === jobId);
-  return idx >= 0 ? idx + 1 : 0;
 }
 
 /**

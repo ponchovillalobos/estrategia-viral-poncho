@@ -1,5 +1,8 @@
 "use client";
 
+// Thumbnails de overlays dinámicos (sizes variables, sourced from /api/overlays).
+/* eslint-disable @next/next/no-img-element */
+
 /**
  * Paso Cinematográfico del wizard (cortos y largos).
  *
@@ -17,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Upload,
-  X,
   Loader2,
   Sparkles,
   Film,

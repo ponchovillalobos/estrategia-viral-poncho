@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useRealMetrics } from "@/hooks/use-real-metrics";
-import { PLATFORMS, PLATFORM_ORDER, type PlatformKey } from "@/lib/platforms";
+import { PLATFORMS, PLATFORM_ORDER } from "@/lib/platforms";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 

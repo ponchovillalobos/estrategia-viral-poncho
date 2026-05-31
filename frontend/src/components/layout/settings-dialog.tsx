@@ -15,7 +15,6 @@ import {
   Music2,
   Camera,
   Briefcase,
-  Users,
   Settings as SettingsIcon,
   Loader2,
   CheckCircle2,

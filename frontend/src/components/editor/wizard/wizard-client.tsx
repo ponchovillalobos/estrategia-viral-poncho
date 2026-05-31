@@ -1,12 +1,15 @@
 ﻿"use client";
 
+// Thumbnails dinámicos de videos raw (sizes flexibles).
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileVideo, Mic, Sparkles, Music2, Camera, Briefcase, Users, Send } from "lucide-react";
+import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, FileVideo, Mic, Sparkles, Music2, Camera, Briefcase, Send } from "lucide-react";
 import { toast } from "sonner";
 import { CinematicStep } from "@/components/editor/wizard/cinematic-step";
 import { HelpHint } from "@/components/ui/help-hint";
