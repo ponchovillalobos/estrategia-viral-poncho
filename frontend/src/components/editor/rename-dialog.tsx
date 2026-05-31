@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -41,10 +41,15 @@ export function RenameDialog({
   const router = useRouter();
   const [value, setValue] = useState(currentId);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
+  // Reset el input cuando se reabre el diálogo o cambia el currentId. Patrón
+  // "store-and-compare" (recomendado por React docs) en vez de useEffect+setState
+  // para evitar el render cascada que dispara react-hooks/set-state-in-effect.
+  const [resetKey, setResetKey] = useState(`${open}-${currentId}`);
+  const nextKey = `${open}-${currentId}`;
+  if (resetKey !== nextKey) {
+    setResetKey(nextKey);
     if (open) setValue(currentId);
-  }, [open, currentId]);
+  }
 
   async function submit() {
     const newId = value.trim();

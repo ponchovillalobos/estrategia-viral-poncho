@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -95,7 +95,10 @@ export function ScheduleDialog({
     [captions, caption]
   );
 
-  useEffect(() => {
+  // Reset on open: patrón store-and-compare en vez de useEffect+setState.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
     if (open) {
       setScheduledAt(defaultScheduledAtLocalISO());
       setSelected(new Set(["tiktok"]));
@@ -103,7 +106,7 @@ export function ScheduleDialog({
       setPrivacyLevel("SELF_ONLY");
       setCaptionByPlatform({ ...initialCaptions });
     }
-  }, [open, initialCaptions]);
+  }
 
   function togglePlatform(p: SchedulePlatform) {
     setSelected((s) => {
