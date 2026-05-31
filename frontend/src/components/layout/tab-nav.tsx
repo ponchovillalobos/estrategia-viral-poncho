@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { SECTION_COLORS } from "@/lib/section-colors";
 import { LayoutDashboard, LineChart, Scissors, FolderKanban, Settings, Film, Telescope, Menu, X } from "lucide-react";
 import { SettingsDialog } from "@/components/layout/settings-dialog";
 
@@ -19,16 +20,17 @@ export function TabNav() {
     setMenuOpen(false);
   }
 
-  // Cada tab tiene su propio color para que la UI tenga variedad y el usuario
-  // ubique visualmente dónde está. Orden por flujo de principiante:
-  // empezar → crear → ver lo creado → resultados → referencia (largos / inspiración).
+  // Cada tab tiene su propio color (definido en lib/section-colors.ts — single
+  // source of truth, también lo usan los SectionHeader de cada pantalla).
+  // Orden por flujo de principiante: empezar → crear → ver lo creado →
+  // resultados → referencia (largos / inspiración).
   const links = [
-    { href: "/", label: "Inicio", icon: LayoutDashboard, color: "#34d399" },         // emerald
-    { href: "/editor", label: "Crear video", icon: Scissors, color: "#06b6d4" },     // cyan
-    { href: "/produccion", label: "Mis videos", icon: FolderKanban, color: "#f59e0b" }, // amber
-    { href: "/metricas", label: "Resultados", icon: LineChart, color: "#a78bfa" },   // violet
-    { href: "/largos", label: "Videos largos", icon: Film, color: "#ec4899" },       // fuchsia
-    { href: "/research", label: "Inspiración", icon: Telescope, color: "#fb7185" },  // rose
+    { href: "/", label: "Inicio", icon: LayoutDashboard, color: SECTION_COLORS.inicio },
+    { href: "/editor", label: "Crear video", icon: Scissors, color: SECTION_COLORS.editor },
+    { href: "/produccion", label: "Mis videos", icon: FolderKanban, color: SECTION_COLORS.produccion },
+    { href: "/metricas", label: "Resultados", icon: LineChart, color: SECTION_COLORS.metricas },
+    { href: "/largos", label: "Videos largos", icon: Film, color: SECTION_COLORS.largos },
+    { href: "/research", label: "Inspiración", icon: Telescope, color: SECTION_COLORS.research },
   ];
 
   return (
