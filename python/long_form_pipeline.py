@@ -165,6 +165,77 @@ def step_extract(
         return []
 
 
+def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
+    """Post-procesa el render con ffmpeg, en paridad con el pipeline de shorts:
+
+      1. LUT 3D color grade — lee `lut` del project JSON (todos los estilos setean uno:
+         kodak_warm / teal_orange / vintage_film / cyberpunk) y aplica lut3d. Sin esto,
+         los clips largos salían SIN el grade que el mismo estilo tiene en shorts.
+      2. Audio mastering — compresor + limiter + highpass + EQ de voz. Los largos son
+         contenido hablado (cursos/charlas), así que el master mejora la claridad en
+         todos los estilos (en shorts solo corría para cinematic_pro).
+
+    Best-effort: cada paso es try/except con timeout. Si ffmpeg falla o el .cube no
+    existe, se conserva el render tal cual y el clip NO se da por fallido.
+    """
+    # 1) LUT — leer el nombre del .cube del project JSON que escribió build-clip-supreme
+    try:
+        project_path = LF_PROJECTS / f"{clip_id}_{style_id}.json"
+        lut_name = None
+        if project_path.exists():
+            data = json.loads(project_path.read_text(encoding="utf-8"))
+            lut_name = data.get("lut")
+        if lut_name:
+            lut_file = REMOTION_DIR / "public" / "luts" / lut_name
+            if lut_file.exists():
+                graded = rendered.with_name(rendered.stem + "_graded.mp4")
+                # Ruta relativa con forward-slashes (cwd=REMOTION_DIR) para evitar el
+                # escaping del ":" de la unidad de Windows dentro del filtergraph.
+                subprocess.run(
+                    [
+                        str(FFMPEG_PATH), "-y",
+                        "-i", str(rendered),
+                        "-vf", f"lut3d=public/luts/{lut_name}",
+                        "-c:a", "copy",
+                        "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+                        "-pix_fmt", "yuv420p",
+                        str(graded),
+                    ],
+                    check=True, cwd=REMOTION_DIR, timeout=180,
+                )
+                graded.replace(rendered)
+                print(f"[post-fx] LUT aplicado ({lut_name}): {rendered.name}", file=sys.stderr)
+            else:
+                print(f"[post-fx] LUT no encontrado, se salta: {lut_name}", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
+        print(f"[post-fx] LUT skipped: {e}", file=sys.stderr)
+
+    # 2) Audio mastering — mismos filtros que el SUPREME de shorts
+    try:
+        mastered = rendered.with_name(rendered.stem + "_mastered.mp4")
+        audio_filter = (
+            "acompressor=threshold=-18dB:ratio=3:attack=20:release=200,"
+            "alimiter=level_in=1:level_out=0.95:limit=0.95,"
+            "highpass=f=80,"
+            "equalizer=f=3000:t=q:w=1:g=2"
+        )
+        subprocess.run(
+            [
+                FFMPEG_PATH, "-y",
+                "-i", str(rendered),
+                "-af", audio_filter,
+                "-c:v", "copy",
+                "-c:a", "aac", "-b:a", "192k",
+                str(mastered),
+            ],
+            check=True, cwd=REMOTION_DIR, timeout=120,
+        )
+        mastered.replace(rendered)
+        print(f"[post-fx] audio mastered: {rendered.name}", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
+        print(f"[post-fx] audio mastering skipped: {e}", file=sys.stderr)
+
+
 def step_render_clip(
     video_id: str,
     clip_index: int,
@@ -204,6 +275,8 @@ def step_render_clip(
         str(out),
         "--props=props.json",
     ], cwd=REMOTION_DIR)
+    # 4) post-fx: LUT color grade + audio mastering (paridad con shorts). Best-effort.
+    _apply_post_fx(out, clip_id, style_id)
     return out
 
 
