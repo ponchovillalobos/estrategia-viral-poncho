@@ -47,6 +47,60 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
     subprocess.run(cmd, check=True, cwd=cwd)
 
 
+def _ffprobe_duration(path: Path) -> float:
+    """Duración del video en segundos, sin transcribir nada (instantáneo)."""
+    ffprobe = FFMPEG_PATH.parent / ("ffprobe.exe" if sys.platform == "win32" else "ffprobe")
+    out = subprocess.run(
+        [str(ffprobe), "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+        capture_output=True, text=True,
+    )
+    try:
+        return float(out.stdout.strip())
+    except (ValueError, AttributeError):
+        return 0.0
+
+
+def _write_block_proposals(
+    video_id: str, duration: float, max_clips: int = 7, clip_seconds: float = 50.0
+) -> Path:
+    """Modo CLIPS RÁPIDOS: genera bloques uniformes de ~50s repartidos por el video,
+    usando SOLO la duración (ffprobe) — sin transcribir los 80 min. Cada bloque se
+    transcribe después por separado, ya cortado, en extract_clips.
+
+    Mismo criterio de espaciado que heuristic_fallback de analyze_clips.
+    """
+    clips: list[dict] = []
+    if duration >= 30:
+        spacing = max(clip_seconds + 10, duration / max(1, max_clips))
+        n = min(max_clips, max(1, int((duration - clip_seconds) / spacing) + 1))
+        for i in range(n):
+            start = i * spacing
+            end = min(start + clip_seconds, duration)
+            if end - start < 25:
+                continue
+            clips.append({
+                "start": round(start, 2),
+                "end": round(end, 2),
+                "slug": f"segmento-{i + 1:02d}",
+                "hook": f"Segmento {i + 1}",
+                "theme": f"Segmento {i + 1} del video",
+                "keywords": [],
+                "caption": "",
+                "hashtags": [],
+            })
+    proposal = {
+        "video_id": video_id,
+        "model": "heuristic-blocks",
+        "transcript_duration": duration,
+        "fallback_heuristic": True,
+        "clips": clips,
+    }
+    out = LF_PROPOSALS / f"{video_id}.json"
+    out.write_text(json.dumps(proposal, ensure_ascii=False, indent=2), encoding="utf-8")
+    return out
+
+
 def run_capture(cmd: list[str], cwd: Path | None = None) -> str:
     proc = subprocess.run(cmd, check=True, cwd=cwd, capture_output=True, text=True)
     return proc.stdout
@@ -400,27 +454,47 @@ def main() -> int:
         return 1
 
     t_total = time.time()
+    clean_path = None  # se setea solo en el modo completo (no en clips rápidos)
 
-    # Step 1: transcribe del raw
-    print("\n========== STEP 1: transcribe ==========", file=sys.stderr)
-    if not args.skip_transcribe:
-        step_transcribe(raw_path, args.video_id)
+    if args.use_heuristic:
+        # ── MODO CLIPS RÁPIDOS ────────────────────────────────────────────────
+        # No transcribimos NI recortamos silencios del video entero (en un video de
+        # 80 min, transcribir+alinear de una sola vez revienta la memoria). En cambio:
+        # duración por ffprobe → bloques uniformes de ~50s → se cortan del raw y se
+        # transcribe CADA clip por separado (30-60s = liviano y seguro) en extract_clips.
+        # Marcamos los pasos 1-5 como saltados para que la UI no quede en "pending".
+        print("\n========== STEP 1-5 (modo clips rápidos): bloques por duración ==========", file=sys.stderr)
+        for _skip in ("transcribe", "detect_silences", "cut_silences",
+                      "re-transcribe", "analyze_clips"):
+            print(f"[skip] {_skip} (modo clips rápidos)", file=sys.stderr)
+        duration = _ffprobe_duration(raw_path)
+        if duration <= 0:
+            print("[error] no pude leer la duración del video (¿corrupto?)", file=sys.stderr)
+            return 1
+        max_clips = args.max_clips if args.max_clips else 7
+        proposals_path = _write_block_proposals(args.video_id, duration, max_clips=max_clips)
+        print(f"[fast] {duration / 60:.1f} min → bloques de ~50s", file=sys.stderr)
+    else:
+        # Step 1: transcribe del raw
+        print("\n========== STEP 1: transcribe ==========", file=sys.stderr)
+        if not args.skip_transcribe:
+            step_transcribe(raw_path, args.video_id)
 
-    # Step 2: detect silences
-    print("\n========== STEP 2: detect silences ==========", file=sys.stderr)
-    cuts_path = step_detect(raw_path, args.video_id)
+        # Step 2: detect silences
+        print("\n========== STEP 2: detect silences ==========", file=sys.stderr)
+        cuts_path = step_detect(raw_path, args.video_id)
 
-    # Step 3: cut silences -> clean
-    print("\n========== STEP 3: cut silences ==========", file=sys.stderr)
-    clean_path = step_cut(raw_path, cuts_path, args.video_id)
+        # Step 3: cut silences -> clean
+        print("\n========== STEP 3: cut silences ==========", file=sys.stderr)
+        clean_path = step_cut(raw_path, cuts_path, args.video_id)
 
-    # Step 4: re-transcribir el CLEAN (timestamps alineados a clips extraídos)
-    print("\n========== STEP 4: re-transcribe del clean ==========", file=sys.stderr)
-    step_re_transcribe_clean(clean_path, args.video_id)
+        # Step 4: re-transcribir el CLEAN (timestamps alineados a clips extraídos)
+        print("\n========== STEP 4: re-transcribe del clean ==========", file=sys.stderr)
+        step_re_transcribe_clean(clean_path, args.video_id)
 
-    # Step 5: analyze con Ollama (o heurístico si --use-heuristic)
-    print("\n========== STEP 5: analyze (Ollama) ==========", file=sys.stderr)
-    proposals_path = step_analyze(args.video_id, model=args.model, use_heuristic=args.use_heuristic)
+        # Step 5: analyze con Ollama
+        print("\n========== STEP 5: analyze (Ollama) ==========", file=sys.stderr)
+        proposals_path = step_analyze(args.video_id, model=args.model, use_heuristic=args.use_heuristic)
 
     # Validación: si el LLM no propuso ningún clip, fallar AHORA con mensaje claro
     # en vez de seguir a extract_clips que va a fallar con un error genérico.
@@ -493,7 +567,8 @@ def main() -> int:
     print(json.dumps({
         "ok": True,
         "video_id": args.video_id,
-        "clean": str(clean_path),
+        # En modo clips rápidos no se genera clean (se corta del raw).
+        "clean": str(clean_path) if clean_path else None,
         "clips": len(clips_info),
         "elapsed_min": round(elapsed / 60, 2),
     }))

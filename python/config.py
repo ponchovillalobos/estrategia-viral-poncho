@@ -49,6 +49,7 @@ ASSETS_BROLL = DATA_ROOT / "assets" / "broll"
 ASSETS_MUSIC = DATA_ROOT / "assets" / "music"
 
 LONG_FORM_ROOT = DATA_ROOT / "long_form"
+LF_ROOT = LONG_FORM_ROOT  # alias: varios scripts importan LF_ROOT
 LF_RAW = LONG_FORM_ROOT / "raw"
 LF_TRANSCRIPTS = LONG_FORM_ROOT / "transcripts"
 LF_CUTS = LONG_FORM_ROOT / "cuts"

@@ -22,6 +22,7 @@ from config import (
     LF_CLEAN,
     LF_CLIPS,
     LF_PROPOSALS,
+    LF_RAW,
     LF_TRANSCRIPTS,
     LF_ROOT,
     ensure_long_form_dirs,
@@ -310,12 +311,31 @@ def main() -> int:
         print("[error] proposals sin clips", file=sys.stderr)
         return 1
 
+    # Fuente: preferir el CLEAN (sin silencios) si existe; si no, cortar del RAW.
+    # El modo "clips rápidos" no transcribe ni recorta silencios del video entero
+    # (inviable en videos de 80 min), así que corta directo del raw.
     clean_path = LF_CLEAN / f"{args.video_id}_clean.mp4"
-    if not clean_path.exists():
-        print(f"[error] no encontré clean {clean_path}", file=sys.stderr)
-        return 1
+    if clean_path.exists():
+        source_path = clean_path
+    else:
+        source_path = None
+        for ext in (".mp4", ".mov", ".mkv", ".webm", ".m4v"):
+            cand = LF_RAW / f"{args.video_id}{ext}"
+            if cand.exists():
+                source_path = cand
+                break
+        if source_path is None:
+            print(f"[error] no encontré ni clean ni raw para {args.video_id}", file=sys.stderr)
+            return 1
+        print(f"[extract] sin clean — cortando del raw {source_path.name}", file=sys.stderr)
 
+    # Si existe el transcript COMPLETO del video, cada clip se obtiene cortándolo (rápido).
+    # Si NO existe (modo clips rápidos), transcribimos CADA clip por separado: 30-60s de
+    # audio es liviano y seguro, a diferencia de transcribir los 80 min de una.
     full_transcript_path = LF_TRANSCRIPTS / f"{args.video_id}.json"
+    has_full_transcript = full_transcript_path.exists()
+    if not has_full_transcript:
+        print("[extract] sin transcript completo — se transcribe cada clip", file=sys.stderr)
 
     results = []
     for i, clip in enumerate(clips, start=1):
@@ -325,7 +345,7 @@ def main() -> int:
         out_transcript = LF_TRANSCRIPTS / f"{clip_id}.json"
         try:
             meta = extract_clip(
-                clean_path,
+                source_path,
                 clip["start"],
                 clip["end"],
                 out_mp4,
@@ -333,15 +353,34 @@ def main() -> int:
                 face_tracking=args.face_tracking,
                 clip_id=clip_id,
             )
-            sub = slice_transcript(full_transcript_path, clip["start"], clip["end"])
-            out_transcript.write_text(json.dumps(sub, ensure_ascii=False, indent=2), encoding="utf-8")
+            if has_full_transcript:
+                sub = slice_transcript(full_transcript_path, clip["start"], clip["end"])
+                out_transcript.write_text(json.dumps(sub, ensure_ascii=False, indent=2), encoding="utf-8")
+                n_words = len(sub["words"])
+            else:
+                # Transcribir el clip recién cortado (timestamps ya empiezan en 0).
+                print(f"[extract] transcribiendo clip {clip_id} ({out_mp4.name})...", file=sys.stderr)
+                tr = subprocess.run(
+                    [str(VENV_PYTHON), str(PYTHON_DIR / "transcribe.py"),
+                     str(out_mp4), "--out", str(out_transcript)],
+                    capture_output=True, text=True,
+                )
+                if tr.returncode != 0 or not out_transcript.exists():
+                    # No romper el clip por la transcripción: dejar uno vacío (sin subtítulos).
+                    print(f"[extract] transcripción del clip falló: {tr.stderr[-300:]}", file=sys.stderr)
+                    out_transcript.write_text(
+                        json.dumps({"duration": float(clip["end"]) - float(clip["start"]), "words": []},
+                                   ensure_ascii=False), encoding="utf-8")
+                    n_words = 0
+                else:
+                    n_words = len(json.loads(out_transcript.read_text(encoding="utf-8")).get("words", []))
             results.append({
                 "clip_id": clip_id,
                 "index": i,
                 "slug": slug,
                 "ok": True,
                 "duration": clip["end"] - clip["start"],
-                "words": len(sub["words"]),
+                "words": n_words,
                 "face_detected": meta.get("face_detected"),
                 "face_bbox": meta.get("face_bbox"),
             })
