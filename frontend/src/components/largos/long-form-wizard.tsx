@@ -168,6 +168,8 @@ export function LongFormWizard() {
   const [loadingList, setLoadingList] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importingPath, setImportingPath] = useState(false);
+  const [pathInput, setPathInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeJob, setActiveJob] = useState<JobState | null>(null);
   const [proposals, setProposals] = useState<ProposalsResponse | null>(null);
@@ -216,14 +218,27 @@ export function LongFormWizard() {
     });
   }
 
+  // Límite práctico para subir por HTTP. Más que esto, el navegador buffea el archivo en
+  // memoria y la subida se trunca (un curso de 80 min en HEVC pesa ~10 GB). Para esos,
+  // mejor «importar por ruta» (copia/hardlink por filesystem, sin pasar por HTTP).
+  const HTTP_UPLOAD_MAX = 1.5 * 1024 * 1024 * 1024; // 1.5 GB
+
   // Sube videos largos desde la compu del usuario (multipart) → /api/long_form/import → LF_RAW.
-  // Mismo patrón que el editor de shorts, así largos también deja elegir un video propio
-  // sin tener que copiarlo a mano a la carpeta.
   async function importVideos(files: FileList | File[]) {
+    const arr = Array.from(files);
+    const tooBig = arr.find((f) => f.size > HTTP_UPLOAD_MAX);
+    if (tooBig) {
+      toast.error(
+        `«${tooBig.name}» pesa ${(tooBig.size / 1024 / 1024 / 1024).toFixed(1)} GB — demasiado para subir por el navegador. ` +
+          `Usá «Importar por ruta» abajo y pegá la ubicación del archivo.`
+      );
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setImporting(true);
     let ok = 0;
     try {
-      for (const file of Array.from(files)) {
+      for (const file of arr) {
         const form = new FormData();
         form.append("file", file);
         const r = await fetch("/api/long_form/import", { method: "POST", body: form });
@@ -242,6 +257,35 @@ export function LongFormWizard() {
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  // Importa un video grande YA en disco por su ruta (sin subir por HTTP).
+  async function importByPath() {
+    const p = pathInput.trim();
+    if (!p) {
+      toast.error("Pegá la ruta del archivo (clic derecho → «Copiar como ruta de acceso»).");
+      return;
+    }
+    setImportingPath(true);
+    try {
+      const r = await fetch("/api/long_form/import-path", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: p }),
+      });
+      const data = (await r.json().catch(() => ({}))) as { error?: string; filename?: string };
+      if (r.ok) {
+        toast.success(`«${data.filename}» importado ✓`);
+        setPathInput("");
+        await refreshList();
+      } else {
+        toast.error(data.error ?? "no se pudo importar");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImportingPath(false);
     }
   }
 
@@ -444,6 +488,42 @@ export function LongFormWizard() {
                 {loadingList ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCcw className="h-3 w-3" />}
                 refrescar
               </button>
+            </div>
+          </div>
+
+          {/* Importar por ruta — para videos GRANDES (cursos largos de varios GB). El
+              navegador no puede subir archivos así por HTTP; acá se importa directo del
+              disco (la app corre en tu misma compu). */}
+          <div className="mb-4 rounded-md border border-violet-500/25 bg-violet-500/5 p-3">
+            <p className="mb-2 text-[11px] text-muted-foreground">
+              <span className="font-medium text-violet-200">¿Video grande (más de ~1.5 GB)?</span>{" "}
+              No lo subas con el botón de arriba (se corta). En el Explorador hacé clic
+              derecho sobre el archivo → «Copiar como ruta de acceso», pegala acá y se
+              importa directo del disco.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input
+                value={pathInput}
+                onChange={(e) => setPathInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") importByPath();
+                }}
+                placeholder="C:\Users\…\Downloads\clase.mp4"
+                className="font-mono-tab text-xs"
+              />
+              <Button
+                size="sm"
+                onClick={importByPath}
+                disabled={importingPath}
+                className="shrink-0 bg-violet-500 text-white hover:bg-violet-400"
+              >
+                {importingPath ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <FolderOpen className="mr-1.5 h-4 w-4" />
+                )}
+                Importar por ruta
+              </Button>
             </div>
           </div>
 

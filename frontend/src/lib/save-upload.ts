@@ -57,7 +57,7 @@ async function uniquePath(dir: string, filename: string, ext: string): Promise<s
 }
 
 /** Corre ffprobe sobre el archivo; lanza UploadError si está corrupto/incompleto. */
-async function validateVideo(filePath: string): Promise<void> {
+export async function validateVideo(filePath: string): Promise<void> {
   const args = [
     "-v", "error",
     "-show_entries", "format=format_name,duration",
