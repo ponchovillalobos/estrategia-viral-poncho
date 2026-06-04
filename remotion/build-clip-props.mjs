@@ -69,10 +69,16 @@ const sfxMarks = (project.sfxMarks || []).map((m) => ({
   url: `${HOST}/api/sfx/stream?file=${encodeURIComponent(m.sound)}`,
 }));
 
+// Subtítulos: si el estilo trae manualSubtitles, respetarlos; si no, los del transcript.
+const subtitles =
+  project.manualSubtitles && project.manualSubtitles.length > 0
+    ? project.manualSubtitles
+    : words;
+
 const props = {
   rawVideoUrl: `${HOST}/api/long_form/stream?file=${encodeURIComponent(clipId)}&source=clip`,
   videoDurationSec: +transcript.duration.toFixed(3),
-  words,
+  words: subtitles,
   bRoll: (project.bRoll || []).map((c) => ({ start: c.start, end: c.end, url: c.url })),
   musicUrl: project.musicTrack
     ? `${HOST}/api/music/stream?file=${encodeURIComponent(project.musicTrack)}`
@@ -96,6 +102,35 @@ const props = {
   // Dimensiones del composition. Default 1080×1920 (vertical 9:16).
   width: project.width ?? 1080,
   height: project.height ?? 1920,
+  // ─── Paridad con build-props.mjs (shorts): FX que el estilo genera vía
+  //     buildProjectForStyle pero que ANTES se descartaban en el render de largos.
+  //     Los clips de largos NO hacen jump-cut (vienen del CLEAN sin silencios), así
+  //     que no hay remap de timestamps — es pass-through directo. Defaults vacíos/none
+  //     = render idéntico para un proyecto que no traiga el campo. ───
+  sceneFx: project.sceneFx || [],
+  proTransitions: project.proTransitions || [],
+  kineticPreset: project.kineticPreset ?? "none",
+  mirrorFx: project.mirrorFx || [],
+  trackPath: project.trackPath || [],
+  trackedItems: project.trackedItems || [],
+  iconStickers: project.iconStickers || [],
+  speedRamps: project.speedRamps || [],
+  endScreen: project.endScreen ?? null,
+  progressBar: project.progressBar ?? false,
+  brandKit: project.brandKit ?? null,
+  cameraMoves: Array.isArray(project.cameraMoves) ? project.cameraMoves : [],
+  filmGrain: project.filmGrain ?? false,
+  cinematicDensity: project.cinematicDensity ?? "medium",
+  // Voz IA (largos no la cablea aún → null = sin voz). Pass-through por si un futuro
+  // estilo/flag la setea en el project.
+  voiceoverUrl: project.voiceoverUrl ?? null,
+  voiceoverVolume: project.voiceoverVolume ?? 0.7,
+  voiceoverStartSec: project.voiceoverStartSec ?? 0,
+  // autoReframe sólo se activa si hay trackPath real (lo llena el pipeline con
+  // track_subject.py sobre el clip). Sin puntos, reframear no tiene a qué seguir →
+  // lo dejamos en false para no introducir un crop errático.
+  autoReframe: Boolean(project.autoReframe) && (project.trackPath || []).length > 0,
+  sourceAspect: project.sourceAspect ?? 16 / 9,
 };
 
 const outFile = path.join(__dirname, "props.json");

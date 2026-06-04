@@ -165,6 +165,54 @@ def step_extract(
         return []
 
 
+def _apply_tracking(clip_id: str, style_id: str) -> None:
+    """Si el estilo pide motion tracking (ej. `hype` setea tracking=true), corre
+    track_subject.py sobre el clip y parchea project.trackPath ANTES de build-props.
+
+    Sin esto, el estilo declara tracking/autoReframe pero el trackPath queda vacío y
+    los labels que siguen la cara (y el reframe inteligente) no tienen a qué seguir.
+    Paridad con applyTracking() del pipeline de shorts, pero operando sobre el clip ya
+    extraído (LF_CLIPS) en vez del raw completo.
+
+    Best-effort: si no hay clip, el estilo no pide tracking, o track_subject falla,
+    se deja el project como está (trackPath vacío) y el render sigue.
+    """
+    try:
+        project_path = LF_PROJECTS / f"{clip_id}_{style_id}.json"
+        if not project_path.exists():
+            return
+        data = json.loads(project_path.read_text(encoding="utf-8"))
+        if not data.get("tracking"):
+            return
+        # Resolver el clip extraído (normalmente .mp4)
+        clip_video = None
+        for ext in (".mp4", ".mov", ".mkv", ".webm"):
+            cand = LF_CLIPS / f"{clip_id}{ext}"
+            if cand.exists():
+                clip_video = cand
+                break
+        if clip_video is None:
+            return
+        proc = subprocess.run(
+            [str(VENV_PYTHON), str(PYTHON_DIR / "track_subject.py"), str(clip_video), "0.15"],
+            check=False, cwd=PYTHON_DIR, capture_output=True, text=True, timeout=180,
+        )
+        line = next(
+            (l for l in reversed(proc.stdout.splitlines()) if l.strip().startswith("{")),
+            None,
+        )
+        if not line:
+            return
+        points = (json.loads(line) or {}).get("points") or []
+        if not points:
+            return
+        data["trackPath"] = points
+        project_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        print(f"[tracking] {len(points)} puntos de cara → {clip_id}_{style_id}", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
+        print(f"[tracking] skipped: {e}", file=sys.stderr)
+
+
 def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
     """Post-procesa el render con ffmpeg, en paridad con el pipeline de shorts:
 
@@ -262,6 +310,9 @@ def step_render_clip(
         aspect_ratio,
     ]
     run(build_args, cwd=REMOTION_DIR)
+    # 1.5) motion tracking opt-in (estilos que lo declaran, ej. hype): parchea trackPath
+    #      sobre el clip antes de armar los props. Best-effort.
+    _apply_tracking(clip_id, style_id)
     # 2) build props.json (pasamos styleId para que cargue el project file correcto)
     run(["node", str(REMOTION_DIR / "build-clip-props.mjs"), clip_id, style_id], cwd=REMOTION_DIR)
     # 3) render — nombre incluye styleId para no pisar otros estilos del mismo clip
