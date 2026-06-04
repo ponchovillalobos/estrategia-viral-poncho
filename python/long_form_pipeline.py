@@ -193,6 +193,7 @@ def _apply_tracking(clip_id: str, style_id: str) -> None:
                 break
         if clip_video is None:
             return
+        print(f"[tracking] detectando cara en {clip_id}…", file=sys.stderr, flush=True)
         proc = subprocess.run(
             [str(VENV_PYTHON), str(PYTHON_DIR / "track_subject.py"), str(clip_video), "0.15"],
             check=False, cwd=PYTHON_DIR, capture_output=True, text=True, timeout=180,
@@ -237,19 +238,27 @@ def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
             lut_file = REMOTION_DIR / "public" / "luts" / lut_name
             if lut_file.exists():
                 graded = rendered.with_name(rendered.stem + "_graded.mp4")
+                # Log ANTES de arrancar: el lut3d re-encodea todo el clip y tarda 1-2 min
+                # en silencio. Sin este aviso el panel de progreso parece congelado.
+                print(
+                    f"[post-fx] aplicando color grade ({lut_name})… re-encode del clip, ~1-2 min",
+                    file=sys.stderr, flush=True,
+                )
                 # Ruta relativa con forward-slashes (cwd=REMOTION_DIR) para evitar el
                 # escaping del ":" de la unidad de Windows dentro del filtergraph.
+                # preset=fast (no medium): ~40% más rápido a crf 18 con calidad casi igual,
+                # clave porque un lote de largos re-encodea N clips × M estilos.
                 subprocess.run(
                     [
                         str(FFMPEG_PATH), "-y",
                         "-i", str(rendered),
                         "-vf", f"lut3d=public/luts/{lut_name}",
                         "-c:a", "copy",
-                        "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+                        "-c:v", "libx264", "-crf", "18", "-preset", "fast",
                         "-pix_fmt", "yuv420p",
                         str(graded),
                     ],
-                    check=True, cwd=REMOTION_DIR, timeout=180,
+                    check=True, cwd=REMOTION_DIR, timeout=240,
                 )
                 graded.replace(rendered)
                 print(f"[post-fx] LUT aplicado ({lut_name}): {rendered.name}", file=sys.stderr)
@@ -267,9 +276,10 @@ def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
             "highpass=f=80,"
             "equalizer=f=3000:t=q:w=1:g=2"
         )
+        print("[post-fx] masterizando audio…", file=sys.stderr, flush=True)
         subprocess.run(
             [
-                FFMPEG_PATH, "-y",
+                str(FFMPEG_PATH), "-y",
                 "-i", str(rendered),
                 "-af", audio_filter,
                 "-c:v", "copy",
