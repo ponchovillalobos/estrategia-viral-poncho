@@ -418,16 +418,20 @@ export function LongFormWizard() {
                 className="hidden"
                 onChange={(e) => e.target.files && e.target.files.length > 0 && importVideos(e.target.files)}
               />
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={importing}
                 title="Subir uno o más videos largos desde tu computadora"
-                className="flex items-center gap-1 rounded border border-violet-500/40 bg-violet-500/10 px-2 py-1 font-mono-tab text-[10px] text-violet-200 hover:bg-violet-500/20 disabled:opacity-50"
+                className="bg-violet-500 text-white hover:bg-violet-400"
               >
-                {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                subir desde mi compu
-              </button>
+                {importing ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="mr-1.5 h-4 w-4" />
+                )}
+                Subir desde mi compu
+              </Button>
               <button
                 type="button"
                 onClick={refreshList}
