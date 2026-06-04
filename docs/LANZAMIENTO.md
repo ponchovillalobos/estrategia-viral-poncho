@@ -190,6 +190,46 @@ Micro-interactions por pantalla:
   emerald), pasos hechos con check + tinte primary, connectors con
   gradient primary → primary/60.
 
+## Paridad de Videos Largos con los Shorts
+
+Los clips de `/largos` se veían más pobres que los shorts y no se podía elegir un
+video propio. Análisis y fix en 3 fases (additive, commit + smoke por fase):
+
+**Fase 1 — Subir video propio.** Antes el wizard de largos solo listaba videos
+copiados a mano a `long_form/raw`. Ahora:
+
+- `POST /api/long_form/import` (gemelo de `/api/videos/import`, copia a `LF_RAW`,
+  límite 8 GB).
+- Botón «subir desde mi compu» en el paso 1 + CTA en el empty state.
+
+**Fase 2 — Post-proceso del render (look premium).** El render de largos delegaba
+a Remotion pero nunca corría el post-proceso ffmpeg de los shorts:
+
+- `_apply_post_fx()` en `long_form_pipeline.py`: **LUT 3D** (lee `lut` del project,
+  todos los estilos setean uno) + **audio mastering** (compresor/limiter/highpass/EQ
+  de voz, en todos los estilos porque los largos son contenido hablado). Best-effort.
+
+**Fase 3 — Paridad de FX (causa raíz).** `remotion/style-templates.mjs` (usado por
+el pipeline de largos) había quedado en la versión **anterior** a la capa CapCut FX,
+mientras que el `.ts` de shorts evolucionó. Resultado: aunque largos «usara el mismo
+estilo», los clips no tenían scene-fx, transiciones, subtítulos karaoke, mirror,
+icon-stickers ni speed-ramps. Fix:
+
+- `style-templates.mjs` **re-sincronizado** con el `.ts`: porta `applyCapcutFx` +
+  todos los generadores y los builders por estilo con sus recetas.
+- `build-clip-props.mjs` ahora hace **pass-through** de esos campos (antes los
+  descartaba). Sin remap porque los clips ya vienen sin silencios.
+- `_apply_tracking()` corre `track_subject.py` sobre el clip y parchea `trackPath`,
+  así el `tracking`/`autoReframe` del estilo `hype` funciona de verdad.
+
+Verificado: build de supreme/hype_max/silent produce los FX correctos y llegan al
+`props.json`; render real (Remotion, frames 0-15) de supreme y de hype-con-tracking
+montan sin romper.
+
+> Pendiente honesto: beat-sync no se portó a largos porque los estilos que ofrece
+> (supreme/hype/…) tienen `musicTrack=null`; requeriría primero darle música a los
+> clips largos.
+
 ## Lo que NO se hizo (queda para futuro)
 
 - Migrar los patrones `load on mount` a React 19 `use(promise)` + Suspense.
