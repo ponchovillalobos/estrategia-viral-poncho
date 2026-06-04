@@ -465,8 +465,16 @@ def main() -> int:
             return 1
         print(f"[render] {len(styles)} estilo(s) × {min(args.max_clips or len(clips_info), len(clips_info))} clip(s)", file=sys.stderr)
         limit = args.max_clips if args.max_clips else len(clips_info)
-        for c in clips_info[:limit]:
-            for style_id in styles:
+        clips_to_render = clips_info[:limit]
+        n_clips = len(clips_to_render)
+        for ci, c in enumerate(clips_to_render, start=1):
+            for si, style_id in enumerate(styles, start=1):
+                # Marcador que la ruta surfacea en el panel: "clip 2/7 · estilo supreme (1/3)".
+                # Da contexto durante el render largo en vez de una barra muda.
+                print(
+                    f"[render] clip {ci}/{n_clips} · estilo {style_id} ({si}/{len(styles)})",
+                    file=sys.stderr, flush=True,
+                )
                 try:
                     out = step_render_clip(
                         args.video_id,

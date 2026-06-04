@@ -108,6 +108,8 @@ async function processJob(
   }
 
   let currentStep: LongFormStepKey | null = null;
+  // Último frame de Remotion reportado, para throttlear las actualizaciones de progreso.
+  let lastRenderedFrame = -100;
 
   return new Promise<void>((resolve) => {
     const proc = spawn(PYTHON_EXE, args, {
@@ -132,6 +134,32 @@ async function processJob(
 
     function processLine(line: string) {
       appendLongFormLog(jobId, line);
+
+      // Progreso de Remotion durante el render: "Rendered X/Y". Antes la barra parecía
+      // congelada todo el render (lo más largo). Lo surfaceamos como mensaje del step
+      // "render". Throttle cada ~15 frames (o el último) para no escribir de más.
+      const rm = line.match(/Rendered (\d+)\/(\d+)/);
+      if (rm) {
+        const cur = parseInt(rm[1], 10);
+        const tot = parseInt(rm[2], 10);
+        if (tot > 0 && (cur - lastRenderedFrame >= 15 || cur >= tot)) {
+          lastRenderedFrame = cur;
+          updateLongFormStep(jobId, "render", {
+            status: "running",
+            message: `renderizando · frame ${cur}/${tot}`,
+          });
+        }
+        return;
+      }
+      // Marcadores del pipeline Python (clip i/n, detectando cara, color grade, master):
+      // se muestran como mensaje del step render para que el panel muestre actividad
+      // durante los tramos silenciosos (tracking + post-fx ffmpeg).
+      const marker = line.match(/\[(render|tracking|post-fx)\]\s*(.+)/i);
+      if (marker) {
+        updateLongFormStep(jobId, "render", { message: marker[2].trim().slice(0, 120) });
+        // sin return: estas líneas no matchean headers/skips, no hay conflicto.
+      }
+
       // Detectar headers de step
       for (const p of STEP_HEADER_PATTERNS) {
         if (p.regex.test(line)) {
