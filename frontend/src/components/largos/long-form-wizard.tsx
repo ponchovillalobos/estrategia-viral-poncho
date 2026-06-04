@@ -26,6 +26,7 @@ import {
   Music2,
   Camera,
   Briefcase,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -166,6 +167,8 @@ export function LongFormWizard() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loadingList, setLoadingList] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeJob, setActiveJob] = useState<JobState | null>(null);
   const [proposals, setProposals] = useState<ProposalsResponse | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
@@ -211,6 +214,32 @@ export function LongFormWizard() {
       else next.add(id);
       return next;
     });
+  }
+
+  // Sube videos largos desde la compu del usuario (multipart) → /api/long_form/import → LF_RAW.
+  // Mismo patrón que el editor de shorts, así largos también deja elegir un video propio
+  // sin tener que copiarlo a mano a la carpeta.
+  async function importVideos(files: FileList | File[]) {
+    setImporting(true);
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const file of Array.from(files)) {
+        const form = new FormData();
+        form.append("file", file);
+        const r = await fetch("/api/long_form/import", { method: "POST", body: form });
+        if (r.ok) ok++;
+        else fail++;
+      }
+      if (ok > 0) toast.success(`${ok} video(s) subido(s) ✓`);
+      if (fail > 0) toast.error(`${fail} no se pudieron subir`);
+      await refreshList();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   // Load on mount + tick cada 1s para "hace N segundos". Patrón válido.
@@ -381,6 +410,24 @@ export function LongFormWizard() {
               <span className="font-mono-tab text-[10px] text-muted-foreground">
                 {selectedIds.size} seleccionado{selectedIds.size === 1 ? "" : "s"} · podés elegir varios
               </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".mp4,.mov,.mkv,.webm,.m4v,video/mp4,video/quicktime"
+                multiple
+                className="hidden"
+                onChange={(e) => e.target.files && e.target.files.length > 0 && importVideos(e.target.files)}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                title="Subir uno o más videos largos desde tu computadora"
+                className="flex items-center gap-1 rounded border border-violet-500/40 bg-violet-500/10 px-2 py-1 font-mono-tab text-[10px] text-violet-200 hover:bg-violet-500/20 disabled:opacity-50"
+              >
+                {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                subir desde mi compu
+              </button>
               <button
                 type="button"
                 onClick={refreshList}
@@ -397,11 +444,22 @@ export function LongFormWizard() {
             <div className="space-y-3">
               <EmptyState
                 icon={FolderOpen}
-                tone="amber"
-                title="No hay videos largos en tu carpeta"
-                description={`Copiá un .mp4/.mov/.mkv a la carpeta de abajo y tocá «recargar» arriba.`}
+                tone="violet"
+                title="Todavía no tenés videos largos"
+                description="Subí un curso, charla o entrevista desde tu compu y el sistema lo recorta en clips virales."
+                cta={{
+                  label: importing ? "Subiendo…" : "Subir desde mi compu",
+                  onClick: () => fileInputRef.current?.click(),
+                }}
               />
-              <CopyableText label="Path para copiar tus videos" value={list.rawDir} />
+              <details className="rounded-md border border-border bg-muted/20 p-3">
+                <summary className="cursor-pointer font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
+                  ¿Preferís copiar el archivo a mano?
+                </summary>
+                <div className="mt-2">
+                  <CopyableText label="Path para copiar tus videos" value={list.rawDir} />
+                </div>
+              </details>
             </div>
           ) : (
             <>
