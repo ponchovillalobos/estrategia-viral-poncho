@@ -188,16 +188,21 @@ export function updateLongFormStep(
   // Cada paso done = 100/N, running = 50/N (mitad de progreso)
   job.overallProgress = Math.round(((done + running * 0.5) / total) * 100);
 
-  // Done si no quedan running ni pending
+  // Terminal: un paso que falla cierra el job DE INMEDIATO. El pipeline Python
+  // corta en el primer error (subprocess check=True), así que los pasos siguientes
+  // quedan en "pending" para siempre — si esperáramos a que no haya pending, el job
+  // se mostraría "running" eternamente (bug del job colgado). Por eso anyFail es
+  // terminal aunque queden pendientes.
+  const anyFail = job.steps.some((s) => s.status === "fail");
   const stillPending = job.steps.some(
     (s) => s.status === "pending" || s.status === "running"
   );
   let nowTerminal = false;
-  if (!stillPending) {
-    const anyFail = job.steps.some((s) => s.status === "fail");
+  if (anyFail || !stillPending) {
     job.status = anyFail ? "failed" : "done";
     job.finishedAt = Date.now();
-    job.overallProgress = 100;
+    // 100% solo si TODO salió bien; en fallo dejamos el progreso real (honesto).
+    if (!anyFail) job.overallProgress = 100;
     nowTerminal = true;
   }
 

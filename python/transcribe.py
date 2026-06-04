@@ -28,7 +28,12 @@ from config import (
 
 
 def extract_audio(video_path: Path, out_wav: Path) -> None:
-    """Extrae pista de audio a WAV mono 16kHz (formato preferido por Whisper)."""
+    """Extrae pista de audio a WAV mono 16kHz (formato preferido por Whisper).
+
+    Si ffmpeg falla, NO tiramos un CalledProcessError con un exit code críptico:
+    leemos su stderr y damos un mensaje accionable (video corrupto / sin audio),
+    que es lo que termina viendo el usuario en el panel del job.
+    """
     cmd = [
         str(FFMPEG_PATH),
         "-y",
@@ -39,7 +44,22 @@ def extract_audio(video_path: Path, out_wav: Path) -> None:
         "-ac", "1",
         str(out_wav),
     ]
-    subprocess.run(cmd, check=True, capture_output=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        err = (proc.stderr or "").lower()
+        if "moov atom not found" in err or "invalid data" in err:
+            raise RuntimeError(
+                "El video está incompleto o corrupto (falta el átomo moov). "
+                "Probablemente la subida se cortó — volvé a subirlo."
+            )
+        if "does not contain any stream" in err or "output file #0 does not contain" in err:
+            raise RuntimeError("El video no tiene pista de audio; no se puede transcribir.")
+        # Otro error de ffmpeg: pasar el final del stderr, que es lo informativo.
+        tail = (proc.stderr or "").strip().splitlines()[-5:]
+        raise RuntimeError("ffmpeg no pudo extraer el audio:\n" + "\n".join(tail))
+    # ffmpeg salió 0 pero por las dudas: si no hay WAV o pesa nada, no hay audio.
+    if not out_wav.exists() or out_wav.stat().st_size < 1024:
+        raise RuntimeError("El video no produjo audio (¿pista de audio vacía?).")
 
 
 def transcribe(video_path: Path, model_size: str = WHISPER_MODEL) -> dict[str, Any]:

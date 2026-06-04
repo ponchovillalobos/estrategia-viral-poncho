@@ -52,17 +52,19 @@ export function VideoList() {
   async function importVideos(files: FileList | File[]) {
     setImporting(true);
     let ok = 0;
-    let fail = 0;
     try {
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append("file", file);
         const r = await fetch("/api/videos/import", { method: "POST", body: form });
-        if (r.ok) ok++;
-        else fail++;
+        if (r.ok) {
+          ok++;
+        } else {
+          const data = (await r.json().catch(() => ({}))) as { error?: string };
+          toast.error(`${file.name}: ${data.error ?? "no se pudo subir"}`);
+        }
       }
       if (ok > 0) toast.success(`${ok} video(s) subido(s) ✓`);
-      if (fail > 0) toast.error(`${fail} no se pudieron subir`);
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
