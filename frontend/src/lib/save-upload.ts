@@ -13,9 +13,7 @@
  * Así el archivo que queda en la carpeta SIEMPRE es válido, y el usuario se entera del
  * problema en la subida (no 5 pasos después en el render).
  */
-import { promises as fs, createWriteStream } from "node:fs";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
+import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { FFPROBE_EXE } from "@/lib/paths";
@@ -146,14 +144,14 @@ export async function saveUploadedVideo(
   const tmpPath = `${finalPath}.part`;
 
   try {
-    // 1) Escribir en streaming al .part (no bufferear todo el archivo de golpe).
-    await pipeline(
-      Readable.fromWeb(blob.stream() as Parameters<typeof Readable.fromWeb>[0]),
-      createWriteStream(tmpPath)
-    );
+    // 1) Escribir al .part. Bufferear el File completo (req.formData() ya lo tiene en
+    //    memoria de todos modos) y volcarlo de una — es el método probado; el streaming
+    //    con Readable.fromWeb truncaba el archivo en este runtime.
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    await fs.writeFile(tmpPath, buffer);
+    const written = buffer.length;
 
-    // 2) Verificar que se escribió todo lo que el cliente declaró.
-    const written = (await fs.stat(tmpPath)).size;
+    // 2) Sanity: lo escrito debe coincidir con el tamaño declarado por el cliente.
     if (blob.size && written !== blob.size) {
       throw new UploadError(
         `subida incompleta (${written} de ${blob.size} bytes). Reintentá la subida.`
@@ -161,6 +159,7 @@ export async function saveUploadedVideo(
     }
 
     // 3) Validar que sea un MP4/MOV demuxable (atoms OK, tiene video + duración).
+    //    Esto es lo que atrapa un upload que llegó cortado (moov atom ausente).
     await validateVideo(tmpPath);
 
     // 4) Publicar atómicamente: el nombre final aparece recién acá, ya validado.
