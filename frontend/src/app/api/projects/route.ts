@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { PROJECTS_DIR, LF_ROOT } from "@/lib/paths";
+import { buildBackingChecker } from "@/lib/orphan-sweep";
 
 export const dynamic = "force-dynamic";
 
@@ -40,11 +41,16 @@ async function readProjectsFromDir(dir: string, source: "short" | "long_form") {
 
 export async function GET() {
   try {
-    const [shorts, longClips] = await Promise.all([
+    const [shorts, longClips, backingExists] = await Promise.all([
       readProjectsFromDir(PROJECTS_DIR, "short"),
       readProjectsFromDir(LF_PROJECTS_DIR, "long_form"),
+      buildBackingChecker(),
     ]);
-    const projects = [...shorts, ...longClips];
+    // Filtrar proyectos cuyo video de respaldo (raw fuente o render producido) ya no
+    // existe: si el usuario borró el archivo, el proyecto no debe seguir apareciendo.
+    const projects = [...shorts, ...longClips].filter((p) =>
+      backingExists(p.id, p.videoId, p.source),
+    );
     projects.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
     return NextResponse.json({ projects });
   } catch (err) {
