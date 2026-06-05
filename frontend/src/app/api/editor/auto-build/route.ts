@@ -306,19 +306,25 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         continue;
       }
 
-      // F5 SUPREME — Audio mastering post-render con ffmpeg.
-      // Aplica: acompressor (picos no saturan), alimiter (-0.5dB sin clipping),
-      // highpass 80Hz (quita rumble), eq +2dB @ 3kHz (claridad de voz).
-      // Si ffmpeg falla, se conserva el render sin master (no rompe el job).
-      if (styleId === "cinematic_pro") {
+      // Audio mastering post-render con ffmpeg — para TODOS los estilos.
+      // Base (todos): alimiter (sin clipping) + loudnorm a -14 LUFS (estándar de
+      // TikTok/Reels/IG → loudness consistente = mejor retención y "se oye pro").
+      // cinematic_pro suma su cadena rica: acompressor + highpass 80Hz (quita
+      // rumble) + EQ +2dB @ 3kHz (claridad de voz). Si ffmpeg falla, se conserva
+      // el render sin master (no rompe el job).
+      {
         updateStep(job.id, styleId, { progress: 96 });
         try {
           const masteredPath = outPath.replace(/\.mp4$/, "_mastered.mp4");
+          const loudness = "loudnorm=I=-14:TP=-1.5:LRA=11";
           const audioFilter =
-            "acompressor=threshold=-18dB:ratio=3:attack=20:release=200," +
-            "alimiter=level_in=1:level_out=0.95:limit=0.95," +
-            "highpass=f=80," +
-            "equalizer=f=3000:t=q:w=1:g=2";
+            styleId === "cinematic_pro"
+              ? "acompressor=threshold=-18dB:ratio=3:attack=20:release=200," +
+                "highpass=f=80," +
+                "equalizer=f=3000:t=q:w=1:g=2," +
+                "alimiter=level_in=1:level_out=0.95:limit=0.95," +
+                loudness
+              : "alimiter=level_in=1:level_out=0.95:limit=0.95," + loudness;
           const masterRun = await runProcess(
             "ffmpeg",
             [

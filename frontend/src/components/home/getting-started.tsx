@@ -38,7 +38,11 @@ export function GettingStarted() {
           hasRender = Array.isArray(vRes.videos) && vRes.videos.some((v: { status?: { rendered?: boolean } }) => v.status?.rendered);
         }
         if (sRes) {
-          hasNetwork = Boolean(sRes.linkedin?.hasAccessToken || sRes.instagram?.hasAccessToken);
+          hasNetwork = Boolean(
+            sRes.linkedin?.hasAccessToken ||
+              sRes.instagram?.hasAccessToken ||
+              sRes.tiktok?.hasAccessToken
+          );
         }
       } catch {
         /* si falla, mostramos todo sin tildar — sigue siendo útil como guía */

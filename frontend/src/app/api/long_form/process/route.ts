@@ -188,10 +188,15 @@ async function processJob(
 
     let stdoutBuf = "";
     let stderrBuf = "";
+    // Acumulador del stdout COMPLETO (no se consume con el split de líneas). El JSON
+    // final del pipeline ({"ok":true,...,"clips":N}) termina en \n, así que se va de
+    // stdoutBuf; para extraer clipsCount al cerrar necesitamos el log entero.
+    let fullStdout = "";
 
     proc.stdout.on("data", (chunk: Buffer) => {
       resetIdle();
       const text = chunk.toString("utf-8");
+      fullStdout += text;
       stdoutBuf += text;
       const lines = stdoutBuf.split(/\r?\n/);
       stdoutBuf = lines.pop() ?? "";
@@ -227,8 +232,12 @@ async function processJob(
           updateLongFormStep(jobId, currentStep, { status: "ok" });
         }
         try {
-          const fullLog = stdoutBuf;
-          const match = fullLog.match(/\{[\s\S]*"clips"\s*:\s*(\d+)[\s\S]*\}/);
+          // Match sobre la ÚLTIMA línea JSON del stdout completo (la del resumen final).
+          const jsonLine = fullStdout
+            .split(/\r?\n/)
+            .reverse()
+            .find((l) => /"clips"\s*:\s*\d+/.test(l));
+          const match = jsonLine?.match(/"clips"\s*:\s*(\d+)/);
           if (match) {
             setLongFormClipsCount(jobId, parseInt(match[1], 10));
           }
