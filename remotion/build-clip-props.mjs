@@ -131,7 +131,29 @@ const props = {
   // lo dejamos en false para no introducir un crop errático.
   autoReframe: Boolean(project.autoReframe) && (project.trackPath || []).length > 0,
   sourceAspect: project.sourceAspect ?? 16 / 9,
+  // Modo Gráficos & Motion: charts + titulares poderosos. El project puede traerlos,
+  // o el generador los deja en long_form/graphics/{clipId}.json (auto desde el transcript).
+  dataViz: project.dataViz || [],
+  kineticHeadlines: project.kineticHeadlines || [],
 };
+
+// Si existe un spec de gráficos generado por generate_graphics.py, lo mergeamos.
+// (Sólo existe cuando el usuario eligió "Modo Gráficos" → si no, esto no hace nada.)
+const graphicsPath = path.join(LF, "graphics", `${clipId}.json`);
+if (_existsSync(graphicsPath)) {
+  try {
+    const g = JSON.parse(readFileSync(graphicsPath, "utf-8"));
+    if (Array.isArray(g.dataViz) && g.dataViz.length) props.dataViz = g.dataViz;
+    if (Array.isArray(g.kineticHeadlines) && g.kineticHeadlines.length) {
+      props.kineticHeadlines = g.kineticHeadlines;
+    }
+    console.error(
+      `[graphics] mergeado ${props.dataViz.length} charts · ${props.kineticHeadlines.length} titulares`,
+    );
+  } catch (e) {
+    console.error(`[graphics] no pude leer ${graphicsPath}: ${e.message}`);
+  }
+}
 
 const outFile = path.join(__dirname, "props.json");
 writeFileSync(outFile, JSON.stringify(props, null, 2), "utf-8");

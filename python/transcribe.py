@@ -120,6 +120,126 @@ def transcribe(video_path: Path, model_size: str = WHISPER_MODEL) -> dict[str, A
         }
 
 
+def _segments_to_words(
+    segments: list[dict[str, Any]], offset: float
+) -> list[dict[str, Any]]:
+    """Convierte segmentos (sin alineación) en un array `words[]` interpolando timestamps.
+
+    WhisperX `model.transcribe()` sin `align()` da segmentos con texto + start/end de
+    frase, pero NO timestamps por palabra. Para *elegir* clips virales no hace falta
+    precisión palabra-por-palabra (alcanza ~frase), así que repartimos los tokens del
+    segmento linealmente en su ventana de tiempo. La precisión real para el karaoke se
+    saca después, clip por clip, en extract_clips (esos clips duran ~50s, no crashean).
+    """
+    words: list[dict[str, Any]] = []
+    for seg in segments:
+        try:
+            seg_start = offset + float(seg["start"])
+            seg_end = offset + float(seg["end"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        toks = str(seg.get("text", "")).strip().split()
+        if not toks:
+            continue
+        span = max(0.1, seg_end - seg_start)
+        per = span / len(toks)
+        for k, tok in enumerate(toks):
+            words.append({
+                "word": tok,
+                "start": round(seg_start + k * per, 3),
+                "end": round(seg_start + (k + 1) * per, 3),
+                "score": 0.0,
+            })
+    return words
+
+
+def transcribe_chunked(
+    video_path: Path,
+    model_size: str = WHISPER_MODEL,
+    chunk_sec: int = 900,
+) -> dict[str, Any]:
+    """Transcribe videos LARGOS en ventanas de ~15 min, a nivel FRASE (sin align).
+
+    Por qué: transcribir+alinear los 80-90 min de una sola vez revienta la memoria
+    (la etapa de alineación de WhisperX murió a las 2h en prod). Acá:
+      - extraemos el audio completo (ffmpeg de 90 min es liviano),
+      - cargamos el modelo UNA vez,
+      - transcribimos por ventanas de ~15 min (probado seguro: ~1.5GB RSS),
+      - NO alineamos (esa es la parte cara y que crashea),
+      - sintetizamos `words[]` interpolando los timestamps de cada frase.
+    El resultado alimenta a analyze_clips (Ollama) para elegir lo más viral.
+    """
+    import gc
+
+    import whisperx
+
+    device = "cpu"
+    batch_size = 8
+
+    with tempfile.TemporaryDirectory() as tmp:
+        wav_path = Path(tmp) / "audio.wav"
+        extract_audio(video_path, wav_path)
+
+        print(f"[chunked] cargando modelo whisperx '{model_size}'...", file=sys.stderr)
+        model = whisperx.load_model(
+            model_size,
+            device=device,
+            compute_type=WHISPER_COMPUTE_TYPE,
+            language=WHISPER_LANGUAGE,
+        )
+
+        audio = whisperx.load_audio(str(wav_path))
+        sr = 16000
+        total_sec = len(audio) / sr
+        n_windows = max(1, int((total_sec + chunk_sec - 1) // chunk_sec))
+        print(
+            f"[chunked] {total_sec / 60:.1f} min → {n_windows} ventana(s) de ~{chunk_sec // 60} min",
+            file=sys.stderr,
+        )
+
+        words: list[dict[str, Any]] = []
+        for wi in range(n_windows):
+            ws = wi * chunk_sec
+            we = min((wi + 1) * chunk_sec, total_sec)
+            if we - ws < 1.0:
+                continue
+            slice_audio = audio[int(ws * sr): int(we * sr)]
+            print(
+                f"[chunked] ventana {wi + 1}/{n_windows} "
+                f"({ws / 60:.0f}-{we / 60:.0f} min) transcribiendo...",
+                file=sys.stderr, flush=True,
+            )
+            t0 = time.time()
+            try:
+                result = model.transcribe(
+                    slice_audio, batch_size=batch_size, language=WHISPER_LANGUAGE
+                )
+            except Exception as exc:
+                print(f"[chunked] ventana {wi + 1} falló: {exc} — sigo", file=sys.stderr)
+                del slice_audio
+                gc.collect()
+                continue
+            segs = result.get("segments", [])
+            new_words = _segments_to_words(segs, offset=ws)
+            words.extend(new_words)
+            print(
+                f"[chunked] ventana {wi + 1}/{n_windows}: "
+                f"{len(segs)} frases · {len(new_words)} palabras · {time.time() - t0:.0f}s",
+                file=sys.stderr, flush=True,
+            )
+            del slice_audio, result, segs, new_words
+            gc.collect()
+
+        return {
+            "video": video_path.name,
+            "language": WHISPER_LANGUAGE,
+            "model": model_size,
+            "duration": round(total_sec, 3),
+            "alignment": "segment",  # marca: timestamps por frase, no palabra
+            "words": words,
+        }
+
+
 def download_model(model_size: str) -> None:
     import whisperx
     print(f"[download] descargando whisperx model '{model_size}'...")
@@ -134,6 +254,15 @@ def main() -> int:
     parser.add_argument("video", nargs="?", help="Path al video .mp4 (o solo nombre si está en raw/)")
     parser.add_argument("--download-model", metavar="SIZE", help="Descarga el modelo sin transcribir")
     parser.add_argument("--out", help="Path JSON de salida (default: transcripts/<video>.json)")
+    parser.add_argument(
+        "--chunked",
+        action="store_true",
+        help="Transcribir en ventanas (nivel frase, sin align). Para videos largos sin crashear.",
+    )
+    parser.add_argument(
+        "--chunk-sec", type=int, default=900,
+        help="Tamaño de ventana en seg para --chunked (default 900 = 15 min).",
+    )
     args = parser.parse_args()
 
     ensure_dirs()
@@ -156,7 +285,10 @@ def main() -> int:
     out_path = Path(args.out) if args.out else TRANSCRIPTS_DIR / f"{video_path.stem}.json"
 
     t0 = time.time()
-    result = transcribe(video_path)
+    if args.chunked:
+        result = transcribe_chunked(video_path, chunk_sec=args.chunk_sec)
+    else:
+        result = transcribe(video_path)
     elapsed = time.time() - t0
 
     result["meta"] = {"elapsed_sec": round(elapsed, 1)}

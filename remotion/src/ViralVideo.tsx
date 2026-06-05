@@ -56,7 +56,11 @@ import {
   speedRampSchema,
   iconStickerSchema,
   brandKitSchema,
+  dataVizSchema,
+  kineticHeadlineSchema,
 } from "./schemas";
+import { DataVizLayer } from "./layers/data-viz-layer";
+import { KineticHeadlineLayer } from "./layers/kinetic-headline-layer";
 
 /**
  * A2 — Interpolación lineal de la posición X de la cara a un tiempo dado, en el espacio
@@ -137,6 +141,10 @@ export const viralVideoSchema = z.object({
   // Default vertical 9:16. Pasar {width:1920, height:1080} para horizontal 16:9.
   width: z.number().default(1080),
   height: z.number().default(1920),
+  // === MODO GRÁFICOS & MOTION (opt-in) — charts animados + titulares poderosos. ===
+  // Defaults [] = render idéntico. Cada elemento tiene su ventana [at, at+duration].
+  dataViz: z.array(dataVizSchema).default([]),
+  kineticHeadlines: z.array(kineticHeadlineSchema).default([]),
 });
 
 type ViralVideoProps = z.infer<typeof viralVideoSchema>;
@@ -185,6 +193,8 @@ export const defaultProps: ViralVideoProps = {
   sourceAspect: 16 / 9,
   width: 1080,
   height: 1920,
+  dataViz: [],
+  kineticHeadlines: [],
 };
 
 export const ViralVideo: React.FC<ViralVideoProps> = ({
@@ -228,6 +238,8 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   voiceoverStartSec,
   autoReframe,
   sourceAspect,
+  dataViz,
+  kineticHeadlines,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -638,6 +650,28 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           fontFamily={fontFamily}
         />
       )}
+
+      {/* MODO GRÁFICOS & MOTION — gráficas animadas (counter/bar/line/donut). Aditivo. */}
+      {dataViz.map((dv, i) => (
+        <DataVizLayer
+          key={`dv-${i}`}
+          config={dv}
+          currentTime={currentTime}
+          fps={fps}
+          fontFamily={fontFamily}
+        />
+      ))}
+
+      {/* MODO GRÁFICOS & MOTION — titulares poderosos animados. Aditivo. */}
+      {kineticHeadlines.map((kh, i) => (
+        <KineticHeadlineLayer
+          key={`kh-${i}`}
+          config={kh}
+          currentTime={currentTime}
+          fps={fps}
+          fontFamily={fontFamily}
+        />
+      ))}
 
       {/* A8 — Barra de progreso (opt-in). Encima de todo, no tapa nada. */}
       {progressBar && (

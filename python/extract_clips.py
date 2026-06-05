@@ -332,10 +332,19 @@ def main() -> int:
     # Si existe el transcript COMPLETO del video, cada clip se obtiene cortándolo (rápido).
     # Si NO existe (modo clips rápidos), transcribimos CADA clip por separado: 30-60s de
     # audio es liviano y seguro, a diferencia de transcribir los 80 min de una.
+    # OJO: un transcript a nivel FRASE (modo inteligente, alignment="segment") tiene
+    # timestamps de palabra INTERPOLADOS (sirven para ELEGIR clips, no para karaoke).
+    # En ese caso re-transcribimos cada clip (50s alinea bien) para subtítulos precisos.
     full_transcript_path = LF_TRANSCRIPTS / f"{args.video_id}.json"
-    has_full_transcript = full_transcript_path.exists()
-    if not has_full_transcript:
-        print("[extract] sin transcript completo — se transcribe cada clip", file=sys.stderr)
+    use_full = False
+    if full_transcript_path.exists():
+        try:
+            _t = json.loads(full_transcript_path.read_text(encoding="utf-8"))
+            use_full = _t.get("alignment") != "segment"  # solo si es nivel palabra
+        except Exception:
+            use_full = False
+    if not use_full:
+        print("[extract] transcript ausente o a nivel frase — se transcribe cada clip (karaoke preciso)", file=sys.stderr)
 
     results = []
     for i, clip in enumerate(clips, start=1):
@@ -353,7 +362,7 @@ def main() -> int:
                 face_tracking=args.face_tracking,
                 clip_id=clip_id,
             )
-            if has_full_transcript:
+            if use_full:
                 sub = slice_transcript(full_transcript_path, clip["start"], clip["end"])
                 out_transcript.write_text(json.dumps(sub, ensure_ascii=False, indent=2), encoding="utf-8")
                 n_words = len(sub["words"])

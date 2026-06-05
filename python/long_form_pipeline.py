@@ -80,6 +80,7 @@ def _write_block_proposals(
             if end - start < 25:
                 continue
             clips.append({
+                "index": i + 1,
                 "start": round(start, 2),
                 "end": round(end, 2),
                 "slug": f"segmento-{i + 1:02d}",
@@ -106,7 +107,7 @@ def run_capture(cmd: list[str], cwd: Path | None = None) -> str:
     return proc.stdout
 
 
-def step_transcribe(video_path: Path, video_id: str) -> Path:
+def step_transcribe(video_path: Path, video_id: str, chunked: bool = False) -> Path:
     out = LF_TRANSCRIPTS / f"{video_id}.json"
     if out.exists():
         print(f"[skip] transcribe (existe {out})", file=sys.stderr)
@@ -117,6 +118,9 @@ def step_transcribe(video_path: Path, video_id: str) -> Path:
         str(video_path),
         "--out", str(out),
     ]
+    if chunked:
+        # Video largo: ventanas a nivel frase (sin align) para no reventar memoria.
+        cmd.append("--chunked")
     run(cmd)
     return out
 
@@ -177,7 +181,12 @@ def step_re_transcribe_clean(clean_path: Path, video_id: str, force: bool = Fals
     return out
 
 
-def step_analyze(video_id: str, model: str | None = None, use_heuristic: bool = False) -> Path:
+def step_analyze(
+    video_id: str,
+    model: str | None = None,
+    use_heuristic: bool = False,
+    max_clips: int = 15,
+) -> Path:
     out = LF_PROPOSALS / f"{video_id}.json"
     if out.exists():
         print(f"[skip] analyze_clips (existe {out})", file=sys.stderr)
@@ -186,6 +195,7 @@ def step_analyze(video_id: str, model: str | None = None, use_heuristic: bool = 
         str(VENV_PYTHON),
         str(PYTHON_DIR / "analyze_clips.py"),
         video_id,
+        "--max-clips", str(max_clips),
     ]
     if model:
         cmd.extend(["--model", model])
@@ -193,6 +203,17 @@ def step_analyze(video_id: str, model: str | None = None, use_heuristic: bool = 
         cmd.append("--use-heuristic")
     run(cmd)
     return out
+
+
+def step_graphics(clip_id: str, use_llm: bool = True) -> None:
+    """Modo Gráficos: genera charts + titulares para un clip (best-effort, no rompe el job)."""
+    cmd = [str(VENV_PYTHON), str(PYTHON_DIR / "generate_graphics.py"), clip_id]
+    if not use_llm:
+        cmd.append("--no-llm")
+    try:
+        run(cmd)
+    except subprocess.CalledProcessError as e:
+        print(f"[graphics] falló para {clip_id} (sigo sin gráficos): {e}", file=sys.stderr)
 
 
 def step_extract(
@@ -408,6 +429,11 @@ def main() -> int:
         help="Skipear Ollama y usar clips uniformes (modo rápido, sin curaduría de IA)",
     )
     parser.add_argument(
+        "--graphics",
+        action="store_true",
+        help="Modo Gráficos & Motion: genera charts + titulares poderosos por clip (auto desde el transcript)",
+    )
+    parser.add_argument(
         "--styles",
         default="supreme",
         help="Estilos de render separados por coma (silent,punch,hype,hype_max,hype_max_sfx,supreme). Default: supreme",
@@ -475,26 +501,39 @@ def main() -> int:
         proposals_path = _write_block_proposals(args.video_id, duration, max_clips=max_clips)
         print(f"[fast] {duration / 60:.1f} min → bloques de ~50s", file=sys.stderr)
     else:
-        # Step 1: transcribe del raw
+        # ── MODO INTELIGENTE (encuentra lo más viral) ─────────────────────────
+        # Transcribimos el raw EN VENTANAS a nivel frase (sin la alineación que
+        # reventaba la memoria en videos de 80-90 min). Con ese transcript completo,
+        # Ollama LEE TODO y elige los momentos más virales (mínimo 15, más si hay).
+        # NO recortamos silencios ni re-transcribimos el clean: los clips se cortan
+        # directo del raw y cada uno se alinea por separado en extract_clips (karaoke).
+        #
+        # Step 1: transcribe del raw (en chunks)
         print("\n========== STEP 1: transcribe ==========", file=sys.stderr)
         if not args.skip_transcribe:
-            step_transcribe(raw_path, args.video_id)
+            step_transcribe(raw_path, args.video_id, chunked=True)
 
-        # Step 2: detect silences
-        print("\n========== STEP 2: detect silences ==========", file=sys.stderr)
-        cuts_path = step_detect(raw_path, args.video_id)
+        # Pasos 2-4 no aplican en modo inteligente: los marcamos saltados para que
+        # la UI no quede en "pending" esperándolos.
+        for _skip in ("detect_silences", "cut_silences", "re-transcribe"):
+            print(f"[skip] {_skip} (modo inteligente: clips se cortan del raw)", file=sys.stderr)
 
-        # Step 3: cut silences -> clean
-        print("\n========== STEP 3: cut silences ==========", file=sys.stderr)
-        clean_path = step_cut(raw_path, cuts_path, args.video_id)
-
-        # Step 4: re-transcribir el CLEAN (timestamps alineados a clips extraídos)
-        print("\n========== STEP 4: re-transcribe del clean ==========", file=sys.stderr)
-        step_re_transcribe_clean(clean_path, args.video_id)
+        # max_clips: mínimo 15, y más si el video es largo (~1 cada 5 min), tope 30.
+        # Es un TECHO — Ollama propone solo los que realmente valen; si hay menos
+        # momentos virales, saca menos.
+        if args.max_clips:
+            smart_max = args.max_clips
+        else:
+            dur_min = _ffprobe_duration(raw_path) / 60.0
+            smart_max = max(15, min(30, int(dur_min / 5) + 1))
+        print(f"[smart] objetivo: hasta {smart_max} clips virales", file=sys.stderr)
 
         # Step 5: analyze con Ollama
         print("\n========== STEP 5: analyze (Ollama) ==========", file=sys.stderr)
-        proposals_path = step_analyze(args.video_id, model=args.model, use_heuristic=args.use_heuristic)
+        proposals_path = step_analyze(
+            args.video_id, model=args.model,
+            use_heuristic=args.use_heuristic, max_clips=smart_max,
+        )
 
     # Validación: si el LLM no propuso ningún clip, fallar AHORA con mensaje claro
     # en vez de seguir a extract_clips que va a fallar con un error genérico.
@@ -527,6 +566,13 @@ def main() -> int:
     print(f"\n[ok] {len(clips_info)} clips extraídos", file=sys.stderr)
     for c in clips_info:
         print(f"  - {c['clip_id']} ({c.get('duration', '?')}s)", file=sys.stderr)
+
+    # Modo Gráficos & Motion: charts + titulares poderosos por clip, auto desde el
+    # transcript de cada clip (que extract_clips ya dejó alineado palabra-por-palabra).
+    if args.graphics and clips_info:
+        print("\n========== Modo Gráficos: charts + titulares por clip ==========", file=sys.stderr)
+        for c in clips_info:
+            step_graphics(c["clip_id"], use_llm=not args.use_heuristic)
 
     # Step 7: render (opcional) — N estilos × M clips
     if args.render and clips_info:

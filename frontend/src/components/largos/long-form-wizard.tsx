@@ -87,7 +87,7 @@ interface JobState {
 }
 
 interface ProposalClip {
-  index: number;
+  index?: number;
   slug?: string;
   title?: string;
   hook?: string;
@@ -177,7 +177,8 @@ export function LongFormWizard() {
 
   // ─── State del wizard (6 pasos) ─────────────────────────────────────────
   const [step, setStep] = useState(1);
-  const [useHeuristic, setUseHeuristic] = useState(true); // default ON por la CPU sin GPU
+  const [useHeuristic, setUseHeuristic] = useState(false); // default: modo inteligente (encuentra lo viral)
+  const [graphicsMode, setGraphicsMode] = useState(false); // Modo Gráficos & Motion (charts + titulares)
   const [maxClips, setMaxClips] = useState<string>("");
   const [ollamaModel, setOllamaModel] = useState<string>("");
   const [skipTranscribe, setSkipTranscribe] = useState(false);
@@ -364,6 +365,7 @@ export function LongFormWizard() {
         render: doRender,
         skipTranscribe,
         useHeuristic,
+        graphicsMode,
         styles: selectedStyles,
         accentColor: accent,
         platforms: selectedPlatforms,
@@ -658,13 +660,13 @@ export function LongFormWizard() {
             >
               <div className="flex items-center gap-2">
                 <span className="text-2xl">⚡</span>
-                <span className="font-medium">Modo rápido — clips uniformes</span>
+                <span className="font-medium">Modo rápido — bloques parejos</span>
                 {useHeuristic && <CheckCircle2 className="h-4 w-4 text-amber-400" />}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Salta Ollama. Corta segmentos de ~45 segundos espaciados a lo largo del video.{" "}
-                <strong className="text-foreground">~30 segundos</strong>. Sin curaduría de IA. Recomendado
-                si tu PC no tiene GPU NVIDIA (modelos grandes son inviables en CPU).
+                Corta bloques de ~50 segundos espaciados parejo por el video (minuto 0, 10, 20…).{" "}
+                <strong className="text-foreground">~minutos</strong>. NO lee qué se dice — no elige por
+                viralidad. Útil solo para tener material rápido.
               </p>
             </button>
 
@@ -680,12 +682,14 @@ export function LongFormWizard() {
             >
               <div className="flex items-center gap-2">
                 <span className="text-2xl">🧠</span>
-                <span className="font-medium">Modo IA — Ollama elige los mejores momentos</span>
+                <span className="font-medium">Modo inteligente — encuentra lo más viral</span>
+                <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-medium text-emerald-300">RECOMENDADO</span>
                 {!useHeuristic && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Ollama lee el transcript completo y propone 5-7 clips con hook + insight + CTA.{" "}
-                <strong className="text-foreground">5-30 minutos</strong> según hardware y modelo.
+                Transcribe el video en trozos (sin colgarse, aunque dure 90 min) y Ollama lee TODO para
+                elegir los momentos más virales — <strong className="text-foreground">mínimo 15 clips, más si hay</strong> —
+                con hook + caption + hashtags listos. <strong className="text-foreground">~30-50 min</strong> en segundo plano.
                 Requiere Ollama corriendo (<code>ollama serve</code>).
               </p>
             </button>
@@ -711,10 +715,10 @@ export function LongFormWizard() {
                 <Input
                   type="number"
                   min={1}
-                  max={20}
+                  max={30}
                   value={maxClips}
                   onChange={(e) => setMaxClips(e.target.value)}
-                  placeholder="default 5-7"
+                  placeholder="auto: mín 15, más si el video es largo"
                   className="font-mono-tab"
                 />
               </div>
@@ -744,6 +748,33 @@ export function LongFormWizard() {
       {step === 3 && (
         <Card className="border-border bg-card p-6">
           <h2 className="mb-2 text-lg font-medium">3. Estilo(s) de edición y formato</h2>
+
+          {/* Modo Gráficos & Motion — opt-in, aditivo sobre el estilo elegido */}
+          <button
+            type="button"
+            onClick={() => setGraphicsMode((v) => !v)}
+            className={cn(
+              "mb-5 w-full rounded-lg border p-4 text-left transition-all",
+              graphicsMode
+                ? "border-fuchsia-500/50 bg-fuchsia-500/5 ring-1 ring-fuchsia-400/40"
+                : "border-border hover:border-foreground/30"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">📊</span>
+              <span className="font-medium">Modo Gráficos &amp; Motion</span>
+              <span className="rounded bg-fuchsia-500/20 px-1.5 py-0.5 text-[9px] font-medium text-fuchsia-300">
+                NUEVO
+              </span>
+              {graphicsMode && <CheckCircle2 className="ml-auto h-4 w-4 text-fuchsia-400" />}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Suma gráficas animadas (contador, barras, línea, dona) y titulares poderosos
+              (glitch, shimmer, draw-on…) generados <strong className="text-foreground">automáticamente</strong>{" "}
+              desde lo que se dice en cada clip. Las gráficas solo aparecen cuando hay datos reales
+              (%, &ldquo;3 veces&rdquo;, &ldquo;de 23 a 78&rdquo;). Se combina con el estilo que elijas abajo.
+            </p>
+          </button>
 
           {/* Aspect ratio toggle */}
           <div className="mb-5">
@@ -990,7 +1021,7 @@ export function LongFormWizard() {
                   {selectedIds.size > 3 && ` +${selectedIds.size - 3} más`}
                 </span>
               </li>
-              <li>· Modo: <span className="text-foreground">{useHeuristic ? "Rápido (heurístico, sin Ollama)" : "IA (Ollama)"}</span>
+              <li>· Modo: <span className="text-foreground">{useHeuristic ? "Rápido (bloques parejos, sin IA)" : "Inteligente (Ollama encuentra lo viral, mín 15 clips)"}</span>
                 {!useHeuristic && ollamaModel && <span className="text-muted-foreground"> · modelo {ollamaModel}</span>}
               </li>
               <li>· Renderizar: <span className="text-foreground">{doRender ? "sí" : "no (solo extracción)"}</span></li>
@@ -1263,15 +1294,17 @@ function JobView({
           </div>
 
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {proposals.clips.slice(0, 12).map((c) => (
-              <div key={c.index} className="rounded-md border border-border bg-muted/30 p-3">
+            {proposals.clips.slice(0, 12).map((c, i) => {
+              const idx = c.index ?? i + 1;
+              return (
+              <div key={idx} className="rounded-md border border-border bg-muted/30 p-3">
                 <div className="flex items-start gap-2">
                   <span className="rounded bg-violet-500/20 px-1.5 py-0.5 font-mono-tab text-[10px] text-violet-300">
-                    c{c.index.toString().padStart(2, "0")}
+                    c{idx.toString().padStart(2, "0")}
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-sm font-medium">
-                      {c.title || c.slug || `Clip ${c.index}`}
+                      {c.title || c.slug || `Clip ${idx}`}
                     </p>
                     <p className="font-mono-tab text-[10px] text-muted-foreground">
                       {fmtTime(c.start)} → {fmtTime(c.end)}
@@ -1286,7 +1319,8 @@ function JobView({
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <Link

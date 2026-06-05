@@ -124,6 +124,58 @@ export const iconStickerSchema = z.object({
 });
 export type IconSticker = z.infer<typeof iconStickerSchema>;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MODO GRÁFICOS & MOTION (opt-in, ADITIVO) — charts animados + texto poderoso.
+// Defaults vacíos = render idéntico. Se animan 100% con useCurrentFrame() en SVG.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Un punto de dato para barras/línea/dona.
+export const dataPointSchema = z.object({
+  label: z.string().default(""),
+  value: z.number(),
+  color: z.string().optional(),
+});
+export type DataPoint = z.infer<typeof dataPointSchema>;
+
+// Gráfica animada: contador, barras, línea o dona. Aparece en `at` por `duration` seg.
+export const dataVizSchema = z.object({
+  at: z.number(),
+  duration: z.number().default(4),
+  type: z.enum(["counter", "bar", "line", "donut"]).default("counter"),
+  title: z.string().default(""),
+  // counter: usa data[0].value. bar/line/donut: usa todos los puntos.
+  data: z.array(dataPointSchema).default([]),
+  prefix: z.string().default(""), // "$"
+  suffix: z.string().default(""), // "%", "k", "M"
+  accent: z.string().default("#34d399"),
+  bg: z.string().default("#0a0a0aE6"),
+  position: z.enum(["center", "top", "bottom"]).default("center"),
+  fullscreen: z.boolean().default(true), // tarjeta fullscreen vs flotante
+});
+export type DataViz = z.infer<typeof dataVizSchema>;
+
+// Titular animado "poderoso" con un efecto. Aparece en `at` por `duration` seg.
+export const kineticHeadlineSchema = z.object({
+  at: z.number(),
+  duration: z.number().default(2.5),
+  text: z.string(),
+  effect: z
+    .enum([
+      "split_letters", // letras entran escalonadas con spring
+      "glitch", // copias RGB desalineadas (datamosh)
+      "shimmer", // barrido de brillo sobre gradiente
+      "draw_on", // contorno SVG que se dibuja
+      "gradient_sweep", // gradiente que se desplaza
+      "tracking_in", // expande letter-spacing + blur-in
+    ])
+    .default("split_letters"),
+  color: z.string().default("#ffffff"),
+  accent: z.string().default("#34d399"),
+  position: z.enum(["center", "top", "bottom"]).default("center"),
+  size: z.number().default(130),
+});
+export type KineticHeadline = z.infer<typeof kineticHeadlineSchema>;
+
 // B6 — Brand kit / marca de agua: handle (y/o logo) sutil en una esquina, todo el video.
 export const brandKitSchema = z.object({
   handle: z.string().default(""),

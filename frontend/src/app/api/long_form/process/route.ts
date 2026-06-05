@@ -30,6 +30,8 @@ interface ProcessBody {
   skipTranscribe?: boolean;
   /** Si true, salta Ollama y usa clips heurísticos uniformes (rápido, sin curaduría IA) */
   useHeuristic?: boolean;
+  /** Modo Gráficos & Motion: genera charts + titulares poderosos por clip (auto desde transcript). */
+  graphicsMode?: boolean;
   /** Estilos de render — array de StyleId. Default ["supreme"]. */
   styles?: string[];
   /** Color accent en hex. Si se omite, paleta rotativa por clipIndex. */
@@ -95,6 +97,7 @@ async function processJob(
   if (body.maxClips != null) args.push("--max-clips", String(body.maxClips));
   if (body.skipTranscribe) args.push("--skip-transcribe");
   if (body.useHeuristic) args.push("--use-heuristic");
+  if (body.graphicsMode) args.push("--graphics");
   if (body.styles && body.styles.length > 0) {
     args.push("--styles", body.styles.join(","));
   }
