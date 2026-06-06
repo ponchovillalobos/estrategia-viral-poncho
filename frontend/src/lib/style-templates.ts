@@ -801,6 +801,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
     return applyCapcutFx(
       {
         ...base,
+        graphics: true,
         subtitleStyle: "anton" as const,
         bRollMode: "pip" as const,
         vignette: true,
@@ -818,6 +819,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
     return applyCapcutFx(
       {
         ...base,
+        graphics: true,
         subtitleStyle: "anton" as const,
         bRollMode: "pip" as const,
         vignette: true,
@@ -849,6 +851,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
     return applyCapcutFx(
       {
         ...base,
+        graphics: true,
         subtitleStyle: "anton" as const,
         bRollMode: "pip" as const,
         vignette: true,
@@ -871,7 +874,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
   }
 
   if (styleId === "supreme") {
-    return applyCapcutFx(buildSupremeStyle(ctx, styleId), ctx, {
+    return applyCapcutFx({ ...buildSupremeStyle(ctx, styleId), graphics: true }, ctx, {
       lut: "kodak_warm.cube",
       kinetic: "karaoke",
       endScreen: true,

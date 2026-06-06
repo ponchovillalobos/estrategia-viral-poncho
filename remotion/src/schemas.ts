@@ -121,6 +121,10 @@ export const iconStickerSchema = z.object({
   color: z.string().default("#0a0a0a"),
   bg: z.string().default("#fbbf24"),
   size: z.number().default(120),
+  // Si true → "tarjeta de diseño" FULLSCREEN: la pantalla se oscurece y aparece el
+  // ícono gigante animado + una palabra (label). Es el momento "motion graphic".
+  fullscreen: z.boolean().default(false),
+  label: z.string().default(""),
 });
 export type IconSticker = z.infer<typeof iconStickerSchema>;
 

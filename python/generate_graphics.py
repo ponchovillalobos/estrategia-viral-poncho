@@ -100,6 +100,15 @@ for _icon, _kws in CONCEPT_ICONS.items():
 # "people" no existe en ICON_MAP → cae a un ícono cercano.
 _ICON_ALIAS = {"people": "heart"}
 
+# Palabra que acompaña a la TARJETA FULLSCREEN de cada concepto (motion graphic).
+ICON_LABELS = {
+    "money": "DINERO", "trending": "CRECER", "brain": "IDEA", "rocket": "DESPEGAR",
+    "target": "OBJETIVO", "lightbulb": "TIP", "fire": "CLAVE", "heart": "COMUNIDAD",
+    "eye": "ATENCIÓN", "warn": "CUIDADO", "check": "LISTO", "message": "COMUNICAR",
+    "award": "GANAR", "music": "AUDIO", "film": "CONTENIDO", "gem": "VALOR",
+    "crown": "LIDERAR", "zap": "PODER", "star": "DESTACAR",
+}
+
 
 def concept_icons(words: list[dict], duration: float, target: int) -> list[dict]:
     """Genera íconos VISUALES (no texto) representando los conceptos que se mencionan.
@@ -127,6 +136,9 @@ def concept_icons(words: list[dict], duration: float, target: int) -> list[dict]
     min_gap = max(2.5, (duration / max(1, target)) * 0.6)
     last_t = -99.0
     positions = ["top-right", "top-left", "bottom-right", "top-center"]
+    # Cuántas tarjetas FULLSCREEN (pantalla negra + ícono gigante): ~1 cada 30s, tope 3.
+    fs_cap = max(1, min(3, round(duration / 30))) if duration > 0 else 1
+    fs_step = max(1, (len([h for h in hits]) // fs_cap) or 1)
     for t, icon in hits:
         if len(out) >= target:
             break
@@ -134,14 +146,18 @@ def concept_icons(words: list[dict], duration: float, target: int) -> list[dict]
             continue
         last_t = t
         i = len(out)
+        # Marcar como tarjeta fullscreen 1 de cada `fs_step` (hasta fs_cap).
+        is_fs = (i % fs_step == 0) and (sum(1 for o in out if o.get("fullscreen")) < fs_cap)
         out.append({
             "at": round(max(0.3, t - 0.1), 2),
-            "duration": 1.8,
+            "duration": 2.2 if is_fs else 1.8,
             "icon": icon,
-            "position": positions[i % len(positions)],
+            "position": "center" if is_fs else positions[i % len(positions)],
             "color": "#0a0a0a",
             "bg": ACCENTS[(i * 2) % len(ACCENTS)],
             "size": 120,
+            "fullscreen": is_fs,
+            "label": ICON_LABELS.get(icon, "") if is_fs else "",
         })
     return out
 

@@ -24,6 +24,79 @@ export const IconStickerLayer: React.FC<{
     extrapolateRight: "clamp",
   });
   const Icon = ICON_MAP[sticker.icon.toLowerCase()] ?? FallbackIcon;
+
+  // ── Tarjeta de diseño FULLSCREEN: pantalla oscura + ícono gigante + palabra. ──
+  if (sticker.fullscreen) {
+    const bgFade = interpolate(elapsed, [0, 0.25], [0, 0.92], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    });
+    const ringSpin = elapsed * 40; // grados/seg, anillo girando
+    const big = Math.min(560, sticker.size * 3.2);
+    return (
+      <AbsoluteFill
+        style={{
+          pointerEvents: "none",
+          justifyContent: "center",
+          alignItems: "center",
+          flexDirection: "column",
+          gap: 50,
+          background: `rgba(8,8,10,${bgFade * opacity})`,
+          opacity,
+        }}
+      >
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {/* anillo de acento que gira detrás del ícono */}
+          <svg width={big + 120} height={big + 120} style={{ position: "absolute", transform: `rotate(${ringSpin}deg)` }}>
+            <circle
+              cx={(big + 120) / 2}
+              cy={(big + 120) / 2}
+              r={(big + 60) / 2}
+              fill="none"
+              stroke={sticker.bg}
+              strokeWidth={10}
+              strokeDasharray="40 28"
+              opacity={0.8 * enter}
+              style={{ filter: `drop-shadow(0 0 24px ${sticker.bg})` }}
+            />
+          </svg>
+          <div
+            style={{
+              width: big,
+              height: big,
+              borderRadius: "50%",
+              background: sticker.bg,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transform: `scale(${enter})`,
+              boxShadow: `0 0 90px ${sticker.bg}aa, 0 24px 60px rgba(0,0,0,0.6)`,
+            }}
+          >
+            <Icon size={big * 0.55} color={sticker.color} strokeWidth={2.2} />
+          </div>
+        </div>
+        {sticker.label ? (
+          <div
+            style={{
+              fontFamily: "sans-serif",
+              fontSize: 96,
+              fontWeight: 900,
+              color: "#ffffff",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+              textShadow: `0 0 50px ${sticker.bg}88`,
+              transform: `translateY(${(1 - enter) * 24}px)`,
+              opacity: enter,
+            }}
+          >
+            {sticker.label}
+          </div>
+        ) : null}
+      </AbsoluteFill>
+    );
+  }
+
   const floatY = Math.sin(elapsed * 2.2) * 5;
   const wobbleRot = Math.sin(elapsed * 1.6) * 3;
   const pad = 80;
