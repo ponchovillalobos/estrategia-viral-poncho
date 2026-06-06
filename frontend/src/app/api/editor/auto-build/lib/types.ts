@@ -27,6 +27,8 @@ export interface AutoBuildRequest {
   videoIds?: string[];
   styles: StyleId[];
   accentColor: string;
+  /** Fuente de subtítulos elegida ("auto" = la del estilo). Google Fonts gratis. */
+  subtitleFont?: string;
   caption?: string;
   captionMeta?: Record<string, unknown>;
   platforms?: string[];
@@ -77,6 +79,8 @@ export interface ResolvedProject {
   reactionZooms?: unknown[];
   brandKit?: { handle?: string; logoUrl?: string; position?: string; opacity?: number; color?: string };
   bRoll?: unknown[];
+  // Fuente de subtítulos elegida en el wizard ("auto" = la del estilo).
+  subtitleFont?: string;
   // Modo Gráficos & Motion (estilos graphics_*): applyGraphics genera dataViz +
   // kineticHeadlines desde el transcript del short y los deja acá.
   graphics?: boolean;

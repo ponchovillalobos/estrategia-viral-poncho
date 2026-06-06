@@ -11,6 +11,14 @@ import {
 import { z } from "zod";
 import { loadFont as loadBebas } from "@remotion/google-fonts/BebasNeue";
 import { loadFont as loadAnton } from "@remotion/google-fonts/Anton";
+import { loadFont as loadMontserrat } from "@remotion/google-fonts/Montserrat";
+import { loadFont as loadPoppins } from "@remotion/google-fonts/Poppins";
+import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
+import { loadFont as loadBangers } from "@remotion/google-fonts/Bangers";
+import { loadFont as loadLuckiest } from "@remotion/google-fonts/LuckiestGuy";
+import { loadFont as loadArchivo } from "@remotion/google-fonts/ArchivoBlack";
+import { loadFont as loadTeko } from "@remotion/google-fonts/Teko";
+import { loadFont as loadRighteous } from "@remotion/google-fonts/Righteous";
 import { CameraMotionBlur } from "@remotion/motion-blur";
 import {
   ImageOverlayLayer,
@@ -40,6 +48,21 @@ import { SubtitleLayer } from "./layers/subtitle-layer";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
+
+// Más fuentes para variedad de subtítulos (todas Google Fonts, gratis). El proyecto
+// elige una vía `subtitleFont`; "auto" usa la del estilo (bebas/anton).
+const FONT_MAP: Record<string, string> = {
+  bebas: BEBAS,
+  anton: ANTON,
+  montserrat: loadMontserrat().fontFamily,
+  poppins: loadPoppins().fontFamily,
+  oswald: loadOswald().fontFamily,
+  bangers: loadBangers().fontFamily,
+  luckiest: loadLuckiest().fontFamily,
+  archivo: loadArchivo().fontFamily,
+  teko: loadTeko().fontFamily,
+  righteous: loadRighteous().fontFamily,
+};
 
 import {
   wordSchema,
@@ -97,6 +120,11 @@ export const viralVideoSchema = z.object({
   subtitleStyle: z.enum(["bebas", "anton", "cinematic"]).default("bebas"),
   subtitleColor: z.string().default("#ffffff"),
   subtitleHighlight: z.string().default("#34d399"),
+  // Fuente del subtítulo. "auto" = la del estilo (bebas/anton). El resto son Google
+  // Fonts gratis para variedad (montserrat, poppins, oswald, bangers, etc.).
+  subtitleFont: z
+    .enum(["auto", "bebas", "anton", "montserrat", "poppins", "oswald", "bangers", "luckiest", "archivo", "teko", "righteous"])
+    .default("auto"),
   animations: z.array(animationSchema).default([]),
   emphasisCards: z.array(emphasisCardSchema).default([]),
   bRollMode: z.enum(["fullscreen", "pip"]).default("fullscreen"),
@@ -163,6 +191,7 @@ export const defaultProps: ViralVideoProps = {
   subtitleStyle: "bebas",
   subtitleColor: "#ffffff",
   subtitleHighlight: "#34d399",
+  subtitleFont: "auto",
   animations: [],
   emphasisCards: [],
   bRollMode: "fullscreen",
@@ -211,6 +240,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   subtitleStyle,
   subtitleColor,
   subtitleHighlight,
+  subtitleFont,
   animations,
   emphasisCards,
   bRollMode,
@@ -326,7 +356,13 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   }
 
   // bebas usa BEBAS, anton + cinematic usan ANTON (cinematic agrega styling extra).
-  const fontFamily = subtitleStyle === "bebas" ? BEBAS : ANTON;
+  // Fuente: si subtitleFont != "auto", usa la elegida; si no, la del estilo (bebas/anton).
+  const fontFamily =
+    subtitleFont && subtitleFont !== "auto" && FONT_MAP[subtitleFont]
+      ? FONT_MAP[subtitleFont]
+      : subtitleStyle === "bebas"
+        ? BEBAS
+        : ANTON;
   const fullscreenBRoll = bRollMode === "fullscreen";
 
   // CameraMoves sobre el video base — SOLO activo en modo cinematic.

@@ -62,6 +62,21 @@ const STYLES: { id: StyleId; name: string; tagline: string; emoji: string; recom
   { id: "graphics_max", name: "Gráficos Max", tagline: "Gráficos al máximo: cortes rápidos, zooms de reacción y stutter. La más intensa.", emoji: "📈" },
 ];
 
+// Fuentes de subtítulo disponibles (Google Fonts gratis). "auto" = la del estilo.
+const SUBTITLE_FONTS: { id: string; name: string }[] = [
+  { id: "auto", name: "Automática" },
+  { id: "bebas", name: "Bebas (clásica)" },
+  { id: "anton", name: "Anton (peso)" },
+  { id: "montserrat", name: "Montserrat (limpia)" },
+  { id: "poppins", name: "Poppins (redonda)" },
+  { id: "oswald", name: "Oswald (condensada)" },
+  { id: "bangers", name: "Bangers (cómic)" },
+  { id: "luckiest", name: "Luckiest Guy (divertida)" },
+  { id: "archivo", name: "Archivo Black (sólida)" },
+  { id: "teko", name: "Teko (fina alta)" },
+  { id: "righteous", name: "Righteous (retro)" },
+];
+
 // Nombre humano de un estilo a partir de su id (acepta "videoId::style" del progreso).
 function humanStyleName(rawId: string): string {
   const id = rawId.includes("::") ? rawId.split("::").pop()! : rawId;
@@ -90,6 +105,7 @@ export function WizardClient() {
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
   const [selectedStyles, setSelectedStyles] = useState<StyleId[]>(["hype"]);
   const [accent, setAccent] = useState<string>("#fb7185");
+  const [subtitleFont, setSubtitleFont] = useState<string>("auto");
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["instagram", "linkedin"]);
   // Aspect ratio del output. 9:16 vertical (TikTok/Reels) default, 16:9 horizontal (LinkedIn/YouTube).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
@@ -278,6 +294,7 @@ export function WizardClient() {
           videoIds,
           styles: selectedStyles,
           accentColor: accent,
+          subtitleFont,
           platforms: selectedPlatforms,
           aspectRatio,
           day: day ? parseInt(day, 10) : undefined,
@@ -651,6 +668,28 @@ export function WizardClient() {
                   />
                   <span className="text-xs font-medium">{c.name}</span>
                   <span className="font-mono-tab text-[10px] text-muted-foreground">{c.mood}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <h3 className="mb-2 mt-6 text-sm font-medium">Tipografía de los subtítulos</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            &quot;Automática&quot; usa la del estilo. O elegí una para darle otra personalidad.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {SUBTITLE_FONTS.map((f) => {
+              const selected = subtitleFont === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setSubtitleFont(f.id)}
+                  className={`rounded-lg border px-3 py-2 text-sm transition-all ${
+                    selected ? "border-foreground bg-muted/40" : "border-border hover:border-foreground/30"
+                  }`}
+                >
+                  {f.name}
                 </button>
               );
             })}

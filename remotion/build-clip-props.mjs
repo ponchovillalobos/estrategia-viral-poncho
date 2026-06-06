@@ -87,6 +87,7 @@ const props = {
   subtitleStyle: project.subtitleStyle ?? "anton",
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",
+  subtitleFont: project.subtitleFont ?? "auto",
   animations: project.animations || [],
   emphasisCards: project.emphasisCards || [],
   bRollMode: project.bRollMode ?? "pip",

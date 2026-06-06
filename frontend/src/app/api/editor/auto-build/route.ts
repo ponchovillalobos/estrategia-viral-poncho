@@ -219,6 +219,10 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         })(),
         platforms: platforms ?? (baseProject as { platforms?: string[] }).platforms ?? [],
         captionMeta: captionMeta ?? (baseProject as { captionMeta?: unknown }).captionMeta ?? null,
+        // Fuente de subtítulos elegida en el wizard ("auto" = la del estilo).
+        ...(body.subtitleFont && body.subtitleFont !== "auto"
+          ? { subtitleFont: body.subtitleFont }
+          : {}),
       };
 
       await applyBeatSync(project, transcript.duration);
