@@ -7,24 +7,53 @@ import { runProcess } from "@/lib/run-process";
 export const dynamic = "force-dynamic";
 
 /**
- * B2/B3 — Descarga un pack curado de música o SFX desde Freesound (CC0, uso comercial
- * sin atribución). La API key se pasa en el body (o vía FREESOUND_API_KEY) y NO se
- * persiste: se usa sólo para esta corrida. Los archivos caen en:
- *   - música → {MUSIC_DIR}/freesound   (el portal y los estilos ya los escanean)
- *   - sfx    → {SFX_DIR}/freesound
+ * Descarga un pack curado de música (y SFX) libre de costo. Dos fuentes:
  *
- * Conseguí tu key gratis en https://freesound.org/apiv2/apply/.
+ *   - source="github" (DEFAULT, SIN API key): música CC0 de FreePD vía el repo
+ *     SoundSafari/CC0-1.0-Music. Descarga directa de GitHub, no requiere registro.
+ *   - source="freesound" (requiere key gratis de freesound.org/apiv2/apply): banco
+ *     más grande de música + SFX. La key va en el body (o FREESOUND_API_KEY) y NO se
+ *     persiste.
+ *
+ * Los archivos caen en {MUSIC_DIR}/<source> (o {SFX_DIR}/freesound), carpetas que el
+ * portal y los estilos ya escanean.
  */
 export async function POST(req: NextRequest) {
-  let body: { apiKey?: string; type?: "music" | "sfx" };
+  let body: { apiKey?: string; type?: "music" | "sfx"; source?: "github" | "freesound"; limit?: number };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ ok: false, error: "body inválido" }, { status: 400 });
+    body = {};
   }
 
-  const apiKey = (body.apiKey || process.env.FREESOUND_API_KEY || "").trim();
+  const source = body.source === "freesound" ? "freesound" : "github";
   const type = body.type === "sfx" ? "sfx" : "music";
+
+  // ── Fuente GitHub (sin API key) — sólo música ──
+  if (source === "github") {
+    const outDir = path.join(MUSIC_DIR, "github");
+    await fs.mkdir(outDir, { recursive: true });
+    const args = [path.join(PYTHON_DIR, "github_music.py"), "download", "--out-dir", outDir];
+    if (body.limit && Number.isFinite(body.limit)) args.push("--limit", String(body.limit));
+    const run = await runProcess(PYTHON_EXE, args, PYTHON_DIR, undefined, 240_000);
+    const lastJson = run.stdout.split(/\r?\n/).filter((l) => l.trim().startsWith("{")).pop();
+    let result: unknown = null;
+    try {
+      result = lastJson ? JSON.parse(lastJson) : null;
+    } catch {
+      result = null;
+    }
+    if (!run.ok || !result) {
+      return NextResponse.json(
+        { ok: false, error: run.stderr?.slice(-300) || "falló la descarga", result },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json(result);
+  }
+
+  // ── Fuente Freesound (requiere API key) — música o SFX ──
+  const apiKey = (body.apiKey || process.env.FREESOUND_API_KEY || "").trim();
   if (!apiKey) {
     return NextResponse.json(
       { ok: false, error: "Falta la API key de Freesound. Conseguila gratis en freesound.org/apiv2/apply" },

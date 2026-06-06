@@ -8,8 +8,13 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     await fs.mkdir(MUSIC_DIR, { recursive: true });
-    // Escanear MUSIC_DIR + subcarpetas de cada proveedor (pixabay, freesound)
-    const folders = [MUSIC_DIR, path.join(MUSIC_DIR, "pixabay"), path.join(MUSIC_DIR, "freesound")];
+    // Escanear MUSIC_DIR + subcarpetas de cada proveedor (pixabay, freesound, github)
+    const folders = [
+      MUSIC_DIR,
+      path.join(MUSIC_DIR, "pixabay"),
+      path.join(MUSIC_DIR, "freesound"),
+      path.join(MUSIC_DIR, "github"),
+    ];
     const tracks: { name: string; filename: string; url: string; source: string }[] = [];
     for (const folder of folders) {
       try {
@@ -24,7 +29,9 @@ export async function GET() {
               ? "pixabay"
               : folder.includes("freesound")
                 ? "freesound"
-                : "curated",
+                : folder.includes("github")
+                  ? "github"
+                  : "curated",
           });
         }
       } catch {

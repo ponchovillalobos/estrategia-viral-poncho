@@ -464,7 +464,12 @@ function pickRandomMusicTrack(seed) {
     }
     if (!dataRoot) return null;
     const MUSIC_DIR = nodePath.join(dataRoot, "assets", "music");
-    const folders = [nodePath.join(MUSIC_DIR, "pixabay"), nodePath.join(MUSIC_DIR, "freesound"), MUSIC_DIR];
+    const folders = [
+      nodePath.join(MUSIC_DIR, "pixabay"),
+      nodePath.join(MUSIC_DIR, "freesound"),
+      nodePath.join(MUSIC_DIR, "github"),
+      MUSIC_DIR,
+    ];
     const files = [];
     for (const folder of folders) {
       try {

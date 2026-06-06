@@ -11,10 +11,11 @@ export async function GET(req: NextRequest) {
   if (!file || file.includes("..") || file.includes("/") || file.includes("\\")) {
     return new Response("bad request", { status: 400 });
   }
-  // Priorizar /pixabay/ y /freesound/ sobre MUSIC_DIR raíz
+  // Priorizar subcarpetas de proveedor (pixabay/freesound/github) sobre MUSIC_DIR raíz
   const candidates = [
     path.join(MUSIC_DIR, "pixabay", file),
     path.join(MUSIC_DIR, "freesound", file),
+    path.join(MUSIC_DIR, "github", file),
     path.join(MUSIC_DIR, file),
   ];
   let filePath: string | null = null;
