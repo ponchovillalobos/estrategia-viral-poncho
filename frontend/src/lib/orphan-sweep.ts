@@ -21,6 +21,10 @@ import {
   LF_RENDERS,
   LF_ROOT,
   RAW_DIR,
+  RENDERS_DIR,
+  PROJECTS_DIR,
+  TRANSCRIPTS_DIR,
+  CUTS_DIR,
 } from "@/lib/paths";
 import { LF_TRANSCRIPTS, LF_CUTS, LF_PROPOSALS, LF_PROJECTS_DIR } from "@/lib/paths-long-form";
 
@@ -135,6 +139,77 @@ export async function sweepLongFormOrphans(): Promise<{ deleted: number; orphans
   return { deleted, orphans: [...orphanIds] };
 }
 
+/**
+ * Borra los derivados de SHORTS cuyo video raw fuente ya no existe: project JSONs,
+ * renders, transcripts y cuts. Conservador igual que el de largos: si RAW_DIR no se
+ * pudo leer (set vacío) NO borra nada. La lógica de "huérfano" espeja EXACTAMENTE la
+ * del filtro de Producción (buildBackingChecker): lo que se oculta es lo que se borra,
+ * y nada visible se toca.
+ */
+export async function sweepShortOrphans(): Promise<{ deleted: number; orphans: string[] }> {
+  const raw = await rawStems(RAW_DIR);
+  if (raw.size === 0) return { deleted: 0, orphans: [] };
+
+  // owner por prefijo: el raw stem `s` tal que id === s o id empieza con `${s}_`
+  // (los ids de proyecto/render son `{videoStem}_{styleId}`).
+  const ownerByPrefix = (id: string): string | null => {
+    if (raw.has(id)) return id;
+    for (const s of raw) if (id === s || id.startsWith(`${s}_`)) return s;
+    return null;
+  };
+
+  const orphanOwners = new Set<string>();
+  let deleted = 0;
+  const del = async (dir: string, f: string) => {
+    try {
+      await fs.rm(path.join(dir, f), { force: true });
+      deleted++;
+    } catch {
+      /* best-effort */
+    }
+  };
+
+  // projects/*.json → huérfano si su videoId (o, si falta, el owner por prefijo) no existe.
+  for (const f of await listSafe(PROJECTS_DIR)) {
+    if (!f.endsWith(".json")) continue;
+    const id = path.basename(f, ".json");
+    let videoId: string | undefined;
+    try {
+      videoId = JSON.parse(await fs.readFile(path.join(PROJECTS_DIR, f), "utf-8"))?.videoId;
+    } catch {
+      /* JSON ilegible → tratar por prefijo */
+    }
+    const owner = videoId || ownerByPrefix(id);
+    if (owner && raw.has(owner)) continue;
+    orphanOwners.add(owner || id);
+    await del(PROJECTS_DIR, f);
+  }
+
+  // renders/* → huérfano si ningún raw es prefijo del id del render.
+  for (const f of await listSafe(RENDERS_DIR)) {
+    const id = path.basename(f, path.extname(f));
+    if (ownerByPrefix(id)) continue;
+    orphanOwners.add(id);
+    await del(RENDERS_DIR, f);
+  }
+
+  // transcripts/ y cuts/ → keyed por videoId exacto (stem). Huérfano si no está en raw.
+  for (const dir of [TRANSCRIPTS_DIR, CUTS_DIR]) {
+    for (const f of await listSafe(dir)) {
+      const stem = path.basename(f, path.extname(f));
+      if (raw.has(stem)) continue;
+      await del(dir, f);
+    }
+  }
+
+  if (deleted > 0) {
+    console.log(
+      `[orphan-sweep] shorts: borrados ${deleted} derivados de video(s) eliminado(s): ${[...orphanOwners].join(", ")}`,
+    );
+  }
+  return { deleted, orphans: [...orphanOwners] };
+}
+
 // Throttle en globalThis (sobrevive a hot-reload; se resetea al reiniciar el server,
 // que de todas formas dispara un sweep de boot).
 const g = globalThis as unknown as { __lastOrphanSweep?: number };
@@ -144,8 +219,11 @@ export function maybeSweepOrphans(): void {
   const now = Date.now();
   if (g.__lastOrphanSweep && now - g.__lastOrphanSweep < SWEEP_INTERVAL_MS) return;
   g.__lastOrphanSweep = now;
-  // fire-and-forget: no bloqueamos la respuesta del listado
+  // fire-and-forget: no bloqueamos la respuesta del listado. Barre largos Y shorts.
   void sweepLongFormOrphans().catch((e) =>
-    console.warn(`[orphan-sweep] falló: ${e instanceof Error ? e.message : e}`),
+    console.warn(`[orphan-sweep] largos falló: ${e instanceof Error ? e.message : e}`),
+  );
+  void sweepShortOrphans().catch((e) =>
+    console.warn(`[orphan-sweep] shorts falló: ${e instanceof Error ? e.message : e}`),
   );
 }
