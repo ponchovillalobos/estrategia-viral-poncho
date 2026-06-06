@@ -308,13 +308,18 @@ export function generateSpeedRamps(ctx: BuildContext): Array<{
 export function generateLottieStickers(ctx: BuildContext): Array<{
   at: number;
   duration: number;
-  name: "pulse_ring" | "sparkle";
+  name: "pulse_ring" | "sparkle" | "arrow_down" | "star5";
   position: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "top-center" | "center";
   size: number;
   color: string;
 }> {
-  const kws = pickKeywords(ctx, 3);
-  const names: Array<"pulse_ring" | "sparkle"> = ["sparkle", "pulse_ring", "sparkle"];
+  const kws = pickKeywords(ctx, 4);
+  const names: Array<"pulse_ring" | "sparkle" | "arrow_down" | "star5"> = [
+    "sparkle",
+    "star5",
+    "arrow_down",
+    "pulse_ring",
+  ];
   const positions: Array<"top-right" | "top-left" | "bottom-right"> = [
     "top-right",
     "top-left",

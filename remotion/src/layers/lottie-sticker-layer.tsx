@@ -3,6 +3,8 @@ import { Lottie, type LottieAnimationData } from "@remotion/lottie";
 import type { LottieSticker } from "../schemas";
 import pulseRing from "../lottie/pulse-ring.json";
 import sparkle from "../lottie/sparkle.json";
+import arrowDown from "../lottie/arrow-down.json";
+import star5 from "../lottie/star5.json";
 
 /**
  * B4 — Sticker ANIMADO (Lottie). A diferencia de los emojis estáticos, esta capa monta
@@ -15,6 +17,8 @@ import sparkle from "../lottie/sparkle.json";
 const ANIMATIONS: Record<LottieSticker["name"], LottieAnimationData> = {
   pulse_ring: pulseRing as LottieAnimationData,
   sparkle: sparkle as LottieAnimationData,
+  arrow_down: arrowDown as LottieAnimationData,
+  star5: star5 as LottieAnimationData,
 };
 
 const POSITIONS: Record<

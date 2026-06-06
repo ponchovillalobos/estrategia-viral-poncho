@@ -209,8 +209,8 @@ export function generateSpeedRamps(ctx) {
 
 /** B4 — stickers animados (Lottie) en keywords clave. Alterna animación y esquina. */
 export function generateLottieStickers(ctx) {
-  const kws = pickKeywords(ctx, 3);
-  const names = ["sparkle", "pulse_ring", "sparkle"];
+  const kws = pickKeywords(ctx, 4);
+  const names = ["sparkle", "star5", "arrow_down", "pulse_ring"];
   const positions = ["top-right", "top-left", "bottom-right"];
   return kws.map((kw, i) => ({
     at: +Math.max(0.4, kw.start - 0.15).toFixed(2),

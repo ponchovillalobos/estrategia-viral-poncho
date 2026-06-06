@@ -194,7 +194,7 @@ export type BrandKit = z.infer<typeof brandKitSchema>;
 export const lottieStickerSchema = z.object({
   at: z.number(),
   duration: z.number().default(1.6),
-  name: z.enum(["pulse_ring", "sparkle"]).default("sparkle"),
+  name: z.enum(["pulse_ring", "sparkle", "arrow_down", "star5"]).default("sparkle"),
   position: z
     .enum(["top-left", "top-right", "bottom-left", "bottom-right", "top-center", "center"])
     .default("top-right"),

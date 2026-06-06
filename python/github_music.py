@@ -34,17 +34,25 @@ REPO_API = "https://api.github.com/repos/SoundSafari/CC0-1.0-Music/contents/free
 CURATED = [
     # upbeat / energético
     "Energizing.mp3", "City Run.mp3", "Funky Energy Loop.mp3", "Gotta Keep On Movin.mp3",
-    "Groovin.mp3", "Downtown Boogie.mp3",
+    "Groovin.mp3", "Downtown Boogie.mp3", "Funshine.mp3", "Funkeriffic.mp3",
+    "Going Bananas.mp3", "City Sunshine.mp3", "Happy Whistling Ukulele.mp3", "Busybody.mp3",
     # inspirador / esperanzador
     "Hopeful.mp3", "Inspiration.mp3", "Journey of Hope.mp3", "Elevate Inspirate.mp3",
-    "Infinite Wonder.mp3", "Finally See The Light.mp3",
+    "Infinite Wonder.mp3", "Finally See The Light.mp3", "Connecting Rainbows.mp3",
+    "Inventing Flight.mp3", "And Here We Go.mp3",
     # épico / cinematográfico
     "Heroic Adventure.mp3", "Epic Blockbuster 2.mp3", "Apex.mp3", "Horizon Flare.mp3",
-    "Adventure.mp3",
-    # chill / lofi / piano
+    "Adventure.mp3", "Chronos.mp3", "Kings Trailer.mp3", "Brothers Unite.mp3", "Honor Bound.mp3",
+    # chill / lofi / piano / aesthetic
     "Be Chillin.mp3", "Kalimba Relaxation Music.mp3", "Lovely Piano Song.mp3", "Infinite Peace.mp3",
+    "Bonfire.mp3", "Coy Koi.mp3", "Magic in the Garden.mp3", "Landra's Dream.mp3",
+    # tech / electrónico / loop
+    "Blippy Trance.mp3", "Bit Bit Loop.mp3", "Circuit.mp3", "Beat One.mp3", "Limit 70.mp3",
     # dramático / tensión
-    "Driving Concern.mp3", "Drop Point.mp3", "Final Step.mp3",
+    "Driving Concern.mp3", "Drop Point.mp3", "Final Step.mp3", "Cold Journey.mp3",
+    "Beginning of Conflict.mp3", "Find Them.mp3",
+    # jazz / divertido / retro
+    "Compy Jazz.mp3", "Flutey Jazz.mp3", "Cha-Cha Ender.mp3", "Maple Leaf Rag.mp3", "Lucky Break.mp3",
 ]
 
 
