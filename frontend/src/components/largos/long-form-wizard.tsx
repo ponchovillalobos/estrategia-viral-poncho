@@ -96,6 +96,8 @@ interface ProposalClip {
   start: number;
   end: number;
   duration?: number;
+  viralityScore?: number;
+  viralityReasons?: string[];
 }
 
 interface ProposalsResponse {
@@ -1302,6 +1304,20 @@ function JobView({
                   <span className="rounded bg-violet-500/20 px-1.5 py-0.5 font-mono-tab text-[10px] text-violet-300">
                     c{idx.toString().padStart(2, "0")}
                   </span>
+                  {typeof c.viralityScore === "number" && (
+                    <span
+                      title={`Potencial viral: ${c.viralityScore}/100${c.viralityReasons?.length ? " — " + c.viralityReasons.join(" · ") : ""}`}
+                      className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono-tab text-[10px] font-semibold"
+                      style={{
+                        background:
+                          c.viralityScore >= 70 ? "#10b98122" : c.viralityScore >= 45 ? "#f59e0b22" : "#71717a22",
+                        color:
+                          c.viralityScore >= 70 ? "#34d399" : c.viralityScore >= 45 ? "#fbbf24" : "#a1a1aa",
+                      }}
+                    >
+                      🔥 {c.viralityScore}
+                    </span>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-sm font-medium">
                       {c.title || c.slug || `Clip ${idx}`}
@@ -1314,6 +1330,11 @@ function JobView({
                       <p className="mt-1 text-[11px] text-foreground/80">
                         <Sparkles className="mr-1 inline h-2.5 w-2.5 text-amber-400" />
                         {c.hook}
+                      </p>
+                    )}
+                    {c.viralityReasons && c.viralityReasons.length > 0 && (
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        {c.viralityReasons.join(" · ")}
                       </p>
                     )}
                   </div>

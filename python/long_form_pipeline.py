@@ -205,6 +205,19 @@ def step_analyze(
     return out
 
 
+def step_score_virality(video_id: str, proposals_path: Path) -> None:
+    """Virality Score (0-100) por clip. Lee las propuestas + el transcript y reescribe
+    cada clip con viralityScore/reasons/factors, reordenando de más a menos viral.
+    Best-effort: si falla, las propuestas quedan sin score (no rompe el job)."""
+    try:
+        import virality
+        tp = LF_TRANSCRIPTS / f"{video_id}.json"
+        res = virality.score_proposals_file(proposals_path, tp)
+        print(f"[virality] {res}", file=sys.stderr)
+    except Exception as e:
+        print(f"[virality] no pude scorear (sigo sin score): {e}", file=sys.stderr)
+
+
 def step_graphics(clip_id: str, use_llm: bool = True) -> None:
     """Modo Gráficos: genera charts + titulares para un clip (best-effort, no rompe el job)."""
     cmd = [str(VENV_PYTHON), str(PYTHON_DIR / "generate_graphics.py"), clip_id]
@@ -555,6 +568,10 @@ def main() -> int:
     except (json.JSONDecodeError, FileNotFoundError) as e:
         print(f"[ERROR ANALYZE] no pude leer {proposals_path}: {e}", file=sys.stderr)
         return 1
+
+    # Virality Score (0-100) por clip — reordena de más a menos viral.
+    print("\n========== Virality Score ==========", file=sys.stderr)
+    step_score_virality(args.video_id, proposals_path)
 
     # Step 6: extract clips (con aspect ratio + face tracking opcional)
     print("\n========== STEP 6: extract clips ==========", file=sys.stderr)
