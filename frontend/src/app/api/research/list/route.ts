@@ -22,9 +22,12 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({
-    items: filtered,
-    total: items.length,
-    filtered: filtered.length,
-  });
+  return NextResponse.json(
+    {
+      items: filtered,
+      total: items.length,
+      filtered: filtered.length,
+    },
+    { headers: { "Cache-Control": "no-store, max-age=0" } }
+  );
 }

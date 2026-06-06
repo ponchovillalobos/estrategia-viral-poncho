@@ -113,12 +113,17 @@ export async function GET(req: NextRequest) {
 
     const all = [...active, ...archived];
     all.sort((a, b) => b.modified.localeCompare(a.modified));
-    return NextResponse.json({
-      videos: all,
-      activeCount: active.length,
-      archivedCount: archived.length,
-      rawDir: RAW_DIR,
-    });
+    return NextResponse.json(
+      {
+        videos: all,
+        activeCount: active.length,
+        archivedCount: archived.length,
+        rawDir: RAW_DIR,
+      },
+      // Sin caché: el navegador SIEMPRE pide la lista fresca. Si no, podía mostrar
+      // videos ya borrados hasta que venciera el caché heurístico del browser.
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },

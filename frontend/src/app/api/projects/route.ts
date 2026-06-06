@@ -52,7 +52,10 @@ export async function GET() {
       backingExists(p.id, p.videoId, p.source),
     );
     projects.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-    return NextResponse.json({ projects });
+    return NextResponse.json(
+      { projects },
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },

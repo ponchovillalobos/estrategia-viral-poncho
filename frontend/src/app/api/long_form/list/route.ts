@@ -68,9 +68,12 @@ export async function GET() {
 
   // Si el usuario borró el video de la carpeta, NO lo resucitamos: desaparece del
   // portal al instante. Los derivados huérfanos los limpia maybeSweepOrphans() arriba.
-  return NextResponse.json({
-    rawDir: LF_RAW,
-    videos: entries.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt)),
-    orphans: [],
-  });
+  return NextResponse.json(
+    {
+      rawDir: LF_RAW,
+      videos: entries.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt)),
+      orphans: [],
+    },
+    { headers: { "Cache-Control": "no-store, max-age=0" } }
+  );
 }
