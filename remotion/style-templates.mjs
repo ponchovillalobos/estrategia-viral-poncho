@@ -207,6 +207,21 @@ export function generateSpeedRamps(ctx) {
   }));
 }
 
+/** B4 — stickers animados (Lottie) en keywords clave. Alterna animación y esquina. */
+export function generateLottieStickers(ctx) {
+  const kws = pickKeywords(ctx, 3);
+  const names = ["sparkle", "pulse_ring", "sparkle"];
+  const positions = ["top-right", "top-left", "bottom-right"];
+  return kws.map((kw, i) => ({
+    at: +Math.max(0.4, kw.start - 0.15).toFixed(2),
+    duration: 1.6,
+    name: names[i % names.length],
+    position: positions[i % positions.length],
+    size: 240,
+    color: ctx.accentColor,
+  }));
+}
+
 /**
  * Suma las recetas CapCut (LUT, scene-fx, transiciones, kinetic, mirror, tracking,
  * end-screen, progress-bar, brand-kit, icon-stickers, auto-reframe, speed-ramps) a
@@ -243,6 +258,7 @@ function applyCapcutFx(project, ctx, opts = {}) {
         }
       : {}),
     ...(opts.speedRamps ? { speedRamps: generateSpeedRamps(ctx) } : {}),
+    ...(opts.lottieStickers ? { lottieStickers: generateLottieStickers(ctx) } : {}),
   };
 }
 
@@ -512,6 +528,7 @@ export function buildProjectForStyle(ctx, styleId) {
         progressBar: true,
         brandKit: true,
         iconStickers: true,
+        lottieStickers: true,
       }
     );
   }
@@ -572,7 +589,7 @@ export function buildProjectForStyle(ctx, styleId) {
         stutterMarks: pickKeywords(ctx, 2).map((kw) => ({ at: Math.max(0, kw.start - 0.15), duration: 0.18 })),
       },
       ctx,
-      { lut: "cyberpunk.cube", kinetic: "bounce", mirror: true, speedRamps: true }
+      { lut: "cyberpunk.cube", kinetic: "bounce", mirror: true, speedRamps: true, lottieStickers: true }
     );
   }
 
@@ -609,6 +626,7 @@ export function buildProjectForStyle(ctx, styleId) {
       brandKit: true,
       iconStickers: true,
       speedRamps: true,
+      lottieStickers: true,
     });
   }
 

@@ -58,9 +58,11 @@ import {
   brandKitSchema,
   dataVizSchema,
   kineticHeadlineSchema,
+  lottieStickerSchema,
 } from "./schemas";
 import { DataVizLayer } from "./layers/data-viz-layer";
 import { KineticHeadlineLayer } from "./layers/kinetic-headline-layer";
+import { LottieStickerLayer } from "./layers/lottie-sticker-layer";
 
 /**
  * A2 — Interpolación lineal de la posición X de la cara a un tiempo dado, en el espacio
@@ -145,6 +147,8 @@ export const viralVideoSchema = z.object({
   // Defaults [] = render idéntico. Cada elemento tiene su ventana [at, at+duration].
   dataViz: z.array(dataVizSchema).default([]),
   kineticHeadlines: z.array(kineticHeadlineSchema).default([]),
+  // B4 — Stickers animados (Lottie). Opt-in. [] = render idéntico.
+  lottieStickers: z.array(lottieStickerSchema).default([]),
 });
 
 type ViralVideoProps = z.infer<typeof viralVideoSchema>;
@@ -195,6 +199,7 @@ export const defaultProps: ViralVideoProps = {
   height: 1920,
   dataViz: [],
   kineticHeadlines: [],
+  lottieStickers: [],
 };
 
 export const ViralVideo: React.FC<ViralVideoProps> = ({
@@ -240,6 +245,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   sourceAspect,
   dataViz,
   kineticHeadlines,
+  lottieStickers,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -594,6 +600,13 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         .filter((s) => currentTime >= s.at - 0.05 && currentTime <= s.at + s.duration)
         .map((s, i) => (
           <IconStickerLayer key={`is-${i}-${s.at}`} sticker={s} currentTime={currentTime} />
+        ))}
+
+      {/* B4 — Stickers ANIMADOS (Lottie): animación vectorial en loop. Aditivo. */}
+      {lottieStickers
+        .filter((s) => currentTime >= s.at - 0.05 && currentTime <= s.at + s.duration)
+        .map((s, i) => (
+          <LottieStickerLayer key={`ls-${i}-${s.at}`} sticker={s} currentTime={currentTime} />
         ))}
 
       {activeEmphasis && (

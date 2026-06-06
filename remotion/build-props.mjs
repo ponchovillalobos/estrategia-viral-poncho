@@ -125,6 +125,7 @@ const trackPathRemapped = filterAndRemap(project.trackPath || [], ["t"]);
 const trackedItemsRemapped = filterAndRemap(project.trackedItems || [], ["at"]);
 const iconStickersRemapped = filterAndRemap(project.iconStickers || [], ["at"]);
 const speedRampsRemapped = filterAndRemap(project.speedRamps || [], ["at"]);
+const lottieStickersRemapped = filterAndRemap(project.lottieStickers || [], ["at"]);
 
 const subtitles =
   project.manualSubtitles && project.manualSubtitles.length > 0
@@ -192,6 +193,8 @@ const props = {
   brandKit: project.brandKit ?? null,
   iconStickers: iconStickersRemapped,
   speedRamps: speedRampsRemapped,
+  // B4 — Stickers animados (Lottie) opt-in.
+  lottieStickers: lottieStickersRemapped,
   // C1 — Voz IA (Piper) opt-in. auto-build rellena voiceoverUrl tras correr tts.py.
   voiceoverUrl: project.voiceoverUrl ?? null,
   voiceoverVolume: project.voiceoverVolume ?? 0.7,

@@ -187,3 +187,18 @@ export const brandKitSchema = z.object({
   color: z.string().default("#ffffff"),
 });
 export type BrandKit = z.infer<typeof brandKitSchema>;
+
+// B4 — Sticker ANIMADO (Lottie). Animación vectorial que se mueve en loop (no un emoji
+// estático). Aparece en `at` por `duration` seg. `name` selecciona una animación CC0
+// propia bundleada en src/lottie/. `color` tiñe el glow (las formas base son blancas).
+export const lottieStickerSchema = z.object({
+  at: z.number(),
+  duration: z.number().default(1.6),
+  name: z.enum(["pulse_ring", "sparkle"]).default("sparkle"),
+  position: z
+    .enum(["top-left", "top-right", "bottom-left", "bottom-right", "top-center", "center"])
+    .default("top-right"),
+  size: z.number().default(220),
+  color: z.string().default("#fbbf24"),
+});
+export type LottieSticker = z.infer<typeof lottieStickerSchema>;

@@ -115,6 +115,7 @@ const props = {
   trackedItems: project.trackedItems || [],
   iconStickers: project.iconStickers || [],
   speedRamps: project.speedRamps || [],
+  lottieStickers: project.lottieStickers || [],
   endScreen: project.endScreen ?? null,
   progressBar: project.progressBar ?? false,
   brandKit: project.brandKit ?? null,

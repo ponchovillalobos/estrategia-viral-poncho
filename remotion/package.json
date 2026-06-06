@@ -11,11 +11,13 @@
   "dependencies": {
     "@remotion/cli": "^4.0.300",
     "@remotion/google-fonts": "^4.0.300",
+    "@remotion/lottie": "^4.0.462",
     "@remotion/media-utils": "^4.0.300",
     "@remotion/motion-blur": "^4.0.465",
     "@remotion/noise": "^4.0.465",
     "@remotion/transitions": "^4.0.465",
     "@remotion/zod-types": "^4.0.300",
+    "lottie-web": "^5.13.0",
     "lucide-react": "^1.17.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

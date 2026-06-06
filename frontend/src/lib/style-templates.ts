@@ -297,6 +297,35 @@ export function generateSpeedRamps(ctx: BuildContext): Array<{
   }));
 }
 
+/**
+ * B4 — Genera stickers ANIMADOS (Lottie) en keywords clave: un sparkle/pulse que late
+ * en una esquina para llamar la atención sobre la palabra. Alterna animación y esquina.
+ */
+export function generateLottieStickers(ctx: BuildContext): Array<{
+  at: number;
+  duration: number;
+  name: "pulse_ring" | "sparkle";
+  position: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "top-center" | "center";
+  size: number;
+  color: string;
+}> {
+  const kws = pickKeywords(ctx, 3);
+  const names: Array<"pulse_ring" | "sparkle"> = ["sparkle", "pulse_ring", "sparkle"];
+  const positions: Array<"top-right" | "top-left" | "bottom-right"> = [
+    "top-right",
+    "top-left",
+    "bottom-right",
+  ];
+  return kws.map((kw, i) => ({
+    at: +Math.max(0.4, kw.start - 0.15).toFixed(2),
+    duration: 1.6,
+    name: names[i % names.length],
+    position: positions[i % positions.length],
+    size: 240,
+    color: ctx.accentColor,
+  }));
+}
+
 type KineticPresetName = "none" | "pop" | "slide_up" | "type_on" | "bounce" | "glow_pulse" | "karaoke";
 
 /**
@@ -326,6 +355,7 @@ function applyCapcutFx<T extends object>(
     iconStickers?: boolean;
     autoReframe?: boolean;
     speedRamps?: boolean;
+    lottieStickers?: boolean;
   } = {}
 ) {
   return {
@@ -364,6 +394,7 @@ function applyCapcutFx<T extends object>(
         }
       : {}),
     ...(opts.speedRamps ? { speedRamps: generateSpeedRamps(ctx) } : {}),
+    ...(opts.lottieStickers ? { lottieStickers: generateLottieStickers(ctx) } : {}),
   };
 }
 
@@ -719,6 +750,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         progressBar: true,
         brandKit: true,
         iconStickers: true,
+        lottieStickers: true,
       }
     );
   }
@@ -788,7 +820,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         stutterMarks: pickKeywords(ctx, 2).map((kw) => ({ at: Math.max(0, kw.start - 0.15), duration: 0.18 })),
       },
       ctx,
-      { lut: "cyberpunk.cube", kinetic: "bounce", mirror: true, speedRamps: true }
+      { lut: "cyberpunk.cube", kinetic: "bounce", mirror: true, speedRamps: true, lottieStickers: true }
     );
   }
 
@@ -833,6 +865,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
       brandKit: true,
       iconStickers: true,
       speedRamps: true,
+      lottieStickers: true,
     });
   }
 
