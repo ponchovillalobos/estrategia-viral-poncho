@@ -141,6 +141,9 @@ export function WizardClient() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["instagram", "linkedin"]);
   // Aspect ratio del output. 9:16 vertical (TikTok/Reels) default, 16:9 horizontal (LinkedIn/YouTube).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
+  // Plantillas guardables: combos favoritos (estilo+color+fuente+plataformas).
+  type Template = { id: string; name: string; styles: string[]; accentColor: string; subtitleFont: string; platforms: string[]; aspectRatio: "9:16" | "16:9" };
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [day, setDay] = useState<string>("");
   const [caption, setCaption] = useState<string>("");
   const [captionMeta, setCaptionMeta] = useState<CaptionMeta | null>(null);
@@ -219,6 +222,62 @@ export function WizardClient() {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function loadTemplates() {
+    try {
+      const r = await fetch("/api/templates", { cache: "no-store" });
+      const d = await r.json();
+      setTemplates(Array.isArray(d.templates) ? d.templates : []);
+    } catch {
+      /* sin plantillas */
+    }
+  }
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  function applyTemplate(t: Template) {
+    setSelectedStyles(t.styles as StyleId[]);
+    setAccent(t.accentColor);
+    setSubtitleFont(t.subtitleFont || "auto");
+    setSelectedPlatforms(t.platforms as PlatformId[]);
+    setAspectRatio(t.aspectRatio === "16:9" ? "16:9" : "9:16");
+    toast.success(`Plantilla "${t.name}" aplicada`);
+  }
+
+  async function saveTemplate() {
+    const name = window.prompt("Nombre de la plantilla (ej: Mi estilo viral):");
+    if (!name || !name.trim()) return;
+    try {
+      const r = await fetch("/api/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          styles: selectedStyles,
+          accentColor: accent,
+          subtitleFont,
+          platforms: selectedPlatforms,
+          aspectRatio,
+        }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error ?? "no se pudo guardar");
+      toast.success(`Plantilla "${name.trim()}" guardada`);
+      loadTemplates();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function deleteTemplate(id: string, name: string) {
+    if (!window.confirm(`¿Borrar la plantilla "${name}"?`)) return;
+    try {
+      await fetch(`/api/templates?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      loadTemplates();
+    } catch {
+      /* ignore */
     }
   }
 
@@ -581,6 +640,48 @@ export function WizardClient() {
       {step === 2 && (
         <Card className="border-border bg-card p-6">
           <h2 className="mb-2 text-lg font-medium">2. Elegí estilo(s) y formato</h2>
+
+          {/* Plantillas guardables — aplicar un combo favorito con un click */}
+          <div className="mb-5 rounded-lg border border-border bg-muted/20 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
+                Mis plantillas
+              </p>
+              <button
+                type="button"
+                onClick={saveTemplate}
+                className="rounded border border-border bg-card px-2 py-1 text-[11px] hover:bg-muted"
+              >
+                💾 Guardar configuración actual
+              </button>
+            </div>
+            {templates.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground">
+                Guardá tu combo de estilo + color + tipografía + redes para reusarlo con un click.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {templates.map((t) => (
+                  <span
+                    key={t.id}
+                    className="group inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1 text-xs"
+                  >
+                    <button type="button" onClick={() => applyTemplate(t)} className="hover:text-primary">
+                      {t.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteTemplate(t.id, t.name)}
+                      className="text-muted-foreground opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                      title="Borrar plantilla"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Aspect ratio toggle */}
           <div className="mb-5">
