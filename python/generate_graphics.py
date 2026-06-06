@@ -208,6 +208,8 @@ DATA_UNITS = {
 }
 # Conectores válidos para una comparación "de X a Y" (crecimiento). "o"/"y" NO.
 COMPARE_CONNECTORS = {"a", "hasta"}
+# Conectores de RATIO "X de Y" / "X de cada Y" (proporción → pictografía/rating).
+RATIO_CONNECTORS = {"de", "cada"}
 
 
 def _is_year_or_age(token_clean: str, val: float, next_word: str) -> bool:
@@ -251,19 +253,22 @@ def heuristic_charts(words: list[dict], duration: float, max_charts: int = 4) ->
         has_unit = is_pct or next1 in DATA_UNITS or next2 in DATA_UNITS
         if _is_year_or_age(tok, val, word_at(i + 1)):
             continue
-        # ¿comparación "de X [conector] Y"? requiere conector real (a/hasta) entre números.
+        # ¿par "de X [conector] Y"? conector a/hasta = crecimiento; de/cada = ratio.
         partner = None
+        rel = None  # "growth" | "ratio"
         for j in range(i + 1, min(i + 6, n)):
-            connector = _clean_word(word_at(j)).lower()
             v2 = _number_in(_clean_word(words[j].get("word", "")))
             if v2 is not None and v2 != val and v2 != 0:
-                # confirmar que entre i y j hubo un conector válido
                 between = [_clean_word(word_at(k)).lower() for k in range(i + 1, j)]
                 if any(b in COMPARE_CONNECTORS for b in between):
-                    partner = v2
+                    partner, rel = v2, "growth"
+                elif any(b in RATIO_CONNECTORS for b in between):
+                    partner, rel = v2, "ratio"
                 break
-        # Sin unidad de dato Y sin comparación válida → no es un dato, lo saltamos.
-        if not has_unit and partner is None:
+        # ¿menciona "estrellas" cerca? → rating.
+        near_star = "estrella" in next1 or "estrella" in next2
+        # Sin unidad de dato Y sin par válido Y sin estrellas → no es dato, saltar.
+        if not has_unit and partner is None and not near_star:
             continue
         # Título: 2-3 palabras previas no-vacías.
         ctx = []
@@ -275,33 +280,76 @@ def heuristic_charts(words: list[dict], duration: float, max_charts: int = 4) ->
                 break
         title = " ".join(ctx).strip().capitalize()[:34]
         accent = ACCENTS[len(charts) % len(ACCENTS)]
-        if partner is not None and abs(partner - val) > 0:
-            charts.append({
-                "at": round(max(0.2, at - 0.3), 2),
-                "duration": 3.0,
-                "type": "bar",
-                "title": title or "Comparación",
-                "data": [
-                    {"label": "Antes", "value": val},
-                    {"label": "Después", "value": partner},
-                ],
-                "suffix": "%" if is_pct else "",
-                "accent": accent,
-                "fullscreen": True,
-            })
+        base = {"at": round(max(0.2, at - 0.3), 2), "accent": accent, "fullscreen": True}
+        k = len(charts)  # para rotar tipos y dar variedad visual
+
+        if near_star or (rel == "ratio" and partner == 5 and val <= 5):
+            # Rating de estrellas (X de 5).
+            charts.append({**base, "duration": 2.8, "type": "rating",
+                           "title": title, "data": [{"label": "", "value": val}], "max": 5})
+        elif rel == "ratio" and partner is not None and 2 <= partner <= 20 and val <= partner:
+            # Proporción "X de Y" → pictografía visual.
+            charts.append({**base, "duration": 3.0, "type": "pictograph",
+                           "title": title, "data": [{"label": "", "value": val}], "total": int(partner)})
+        elif rel == "growth" and partner is not None:
+            # Crecimiento "de X a Y" → alterna comparación VS / barras.
+            ctype = "comparison" if k % 2 == 0 else "bar"
+            charts.append({**base, "duration": 3.0, "type": ctype,
+                           "title": title or ("VS" if ctype == "comparison" else "Comparación"),
+                           "data": [{"label": "Antes", "value": val}, {"label": "Después", "value": partner}],
+                           "suffix": "%" if is_pct else ""})
+        elif is_pct:
+            # Un porcentaje suelto → rota entre gauge / dona / contador (variedad visual).
+            ctype = ["progress", "donut", "counter"][k % 3]
+            charts.append({**base, "duration": 2.8, "type": ctype, "title": title,
+                           "data": [{"label": title or "", "value": val}], "suffix": "%"})
         else:
-            charts.append({
-                "at": round(max(0.2, at - 0.3), 2),
-                "duration": 2.6,
-                "type": "counter",
-                "title": title,
-                "data": [{"value": val}],
-                "suffix": "%" if is_pct else "",
-                "accent": accent,
-                "fullscreen": True,
-            })
+            # Número con unidad de dato → contador (o gauge si parece proporción ≤100).
+            charts.append({**base, "duration": 2.6, "type": "counter", "title": title,
+                           "data": [{"value": val}], "suffix": ""})
         used_times.append(at)
     return charts
+
+
+ORDINALS = {
+    "primero": 1, "primera": 1, "segundo": 2, "segunda": 2, "tercero": 3, "tercera": 3,
+    "cuarto": 4, "cuarta": 4, "quinto": 5, "quinta": 5,
+}
+
+
+def detect_steps(words: list[dict], duration: float) -> list[dict]:
+    """Si el orador enumera ('primero… segundo… tercero…'), arma UN diagrama de pasos
+    numerado con la frase corta que sigue a cada ordinal. Devuelve [] si no hay ≥2."""
+    n = len(words)
+    found: list[tuple[float, str]] = []
+    for i, w in enumerate(words):
+        tok = _clean_word(str(w.get("word", ""))).lower()
+        if tok not in ORDINALS:
+            continue
+        label_words: list[str] = []
+        for j in range(i + 1, min(i + 7, n)):
+            nxt = _clean_word(str(words[j].get("word", ""))).lower()
+            if nxt in ORDINALS:
+                break
+            raw = str(words[j].get("word", "")).strip()
+            label_words.append(raw)
+            if raw.endswith((".", "!", "?")):
+                break
+        label = " ".join(label_words).strip(" .,").capitalize()[:30]
+        if label:
+            found.append((float(w.get("start", 0)), label))
+    if len(found) < 2:
+        return []
+    found.sort(key=lambda x: x[0])
+    return [{
+        "at": round(max(0.2, found[0][0] - 0.3), 2),
+        "duration": 4.5,
+        "type": "steps",
+        "title": "",
+        "data": [{"label": lbl, "value": idx + 1} for idx, (_, lbl) in enumerate(found[:5])],
+        "accent": ACCENTS[2],
+        "fullscreen": True,
+    }]
 
 
 def _sentences(words: list[dict]) -> list[dict]:
@@ -453,6 +501,12 @@ def generate(transcript_path: Path, use_llm: bool = True) -> dict:
     #     crecimiento…). VISUAL, no texto.
     # NO generamos titulares de texto automáticos: repetían el subtítulo (texto duplicado).
     charts = heuristic_charts(words, duration, max_charts=max(4, target))
+    # Diagrama de pasos si el orador enumera (primero/segundo/tercero…).
+    steps = detect_steps(words, duration)
+    for s in steps:
+        if all(abs(s["at"] - c["at"]) > 3.5 for c in charts):
+            charts.append(s)
+    charts.sort(key=lambda c: c["at"])
     icon_budget = max(3, target - len(charts))  # los charts ya aportan; el resto, íconos
     icons = concept_icons(words, duration, icon_budget)
 

@@ -141,7 +141,17 @@ export type DataPoint = z.infer<typeof dataPointSchema>;
 export const dataVizSchema = z.object({
   at: z.number(),
   duration: z.number().default(4),
-  type: z.enum(["counter", "bar", "line", "donut"]).default("counter"),
+  type: z
+    .enum([
+      "counter", "bar", "line", "donut",
+      // Tipos visuales nuevos:
+      "progress",    // gauge/barra que se llena a un %
+      "comparison",  // dos paneles VS (izq vs der)
+      "pictograph",  // X de Y representado con íconos/puntos
+      "steps",       // lista numerada 1·2·3 animada
+      "rating",      // estrellas (X de 5)
+    ])
+    .default("counter"),
   title: z.string().default(""),
   // counter: usa data[0].value. bar/line/donut: usa todos los puntos.
   data: z.array(dataPointSchema).default([]),
@@ -151,6 +161,8 @@ export const dataVizSchema = z.object({
   bg: z.string().default("#0a0a0aE6"),
   position: z.enum(["center", "top", "bottom"]).default("center"),
   fullscreen: z.boolean().default(true), // tarjeta fullscreen vs flotante
+  total: z.number().optional(),  // pictograph: total de íconos (data[0].value = llenos)
+  max: z.number().optional(),    // rating: máximo de estrellas (default 5)
 });
 export type DataViz = z.infer<typeof dataVizSchema>;
 
