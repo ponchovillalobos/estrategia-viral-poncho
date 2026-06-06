@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { PROJECTS_DIR } from "@/lib/paths";
+import { PROJECTS_DIR, RENDERS_DIR, LF_ROOT, LF_RENDERS } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
+
+const LF_PROJECTS_DIR = path.join(LF_ROOT, "projects");
 
 interface ProjectPayload {
   id: string;
@@ -72,15 +74,59 @@ export async function PUT(
   return NextResponse.json(merged);
 }
 
+/**
+ * Borra un proyecto de Producción ("Mis videos") por completo: su JSON (sea short o
+ * largo) Y el video renderizado en disco. Así el short desaparece de la galería y no
+ * deja el archivo colgado. No toca el video raw fuente (eso es el botón del editor).
+ */
+async function rmIfExists(p: string): Promise<boolean> {
+  // OJO: fs.rm con force:true NO falla si el archivo no existe, así que no sirve para
+  // detectar si borró algo. Verificamos existencia primero (stat) y reportamos si borró.
+  try {
+    await fs.stat(p);
+  } catch {
+    return false; // no existe
+  }
+  try {
+    await fs.rm(p, { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  let removed = false;
+
+  // 1) JSON del proyecto (short o largo).
+  for (const dir of [PROJECTS_DIR, LF_PROJECTS_DIR]) {
+    if (await rmIfExists(path.join(dir, `${id}.json`))) removed = true;
+  }
+
+  // 2) Render de short: renders/{id}.mp4.
+  await rmIfExists(path.join(RENDERS_DIR, `${id}.mp4`));
+
+  // 3) Render(s) de largo: long_form/renders/{id}*.mp4 (llevan sufijo de estilo).
   try {
-    await fs.unlink(path.join(PROJECTS_DIR, `${id}.json`));
-    return NextResponse.json({ ok: true });
+    const lfRenders = await fs.readdir(LF_RENDERS);
+    for (const f of lfRenders) {
+      if (f === `${id}.mp4` || f.startsWith(`${id}_`) || f.startsWith(`${id}.`)) {
+        await rmIfExists(path.join(LF_RENDERS, f));
+      }
+    }
   } catch {
+    /* carpeta inexistente */
+  }
+
+  if (!removed) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+  return NextResponse.json(
+    { ok: true },
+    { headers: { "Cache-Control": "no-store, max-age=0" } }
+  );
 }

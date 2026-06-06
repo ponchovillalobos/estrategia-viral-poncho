@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ProjectCardSkeleton } from "@/components/ui/skeleton";
-import { RefreshCcw, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Play, Calendar, Camera } from "lucide-react";
+import { RefreshCcw, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Play, Calendar, Camera, Trash2 } from "lucide-react";
 import { ScheduleDialog } from "@/components/produccion/schedule-dialog";
 import { UploadHelperDialog } from "@/components/produccion/upload-helper-dialog";
 import { InstagramHelperDialog } from "@/components/produccion/instagram-helper-dialog";
@@ -80,11 +80,29 @@ export function ProductionList() {
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch("/api/projects");
+      const res = await fetch("/api/projects", { cache: "no-store" });
       const data = await res.json();
       setProjects(data.projects ?? []);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Borra el short de Producción (su JSON + el video renderizado). No toca el video
+  // raw fuente. Optimista: lo saco de la lista ya; si falla, recargo para restaurar.
+  async function removeProject(p: ProjectExt) {
+    if (
+      !confirm(
+        `¿Borrar el short "${p.title ?? p.id}"?\n\nSe elimina de "Mis videos" junto con su video renderizado. El video original NO se toca. Esto no se puede deshacer.`
+      )
+    )
+      return;
+    setProjects((prev) => prev.filter((x) => x.id !== p.id));
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(p.id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("delete failed");
+    } catch {
+      load(); // restaurar si algo falló
     }
   }
 
@@ -396,10 +414,20 @@ export function ProductionList() {
                         programar
                       </button>
                     </div>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-2.5 w-2.5" />
-                      {p.updatedAt ? new Date(p.updatedAt).toLocaleDateString("es") : "—"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-2.5 w-2.5" />
+                        {p.updatedAt ? new Date(p.updatedAt).toLocaleDateString("es") : "—"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeProject(p)}
+                        title="Borrar este short (no toca el video original)"
+                        className="flex items-center rounded p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-400"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
                   {/* Fila 2 — bridges manuales por plataforma + status badges del schedule */}
                   <div className="flex flex-wrap items-center gap-1.5">
