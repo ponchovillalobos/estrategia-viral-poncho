@@ -52,6 +52,99 @@ EMPHASIS = {
     "atención", "atencion", "importante", "jamás", "jamas", "peor", "mejor",
 }
 
+# Concepto → ÍCONO (lucide). En vez de repetir el texto del subtítulo, mostramos un
+# símbolo VISUAL que representa lo que se dice (esto "explica" sin saturar de texto).
+# Keywords en español; matcheo por palabra/prefijo. Los íconos existen en ICON_MAP.
+CONCEPT_ICONS = {
+    "money": ["dinero", "plata", "peso", "pesos", "dólar", "dolar", "dólares", "dolares",
+              "precio", "costo", "gratis", "vender", "vende", "venta", "ventas", "ganar",
+              "ingreso", "ingresos", "factura", "pagar", "invertir", "inversión", "inversion",
+              "negocio", "rentable", "ganancia", "ganancias", "facturar"],
+    "trending": ["crecer", "crece", "crecimiento", "subir", "sube", "aumentar", "aumenta",
+                 "escalar", "duplicar", "triplicar", "resultado", "resultados", "éxito",
+                 "exito", "despegar", "explotar", "multiplicar"],
+    "brain": ["idea", "ideas", "pensar", "mente", "aprender", "aprende", "estrategia",
+              "inteligencia", "cerebro", "conocimiento", "entender", "lógica", "logica"],
+    "rocket": ["lanzar", "lanzamiento", "despegue", "acelerar", "impulso", "empezar",
+               "arrancar", "empieza", "arranca", "rápido", "rapido"],
+    "target": ["objetivo", "objetivos", "meta", "metas", "foco", "enfocar", "enfoque",
+               "apuntar", "nicho", "público", "publico"],
+    "lightbulb": ["tip", "tips", "consejo", "consejos", "truco", "trucos", "secreto",
+                  "secretos", "descubrir", "solución", "solucion", "aprendé"],
+    "fire": ["increíble", "increible", "brutal", "fuego", "tendencia", "viral", "imperdible"],
+    "heart": ["amor", "pasión", "pasion", "comunidad", "fans", "conexión", "conexion",
+              "corazón", "corazon"],
+    "eye": ["atención", "atencion", "observa", "visión", "vision", "fíjate", "fijate"],
+    "warn": ["error", "errores", "cuidado", "peligro", "problema", "problemas", "evitar",
+             "evita", "riesgo", "fallo", "trampa"],
+    "check": ["listo", "hecho", "correcto", "funciona", "confirmar", "perfecto", "logrado",
+              "resuelto"],
+    "message": ["comentar", "comenta", "mensaje", "conversación", "conversacion", "pregunta",
+                "responder", "comunicación", "comunicacion"],
+    "award": ["premio", "ganador", "logro", "campeón", "campeon", "medalla", "trofeo"],
+    "music": ["música", "musica", "audio", "sonido", "canción", "cancion", "ritmo"],
+    "film": ["video", "videos", "grabar", "cámara", "camara", "contenido", "reel", "reels",
+             "tiktok"],
+    "gem": ["valor", "valioso", "premium", "calidad", "joya", "tesoro", "exclusivo"],
+    "crown": ["rey", "reina", "líder", "lider", "liderar", "dominar", "corona"],
+    "zap": ["energía", "energia", "poder", "fuerza", "impacto", "potente"],
+    "star": ["estrella", "destacar", "destaca", "famoso", "brillar", "sobresalir"],
+    "people": ["gente", "personas", "clientes", "cliente", "usuarios", "audiencia",
+               "seguidores", "equipo"],
+}
+# Lookup invertido: palabra → ícono.
+_WORD_TO_ICON: dict[str, str] = {}
+for _icon, _kws in CONCEPT_ICONS.items():
+    for _kw in _kws:
+        _WORD_TO_ICON.setdefault(_kw, _icon)
+# "people" no existe en ICON_MAP → cae a un ícono cercano.
+_ICON_ALIAS = {"people": "heart"}
+
+
+def concept_icons(words: list[dict], duration: float, target: int) -> list[dict]:
+    """Genera íconos VISUALES (no texto) representando los conceptos que se mencionan.
+    Uno por tipo de concepto (no repite el mismo ícono), distribuidos en el tiempo."""
+    seen: set[str] = set()
+    hits: list[tuple[float, str]] = []
+    for w in words:
+        tok = _clean_word(str(w.get("word", ""))).lower().strip(".,!?¿¡")
+        if len(tok) < 3:
+            continue
+        icon = _WORD_TO_ICON.get(tok)
+        if not icon:
+            # prefijo (plurales/conjugaciones): "vendés" → "vend…"
+            for kw, ic in _WORD_TO_ICON.items():
+                if len(kw) >= 5 and tok.startswith(kw[:5]):
+                    icon = ic
+                    break
+        if not icon or icon in seen:
+            continue
+        seen.add(icon)
+        hits.append((float(w.get("start", 0)), _ICON_ALIAS.get(icon, icon)))
+
+    hits.sort(key=lambda h: h[0])
+    out: list[dict] = []
+    min_gap = max(2.5, (duration / max(1, target)) * 0.6)
+    last_t = -99.0
+    positions = ["top-right", "top-left", "bottom-right", "top-center"]
+    for t, icon in hits:
+        if len(out) >= target:
+            break
+        if t - last_t < min_gap:
+            continue
+        last_t = t
+        i = len(out)
+        out.append({
+            "at": round(max(0.3, t - 0.1), 2),
+            "duration": 1.8,
+            "icon": icon,
+            "position": positions[i % len(positions)],
+            "color": "#0a0a0a",
+            "bg": ACCENTS[(i * 2) % len(ACCENTS)],
+            "size": 120,
+        })
+    return out
+
 
 def _ollama(prompt: str, temperature: float = 0.3) -> str:
     payload = {
@@ -351,64 +444,38 @@ def generate(transcript_path: Path, use_llm: bool = True) -> dict:
     if duration <= 0 and words:
         duration = float(words[-1].get("end", 0))
 
-    # DENSIDAD: ~1 gráfico cada 10s (lo que el usuario pidió), mín 3, máx 14.
+    # DENSIDAD: ~1 elemento visual cada ~10s, mín 3, máx 14.
     target = max(3, min(14, round(duration / 10))) if duration > 0 else 3
 
-    # Charts: todos los que haya datos reales, hasta `target` (no inventa números).
+    # GRÁFICOS VISUALES (lo que el usuario pidió):
+    #   - charts: contador/barras/línea/dona desde NÚMEROS reales (no inventa datos).
+    #   - íconos de concepto: un símbolo que representa lo que se dice (dinero, idea,
+    #     crecimiento…). VISUAL, no texto.
+    # NO generamos titulares de texto automáticos: repetían el subtítulo (texto duplicado).
     charts = heuristic_charts(words, duration, max_charts=max(4, target))
+    icon_budget = max(3, target - len(charts))  # los charts ya aportan; el resto, íconos
+    icons = concept_icons(words, duration, icon_budget)
 
-    # Titulares: llenan hasta `target`. Con Ollama (si está) + relleno heurístico para
-    # alcanzar la densidad; sin Ollama, heurística distribuida por buckets.
-    source = "heurística"
-    headlines: list[dict] = []
-    if use_llm:
-        llm = llm_headlines(words, duration, max_h=target)
-        if llm:
-            headlines = llm
-            source = "LLM"
-    heur = heuristic_headlines(words, duration, max_h=target)
-    if len(headlines) < target:
-        # Rellenar con titulares heurísticos en tiempos NO cubiertos (≥4s de separación).
-        existing = [h["at"] for h in headlines]
-        for e in heur:
-            if len(headlines) >= target:
-                break
-            if all(abs(e["at"] - x) > 4 for x in existing):
-                headlines.append(e)
-                existing.append(e["at"])
-        if headlines and source == "LLM":
-            source = "LLM+heur"
-        elif not headlines:
-            headlines = heur
-    headlines.sort(key=lambda h: h["at"])
-
-    # Pase final de ULTRA VARIEDAD: re-asigna efecto/color/posición/tamaño/duración por
-    # orden, así dos titulares seguidos NUNCA repiten efecto ni color (sin importar la fuente).
-    for i, h in enumerate(headlines):
-        h["effect"] = EFFECTS[i % len(EFFECTS)]
-        h["accent"] = ACCENTS[(i * 5) % len(ACCENTS)]  # *5 = salto coprimo → más variedad
-        h["position"] = "bottom" if i % 2 == 0 else "top"
-        h["size"] = [120, 108, 132, 116][i % 4]
-        h["duration"] = [2.2, 2.0, 2.5, 2.3][i % 4]
-
-    # Variedad de charts: alterna tipo cuando hay varios contadores seguidos.
+    # Variedad de charts: rota color y posición.
     for i, c in enumerate(charts):
         c["accent"] = ACCENTS[(i * 2 + 1) % len(ACCENTS)]
         c["position"] = ["top", "bottom", "center"][i % 3]
 
-    # Anti-solape: si un titular cae sobre un chart, lo movemos al hueco.
-    chart_windows = [(c["at"], c["at"] + c["duration"]) for c in charts]
-    for h in headlines:
+    # Anti-solape: si un ícono cae sobre un chart fullscreen, lo corremos de esquina.
+    chart_windows = [(c["at"], c["at"] + c["duration"]) for c in charts if c.get("fullscreen")]
+    for ic in icons:
         for s, e in chart_windows:
-            if s - 0.5 < h["at"] < e:
-                h["position"] = "top" if h["position"] == "bottom" else "bottom"
+            if s - 0.5 < ic["at"] < e:
+                ic["position"] = "bottom-right" if ic["position"] != "bottom-right" else "top-left"
                 break
 
     print(
-        f"[graphics] {len(charts)} charts · {len(headlines)} titulares ({source}) · target {target} (dur {duration:.0f}s)",
+        f"[graphics] {len(charts)} charts · {len(icons)} íconos visuales · target {target} (dur {duration:.0f}s) · SIN texto repetido",
         file=sys.stderr,
     )
-    return {"dataViz": charts, "kineticHeadlines": headlines}
+    # kineticHeadlines vacío a propósito: las animaciones ahora son VISUALES (charts +
+    # íconos), no copias del texto. La capa de titulares sigue disponible para uso manual.
+    return {"dataViz": charts, "kineticHeadlines": [], "iconStickers": icons}
 
 
 def main() -> int:
@@ -441,6 +508,7 @@ def main() -> int:
     print(json.dumps({
         "ok": True, "out": str(out),
         "dataViz": len(result["dataViz"]),
+        "iconStickers": len(result.get("iconStickers", [])),
         "kineticHeadlines": len(result["kineticHeadlines"]),
         "elapsed_sec": round(time.time() - t0, 1),
     }))

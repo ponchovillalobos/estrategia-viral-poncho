@@ -86,4 +86,5 @@ export interface ResolvedProject {
   graphics?: boolean;
   dataViz?: unknown[];
   kineticHeadlines?: unknown[];
+  iconStickers?: unknown[];
 }

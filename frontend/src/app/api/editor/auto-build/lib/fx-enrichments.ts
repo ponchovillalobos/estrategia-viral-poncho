@@ -59,11 +59,19 @@ export async function applyGraphics(
 
     const raw = await fs.readFile(outPath, "utf-8").catch(() => null);
     if (!raw) return;
-    const g = JSON.parse(raw) as { dataViz?: unknown[]; kineticHeadlines?: unknown[] };
+    const g = JSON.parse(raw) as {
+      dataViz?: unknown[];
+      kineticHeadlines?: unknown[];
+      iconStickers?: unknown[];
+    };
     if (Array.isArray(g.dataViz)) project.dataViz = g.dataViz;
     if (Array.isArray(g.kineticHeadlines)) project.kineticHeadlines = g.kineticHeadlines;
+    // Íconos de concepto (visuales) — se suman a los que ya trae el estilo.
+    if (Array.isArray(g.iconStickers) && g.iconStickers.length) {
+      project.iconStickers = [...(project.iconStickers ?? []), ...g.iconStickers];
+    }
     console.log(
-      `[auto-build] gráficos: ${project.dataViz?.length ?? 0} charts · ${project.kineticHeadlines?.length ?? 0} titulares`
+      `[auto-build] gráficos: ${project.dataViz?.length ?? 0} charts · ${(project.iconStickers as unknown[] | undefined)?.length ?? 0} íconos`
     );
   } catch (err) {
     console.warn("[auto-build] gráficos falló:", err);

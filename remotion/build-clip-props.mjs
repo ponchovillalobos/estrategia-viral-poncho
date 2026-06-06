@@ -149,8 +149,12 @@ if (_existsSync(graphicsPath)) {
     if (Array.isArray(g.kineticHeadlines) && g.kineticHeadlines.length) {
       props.kineticHeadlines = g.kineticHeadlines;
     }
+    // Íconos de concepto (visuales) generados desde el transcript — se suman a los del estilo.
+    if (Array.isArray(g.iconStickers) && g.iconStickers.length) {
+      props.iconStickers = [...(props.iconStickers || []), ...g.iconStickers];
+    }
     console.error(
-      `[graphics] mergeado ${props.dataViz.length} charts · ${props.kineticHeadlines.length} titulares`,
+      `[graphics] mergeado ${props.dataViz.length} charts · ${(props.iconStickers || []).length} íconos`,
     );
   } catch (e) {
     console.error(`[graphics] no pude leer ${graphicsPath}: ${e.message}`);
