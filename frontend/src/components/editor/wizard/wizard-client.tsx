@@ -16,6 +16,38 @@ import { toast } from "sonner";
 import { CinematicStep } from "@/components/editor/wizard/cinematic-step";
 import { HelpHint } from "@/components/ui/help-hint";
 import { Confetti } from "@/components/ui/confetti";
+import {
+  Montserrat, Poppins, Oswald, Bangers, Luckiest_Guy, Archivo_Black, Teko, Righteous,
+  Bebas_Neue, Anton,
+} from "next/font/google";
+
+// Fuentes auto-hospedadas por Next (gratis, sin API key) SOLO para previsualizar cada
+// tipografía en su propio estilo dentro del selector. El render real las carga aparte
+// en Remotion. Así el usuario VE cómo se ve cada fuente, no solo el nombre.
+const _mont = Montserrat({ subsets: ["latin"], weight: "700", display: "swap" });
+const _pop = Poppins({ subsets: ["latin"], weight: "700", display: "swap" });
+const _osw = Oswald({ subsets: ["latin"], weight: "600", display: "swap" });
+const _ban = Bangers({ subsets: ["latin"], weight: "400", display: "swap" });
+const _luck = Luckiest_Guy({ subsets: ["latin"], weight: "400", display: "swap" });
+const _arch = Archivo_Black({ subsets: ["latin"], weight: "400", display: "swap" });
+const _teko = Teko({ subsets: ["latin"], weight: "600", display: "swap" });
+const _right = Righteous({ subsets: ["latin"], weight: "400", display: "swap" });
+const _bebas = Bebas_Neue({ subsets: ["latin"], weight: "400", display: "swap" });
+const _anton = Anton({ subsets: ["latin"], weight: "400", display: "swap" });
+
+const FONT_PREVIEW: Record<string, string> = {
+  auto: "",
+  bebas: _bebas.style.fontFamily,
+  anton: _anton.style.fontFamily,
+  montserrat: _mont.style.fontFamily,
+  poppins: _pop.style.fontFamily,
+  oswald: _osw.style.fontFamily,
+  bangers: _ban.style.fontFamily,
+  luckiest: _luck.style.fontFamily,
+  archivo: _arch.style.fontFamily,
+  teko: _teko.style.fontFamily,
+  righteous: _right.style.fontFamily,
+};
 
 type StyleId = "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme" | "broll_full" | "broll_pip" | "text_behind" | "graphics_pro" | "graphics_max";
 type PlatformId = "tiktok" | "instagram" | "linkedin" | "facebook";
@@ -677,7 +709,7 @@ export function WizardClient() {
           <p className="mb-3 text-xs text-muted-foreground">
             &quot;Automática&quot; usa la del estilo. O elegí una para darle otra personalidad.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
             {SUBTITLE_FONTS.map((f) => {
               const selected = subtitleFont === f.id;
               return (
@@ -685,11 +717,18 @@ export function WizardClient() {
                   key={f.id}
                   type="button"
                   onClick={() => setSubtitleFont(f.id)}
-                  className={`rounded-lg border px-3 py-2 text-sm transition-all ${
-                    selected ? "border-foreground bg-muted/40" : "border-border hover:border-foreground/30"
+                  className={`flex flex-col items-center justify-center gap-1 rounded-lg border px-3 py-3 transition-all ${
+                    selected ? "border-foreground bg-muted/40 ring-1 ring-foreground/30" : "border-border hover:border-foreground/30"
                   }`}
                 >
-                  {f.name}
+                  {/* Miniatura: muestra en la fuente real para que se vea cómo es. */}
+                  <span
+                    className="text-2xl leading-none"
+                    style={{ fontFamily: FONT_PREVIEW[f.id] || undefined }}
+                  >
+                    {f.id === "auto" ? "Aa" : "Viral"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{f.name}</span>
                 </button>
               );
             })}
