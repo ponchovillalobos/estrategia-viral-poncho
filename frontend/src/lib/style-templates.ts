@@ -673,7 +673,7 @@ function pickRandomMusicTrack(seed: string): string | null {
     const path = require("node:path") as typeof import("node:path");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { MUSIC_DIR } = require("@/lib/paths");
-    const folders = [path.join(MUSIC_DIR, "pixabay"), MUSIC_DIR];
+    const folders = [path.join(MUSIC_DIR, "pixabay"), path.join(MUSIC_DIR, "freesound"), MUSIC_DIR];
     const files: string[] = [];
     for (const folder of folders) {
       try {
