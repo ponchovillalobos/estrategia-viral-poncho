@@ -21,7 +21,6 @@ import {
   LF_RENDERS,
   LF_ROOT,
   RAW_DIR,
-  RENDERS_DIR,
 } from "@/lib/paths";
 import { LF_TRANSCRIPTS, LF_CUTS, LF_PROPOSALS, LF_PROJECTS_DIR } from "@/lib/paths-long-form";
 
@@ -67,14 +66,12 @@ export function longFormOwner(filename: string): string {
 export async function buildBackingChecker(): Promise<
   (id: string, videoId: string | undefined, source: "short" | "long_form") => boolean
 > {
-  const [shortRaw, lfRaw, shortRenders, lfRenders, lfClips] = await Promise.all([
+  const [shortRaw, lfRaw, lfRenders, lfClips] = await Promise.all([
     rawStems(RAW_DIR),
     rawStems(LF_RAW),
-    listSafe(RENDERS_DIR),
     listSafe(LF_RENDERS),
     listSafe(LF_CLIPS),
   ]);
-  const shortRenderStems = new Set(shortRenders.map((f) => path.basename(f, path.extname(f))));
   const lfRenderStems = new Set(lfRenders.map((f) => path.basename(f, path.extname(f))));
 
   return (id, videoId, source) => {
@@ -85,11 +82,18 @@ export async function buildBackingChecker(): Promise<
       if (lfClips.some((c) => c === `${id}.mp4` || c.startsWith(`${owner}_c`))) return true;
       return false;
     }
-    // shorts
-    const owner = videoId || id;
-    if (shortRaw.has(owner)) return true;
-    if (shortRenderStems.has(id)) return true;
-    return false;
+    // shorts: el proyecto se muestra SOLO si su video raw fuente sigue existiendo.
+    // ANTES bastaba con que existiera el render producido (shortRenderStems), lo que
+    // dejaba "pegados" en Producción los proyectos de videos ya BORRADOS por el usuario
+    // (el render queda en disco aunque el raw no). El usuario espera que al borrar el
+    // video, su proyecto desaparezca → exigimos que el raw exista.
+    let owner = videoId;
+    if (!owner) {
+      // Proyecto sin videoId en el JSON: derivar buscando un raw cuyo stem sea el id
+      // o un prefijo del id (id = `{videoStem}_{styleId}`). Evita ocultar válidos.
+      owner = [...shortRaw].find((s) => id === s || id.startsWith(`${s}_`));
+    }
+    return !!owner && shortRaw.has(owner);
   };
 }
 
