@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ProjectCardSkeleton } from "@/components/ui/skeleton";
-import { RefreshCcw, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Play, Calendar, Camera, Trash2 } from "lucide-react";
+import { RefreshCcw, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Play, Calendar, Camera, Trash2, CheckSquare } from "lucide-react";
 import { ScheduleDialog } from "@/components/produccion/schedule-dialog";
 import { UploadHelperDialog } from "@/components/produccion/upload-helper-dialog";
 import { InstagramHelperDialog } from "@/components/produccion/instagram-helper-dialog";
@@ -55,6 +55,10 @@ export function ProductionList() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<StatusFilter>("all");
   const [filterPlatform, setFilterPlatform] = useState<PlatformFilter>("all");
+  // Selección múltiple para borrar en lote.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -103,6 +107,45 @@ export function ProductionList() {
       if (!res.ok) throw new Error("delete failed");
     } catch {
       load(); // restaurar si algo falló
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }
+
+  // Borra TODOS los shorts seleccionados (su JSON + render). No toca los videos raw.
+  async function removeSelected() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (
+      !confirm(
+        `¿Borrar ${ids.length} short${ids.length === 1 ? "" : "s"} seleccionado${ids.length === 1 ? "" : "s"}?\n\nSe eliminan de "Mis videos" junto con sus videos renderizados. Los videos originales NO se tocan. Esto no se puede deshacer.`
+      )
+    )
+      return;
+    setDeleting(true);
+    setProjects((prev) => prev.filter((x) => !selectedIds.has(x.id)));
+    try {
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null)
+        )
+      );
+    } finally {
+      setDeleting(false);
+      exitSelectMode();
+      load(); // refrescar contra el estado real del disco
     }
   }
 
@@ -181,8 +224,54 @@ export function ProductionList() {
               <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
               Recargar
             </Button>
+            <Button
+              variant={selectMode ? "default" : "ghost"}
+              size="sm"
+              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+              disabled={loading || projects.length === 0}
+            >
+              <CheckSquare className="mr-1.5 h-3.5 w-3.5" />
+              {selectMode ? "Cancelar" : "Seleccionar"}
+            </Button>
           </div>
         </div>
+
+        {/* Barra de acciones del modo selección — borrar varios a la vez. */}
+        {selectMode && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
+            <span className="font-mono-tab text-xs text-muted-foreground">
+              {selectedIds.size} seleccionado{selectedIds.size === 1 ? "" : "s"}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds(new Set(filtered.map((p) => p.id)))}
+              disabled={filtered.length === 0}
+            >
+              Seleccionar todos ({filtered.length})
+            </Button>
+            {selectedIds.size > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                Limpiar selección
+              </Button>
+            )}
+            <div className="ml-auto">
+              <Button
+                size="sm"
+                onClick={removeSelected}
+                disabled={selectedIds.size === 0 || deleting}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                {deleting ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Borrar {selectedIds.size > 0 ? `(${selectedIds.size})` : "seleccionados"}
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground/70">
@@ -253,15 +342,31 @@ export function ProductionList() {
         {filtered.map((p) => (
           <Card
             key={p.id}
-            className="group overflow-hidden border-border bg-card p-0 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10"
+            className={`group overflow-hidden bg-card p-0 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/10 ${
+              selectMode && selectedIds.has(p.id)
+                ? "border-red-500 ring-2 ring-red-500/50"
+                : "border-border hover:border-primary/40"
+            }`}
           >
             <div className="grid grid-cols-[140px_1fr] gap-0">
               <button
                 type="button"
-                onClick={() => setPreviewProject(p)}
-                title="Click para reproducir"
+                onClick={() => (selectMode ? toggleSelect(p.id) : setPreviewProject(p))}
+                title={selectMode ? "Click para seleccionar" : "Click para reproducir"}
                 className="group relative aspect-[9/16] cursor-pointer overflow-hidden bg-zinc-900 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
+                {/* Casilla de selección (solo en modo selección). */}
+                {selectMode && (
+                  <span
+                    className={`absolute left-1.5 top-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-md border-2 ${
+                      selectedIds.has(p.id)
+                        ? "border-red-500 bg-red-500 text-white"
+                        : "border-white/80 bg-black/50 text-transparent"
+                    }`}
+                  >
+                    <Check className="h-4 w-4" />
+                  </span>
+                )}
                 <img
                   src={`/api/videos/${encodeURIComponent(p.videoId)}/thumbnail`}
                   alt={p.id}
