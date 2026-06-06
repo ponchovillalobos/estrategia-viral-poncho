@@ -238,7 +238,9 @@ def _sentences(words: list[dict]) -> list[dict]:
 
 
 def heuristic_headlines(words: list[dict], duration: float, max_h: int = 3) -> list[dict]:
-    """Elige frases potentes: hook de apertura + frases con palabras de énfasis."""
+    """Elige frases potentes DISTRIBUIDAS parejo en el tiempo (~1 por bucket), para
+    densidad uniforme en vez de agrupar todas al principio. Hook de apertura + frases
+    con palabras de énfasis. `max_h` = cuántos titulares objetivo (escala con duración)."""
     sents = _sentences(words)
     if not sents:
         return []
@@ -246,19 +248,42 @@ def heuristic_headlines(words: list[dict], duration: float, max_h: int = 3) -> l
     for s in sents:
         text = s["text"].strip()
         wcount = len(text.split())
-        if wcount < 2 or wcount > 7:
-            continue  # titulares: 2-7 palabras
+        if wcount < 2 or wcount > 8:
+            continue  # titulares: 2-8 palabras
         low = text.lower()
         score = sum(2 for e in EMPHASIS if e in low)
         if s["start"] < 2.0:
             score += 3  # el hook de apertura siempre es buen titular
         score += min(2, wcount / 3)
         scored.append((score, s))
-    scored.sort(key=lambda x: -x[0])
-    chosen = scored[:max_h]
-    chosen.sort(key=lambda x: x[1]["start"])
+    if not scored:
+        return []
+
+    # Distribución por buckets temporales: ~1 titular cada (duration/max_h) seg.
+    n = max(1, max_h)
+    bucket = max(1.0, duration / n) if duration > 0 else 10.0
+    used: set[int] = set()
+    chosen: list[dict] = []
+    for b in range(n):
+        lo, hi = b * bucket, (b + 1) * bucket
+        cands = [(sc, s) for sc, s in scored if lo <= s["start"] < hi and id(s) not in used]
+        if not cands:
+            continue
+        cands.sort(key=lambda x: -x[0])
+        used.add(id(cands[0][1]))
+        chosen.append(cands[0][1])
+    # Si quedaron huecos (frases ralas), rellenar con las mejores no usadas.
+    if len(chosen) < n:
+        rest = sorted((p for p in scored if id(p[1]) not in used), key=lambda x: -x[0])
+        for _, s in rest:
+            if len(chosen) >= n:
+                break
+            used.add(id(s))
+            chosen.append(s)
+
+    chosen.sort(key=lambda s: s["start"])
     headlines: list[dict] = []
-    for i, (_, s) in enumerate(chosen):
+    for i, s in enumerate(chosen):
         text = re.sub(r"\s+", " ", s["text"]).strip(" .,").upper()[:40]
         headlines.append({
             "at": round(min(duration - 1.8, max(0.3, s["start"])), 2),
@@ -276,9 +301,10 @@ def llm_headlines(words: list[dict], duration: float, max_h: int = 3) -> list[di
     """Pide a Ollama 2-3 titulares potentes. Devuelve None si falla."""
     text = " ".join(w.get("word", "") for w in words)[:2000]
     prompt = (
-        "Sos editor de video viral. De este fragmento, dame los 2-3 TITULARES más "
+        f"Sos editor de video viral. De este fragmento, dame los {max_h} TITULARES más "
         "potentes (frases de 2-6 palabras que paren el scroll, en MAYÚSCULAS, sin "
-        "comillas). Para cada uno, el segundo aprox del clip donde aparece la idea.\n"
+        "comillas), REPARTIDOS a lo largo de todo el clip (no todos al inicio). Para cada "
+        "uno, el segundo aprox del clip donde aparece la idea.\n"
         "Devolvé SOLO JSON: {\"headlines\":[{\"text\":\"...\",\"at\":<seg>}]}\n"
         f"Duración del clip: {duration:.0f}s.\n\nFRAGMENTO:\n{text}\n\nJSON:"
     )
@@ -325,17 +351,52 @@ def generate(transcript_path: Path, use_llm: bool = True) -> dict:
     if duration <= 0 and words:
         duration = float(words[-1].get("end", 0))
 
-    charts = heuristic_charts(words, duration)
-    headlines = None
-    source = "heurística"
-    if use_llm:
-        headlines = llm_headlines(words, duration)
-        if headlines is not None:
-            source = "LLM"
-    if headlines is None:
-        headlines = heuristic_headlines(words, duration)
+    # DENSIDAD: ~1 gráfico cada 10s (lo que el usuario pidió), mín 3, máx 14.
+    target = max(3, min(14, round(duration / 10))) if duration > 0 else 3
 
-    # Anti-solape básico: si un titular cae sobre un chart, lo movemos al hueco.
+    # Charts: todos los que haya datos reales, hasta `target` (no inventa números).
+    charts = heuristic_charts(words, duration, max_charts=max(4, target))
+
+    # Titulares: llenan hasta `target`. Con Ollama (si está) + relleno heurístico para
+    # alcanzar la densidad; sin Ollama, heurística distribuida por buckets.
+    source = "heurística"
+    headlines: list[dict] = []
+    if use_llm:
+        llm = llm_headlines(words, duration, max_h=target)
+        if llm:
+            headlines = llm
+            source = "LLM"
+    heur = heuristic_headlines(words, duration, max_h=target)
+    if len(headlines) < target:
+        # Rellenar con titulares heurísticos en tiempos NO cubiertos (≥4s de separación).
+        existing = [h["at"] for h in headlines]
+        for e in heur:
+            if len(headlines) >= target:
+                break
+            if all(abs(e["at"] - x) > 4 for x in existing):
+                headlines.append(e)
+                existing.append(e["at"])
+        if headlines and source == "LLM":
+            source = "LLM+heur"
+        elif not headlines:
+            headlines = heur
+    headlines.sort(key=lambda h: h["at"])
+
+    # Pase final de ULTRA VARIEDAD: re-asigna efecto/color/posición/tamaño/duración por
+    # orden, así dos titulares seguidos NUNCA repiten efecto ni color (sin importar la fuente).
+    for i, h in enumerate(headlines):
+        h["effect"] = EFFECTS[i % len(EFFECTS)]
+        h["accent"] = ACCENTS[(i * 5) % len(ACCENTS)]  # *5 = salto coprimo → más variedad
+        h["position"] = "bottom" if i % 2 == 0 else "top"
+        h["size"] = [120, 108, 132, 116][i % 4]
+        h["duration"] = [2.2, 2.0, 2.5, 2.3][i % 4]
+
+    # Variedad de charts: alterna tipo cuando hay varios contadores seguidos.
+    for i, c in enumerate(charts):
+        c["accent"] = ACCENTS[(i * 2 + 1) % len(ACCENTS)]
+        c["position"] = ["top", "bottom", "center"][i % 3]
+
+    # Anti-solape: si un titular cae sobre un chart, lo movemos al hueco.
     chart_windows = [(c["at"], c["at"] + c["duration"]) for c in charts]
     for h in headlines:
         for s, e in chart_windows:
@@ -344,7 +405,7 @@ def generate(transcript_path: Path, use_llm: bool = True) -> dict:
                 break
 
     print(
-        f"[graphics] {len(charts)} charts · {len(headlines)} titulares ({source})",
+        f"[graphics] {len(charts)} charts · {len(headlines)} titulares ({source}) · target {target} (dur {duration:.0f}s)",
         file=sys.stderr,
     )
     return {"dataViz": charts, "kineticHeadlines": headlines}
