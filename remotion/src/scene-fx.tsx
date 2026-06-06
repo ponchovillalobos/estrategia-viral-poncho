@@ -526,17 +526,22 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
         >
           {line.map((j) => {
             const isActive = j === activeIndex;
+            // Relleno progresivo (karaoke real): las palabras YA dichas se quedan
+            // resaltadas (highlight), la activa con pop+glow, las que faltan atenuadas.
+            const spoken = words[j].start <= currentTime + 0.05;
             return (
               <span
                 key={j}
                 style={{
-                  color: isActive ? highlight || color : color,
-                  opacity: isActive ? 1 : 0.55,
-                  transform: isActive ? "scale(1.08)" : "scale(1)",
+                  color: spoken ? highlight || color : color,
+                  opacity: spoken ? 1 : 0.5,
+                  transform: isActive ? "scale(1.1)" : "scale(1)",
                   display: "inline-block",
                   transformOrigin: "center bottom",
                   filter: isActive
-                    ? `drop-shadow(0 0 24px ${highlight}) drop-shadow(0 4px 16px rgba(0,0,0,0.95))`
+                    ? `drop-shadow(0 0 26px ${highlight}) drop-shadow(0 4px 16px rgba(0,0,0,0.95))`
+                    : spoken
+                    ? `drop-shadow(0 0 12px ${highlight}aa) drop-shadow(0 3px 14px rgba(0,0,0,0.9))`
                     : `drop-shadow(0 3px 14px rgba(0,0,0,0.9))`,
                 }}
               >
