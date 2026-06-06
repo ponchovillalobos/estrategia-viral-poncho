@@ -44,6 +44,7 @@ import {
   applyVoiceover,
   applyTextBehind,
   applyTranslate,
+  applyGraphics,
 } from "./lib/fx-enrichments";
 
 export const dynamic = "force-dynamic";
@@ -73,7 +74,9 @@ async function processJob(job: Job, body: AutoBuildRequest) {
   }
 
   // 2. Cuts si es necesario
-  const needsCuts = job.styles.some((s) => s === "hype_max" || s === "hype_max_sfx");
+  const needsCuts = job.styles.some(
+    (s) => s === "hype_max" || s === "hype_max_sfx" || s === "graphics_max"
+  );
   if (needsCuts) {
     const cutMp4 = path.join(RAW_DIR, `${videoId}_cut.mp4`);
     try {
@@ -227,6 +230,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       await applyVoiceover(project, projectId);
       await applyTextBehind(project, videoId);
       await applyTranslate(project);
+      await applyGraphics(project, videoId);
 
       const projectPath = path.join(PROJECTS_DIR, `${projectId}.json`);
       await writeJsonFileAtomic(projectPath, project);

@@ -16,10 +16,59 @@ import {
   PYTHON_EXE,
   RAW_DIR,
   VOICEOVER_DIR,
+  TRANSCRIPTS_DIR,
+  DATA_ROOT,
 } from "@/lib/paths";
 import { runProcess, parseLastJsonLine } from "@/lib/run-process";
 import { findRawVideo } from "./helpers";
 import type { ResolvedProject } from "./types";
+
+/**
+ * Modo Gráficos & Motion (estilos graphics_*): genera gráficas animadas (contador/
+ * barras/línea/dona) + titulares poderosos desde el transcript del short, con
+ * generate_graphics.py, y los deja en project.dataViz / project.kineticHeadlines.
+ * Las gráficas solo salen si el contenido menciona números (%, "3 veces", "de 23 a 78");
+ * los titulares salen siempre. Si Ollama está offline, cae a heurística (no rompe).
+ */
+export async function applyGraphics(
+  project: ResolvedProject,
+  videoId: string
+): Promise<void> {
+  if (!project.graphics) return;
+  try {
+    const transcriptPath = path.join(TRANSCRIPTS_DIR, `${videoId}.json`);
+    const hasTranscript = await fs.access(transcriptPath).then(() => true).catch(() => false);
+    if (!hasTranscript) return;
+
+    const outDir = path.join(DATA_ROOT, "graphics");
+    await fs.mkdir(outDir, { recursive: true });
+    const outPath = path.join(outDir, `${videoId}.json`);
+
+    const run = await runProcess(
+      PYTHON_EXE,
+      [
+        path.join(PYTHON_DIR, "generate_graphics.py"),
+        "--transcript", transcriptPath,
+        "--out", outPath,
+      ],
+      PYTHON_DIR,
+      undefined,
+      120_000
+    );
+    if (!run.ok) return;
+
+    const raw = await fs.readFile(outPath, "utf-8").catch(() => null);
+    if (!raw) return;
+    const g = JSON.parse(raw) as { dataViz?: unknown[]; kineticHeadlines?: unknown[] };
+    if (Array.isArray(g.dataViz)) project.dataViz = g.dataViz;
+    if (Array.isArray(g.kineticHeadlines)) project.kineticHeadlines = g.kineticHeadlines;
+    console.log(
+      `[auto-build] gráficos: ${project.dataViz?.length ?? 0} charts · ${project.kineticHeadlines?.length ?? 0} titulares`
+    );
+  } catch (err) {
+    console.warn("[auto-build] gráficos falló:", err);
+  }
+}
 
 /** Motion tracking: detecta cara en el raw, llena project.trackPath. */
 export async function applyTracking(

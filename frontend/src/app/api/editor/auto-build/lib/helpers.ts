@@ -21,6 +21,8 @@ export const STYLE_SHORT_LABEL: Record<StyleId, string> = {
   broll_full: "Broll",
   broll_pip: "BrollPIP",
   text_behind: "TextoDetras",
+  graphics_pro: "Graficos",
+  graphics_max: "GraficosMax",
 };
 
 /** Resuelve aspect ratio → dimensiones de output en píxeles. */

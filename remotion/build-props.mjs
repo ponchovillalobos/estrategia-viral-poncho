@@ -126,6 +126,10 @@ const trackedItemsRemapped = filterAndRemap(project.trackedItems || [], ["at"]);
 const iconStickersRemapped = filterAndRemap(project.iconStickers || [], ["at"]);
 const speedRampsRemapped = filterAndRemap(project.speedRamps || [], ["at"]);
 const lottieStickersRemapped = filterAndRemap(project.lottieStickers || [], ["at"]);
+// Modo Gráficos & Motion: charts + titulares animados. Tienen `at` → remapear igual
+// que el resto si hay jump cuts (estilo graphics_max).
+const dataVizRemapped = filterAndRemap(project.dataViz || [], ["at"]);
+const kineticHeadlinesRemapped = filterAndRemap(project.kineticHeadlines || [], ["at"]);
 
 const subtitles =
   project.manualSubtitles && project.manualSubtitles.length > 0
@@ -195,6 +199,9 @@ const props = {
   speedRamps: speedRampsRemapped,
   // B4 — Stickers animados (Lottie) opt-in.
   lottieStickers: lottieStickersRemapped,
+  // Modo Gráficos & Motion (estilos graphics_*): charts + titulares animados.
+  dataViz: dataVizRemapped,
+  kineticHeadlines: kineticHeadlinesRemapped,
   // C1 — Voz IA (Piper) opt-in. auto-build rellena voiceoverUrl tras correr tts.py.
   voiceoverUrl: project.voiceoverUrl ?? null,
   voiceoverVolume: project.voiceoverVolume ?? 0.7,

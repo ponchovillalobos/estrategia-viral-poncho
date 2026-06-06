@@ -15,6 +15,11 @@ export const DataVizLayer: React.FC<{
   if (currentTime < config.at || currentTime > config.at + config.duration) {
     return null;
   }
+  // Guarda: una gráfica sin datos no debe romper el render (defensivo ante specs
+  // malformados; el generador siempre emite `data`, pero esto evita un crash global).
+  if (!Array.isArray(config.data) || config.data.length === 0) {
+    return null;
+  }
   const elapsed = currentTime - config.at;
   const frame = elapsed * fps;
   const fadeIn = Math.min(1, elapsed / 0.25);

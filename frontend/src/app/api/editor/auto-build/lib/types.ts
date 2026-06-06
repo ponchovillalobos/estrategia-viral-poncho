@@ -77,4 +77,9 @@ export interface ResolvedProject {
   reactionZooms?: unknown[];
   brandKit?: { handle?: string; logoUrl?: string; position?: string; opacity?: number; color?: string };
   bRoll?: unknown[];
+  // Modo Gráficos & Motion (estilos graphics_*): applyGraphics genera dataViz +
+  // kineticHeadlines desde el transcript del short y los deja acá.
+  graphics?: boolean;
+  dataViz?: unknown[];
+  kineticHeadlines?: unknown[];
 }

@@ -19,7 +19,11 @@ export type StyleId =
   | "broll_full"
   | "broll_pip"
   // A3 — Estilo NUEVO: texto detrás del sujeto (bake con mediapipe + ffmpeg).
-  | "text_behind";
+  | "text_behind"
+  // Modo Gráficos & Motion en shorts: gráficas animadas + titulares poderosos,
+  // COMBINADO con la edición dinámica (zooms, transiciones, y en _max jump cuts).
+  | "graphics_pro"
+  | "graphics_max";
 
 export interface BuildContext {
   videoId: string;
@@ -896,6 +900,67 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
     );
   }
 
+  // ─── graphics_pro: MODO GRÁFICOS & MOTION en shorts. Gráficas animadas + titulares
+  // poderosos (los genera auto-build con applyGraphics desde el transcript) COMBINADO
+  // con edición dinámica: zooms en keywords, transiciones, karaoke, stickers. ───
+  if (styleId === "graphics_pro") {
+    return applyCapcutFx(
+      {
+        ...base,
+        graphics: true,
+        subtitleStyle: "anton" as const,
+        vignette: true,
+        captionBounce: true,
+        wordStickers: buildStickers(ctx, 4),
+        floatingEmojis: buildFloatingEmojis(ctx, 3),
+        zoomMarks: pickKeywords(ctx, 4).map((kw) => ({ at: kw.start, duration: 0.6, scale: 1.12 })),
+      },
+      ctx,
+      {
+        lut: "teal_orange.cube",
+        kinetic: "karaoke",
+        endScreen: true,
+        progressBar: true,
+        lottieStickers: true,
+      }
+    );
+  }
+
+  // ─── graphics_max: lo mismo PERO al máximo — jump cuts, reaction zooms, stutter,
+  // speed ramps y mirror. Para quien quiere gráficos + la edición más intensa. ───
+  if (styleId === "graphics_max") {
+    return applyCapcutFx(
+      {
+        ...base,
+        graphics: true,
+        subtitleStyle: "anton" as const,
+        vignette: true,
+        captionBounce: true,
+        enableJumpCuts: true,
+        wordStickers: buildStickers(ctx, 6),
+        floatingEmojis: buildFloatingEmojis(ctx, 4),
+        zoomMarks: pickKeywords(ctx, 5).map((kw) => ({ at: kw.start, duration: 0.6, scale: 1.14 })),
+        reactionZooms: pickKeywords(ctx, 3).slice(-3).map((kw) => ({
+          at: kw.start,
+          intensity: 1.42,
+          duration: 0.22,
+        })),
+        stutterMarks: pickKeywords(ctx, 2).map((kw) => ({ at: Math.max(0, kw.start - 0.15), duration: 0.18 })),
+      },
+      ctx,
+      {
+        lut: "cyberpunk.cube",
+        kinetic: "karaoke",
+        mirror: true,
+        speedRamps: true,
+        endScreen: true,
+        progressBar: true,
+        iconStickers: true,
+        lottieStickers: true,
+      }
+    );
+  }
+
   return base;
 }
 
@@ -925,6 +990,16 @@ export const STYLE_INFO: Record<StyleId, { name: string; tagline: string; emoji:
     name: "Texto detrás de vos",
     tagline: "El efecto CapCut clásico: la palabra clave queda detrás del sujeto",
     emoji: "🧍",
+  },
+  graphics_pro: {
+    name: "Gráficos & Motion",
+    tagline: "Gráficas animadas + titulares poderosos + zooms y transiciones",
+    emoji: "📊",
+  },
+  graphics_max: {
+    name: "Gráficos Max",
+    tagline: "Gráficos & Motion al máximo: cortes rápidos, zooms de reacción y stutter",
+    emoji: "📈",
   },
 };
 
