@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCcw, FileVideo, CheckCircle2, Circle, Pencil, Archive, ArchiveRestore, Upload, Loader2 } from "lucide-react";
+import { RefreshCcw, FileVideo, CheckCircle2, Circle, Pencil, Archive, ArchiveRestore, Upload, Loader2, Trash2 } from "lucide-react";
 import { RenameDialog } from "@/components/editor/rename-dialog";
 import { HelpHint } from "@/components/ui/help-hint";
 import { toast } from "sonner";
@@ -110,6 +110,26 @@ export function VideoList() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "unarchive failed");
       toast.success(`${videoId} restaurado`);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // Borrado DEFINITIVO: elimina el archivo del disco + sus derivados (proyectos,
+  // renders, etc.). Irreversible → confirmación explícita.
+  async function removeVideo(videoId: string) {
+    if (
+      !confirm(
+        `¿Borrar "${videoId}" para siempre?\n\nSe elimina el video del disco y todo lo generado a partir de él (shorts, subtítulos, etc.). Esto NO se puede deshacer.`
+      )
+    )
+      return;
+    try {
+      const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}/delete`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "delete failed");
+      toast.success(`${videoId} borrado`);
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -265,11 +285,24 @@ export function VideoList() {
                         archive(v.id);
                       }}
                       className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      title="Mover a usados"
+                      title="Mover a usados (conserva los shorts ya hechos)"
                     >
                       <Archive className="h-3 w-3" />
                     </button>
                   ) : null}
+                  {/* Borrar SIEMPRE disponible: elimina el video del disco para que
+                      desaparezca de todo el portal. Irreversible (pide confirmación). */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      removeVideo(v.id);
+                    }}
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-400"
+                    title="Borrar para siempre (del disco)"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
                 </div>
               </div>
               <div className="flex flex-wrap gap-1.5 text-[10px]">
