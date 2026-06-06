@@ -15,6 +15,12 @@ export const dynamic = "force-dynamic";
 
 const USED_DIR = path.join(RAW_DIR, "used");
 
+// Cache de duración por `${path}:${mtimeMs}` (sobrevive hot-reload). Evita re-spawnear
+// ffprobe por cada video en cada carga del listado.
+const DURATION_CACHE: Map<string, number> = ((globalThis as unknown as {
+  __durCache?: Map<string, number>;
+}).__durCache ??= new Map<string, number>());
+
 interface VideoEntry {
   id: string;
   filename: string;
@@ -81,7 +87,15 @@ async function entriesFromDir(dir: string, archived: boolean): Promise<VideoEntr
       const filePath = path.join(dir, filename);
       const stat = await fs.stat(filePath);
       const id = path.basename(filename, path.extname(filename));
-      const durationSec = await probeDuration(filePath);
+      // OPTIMIZACIÓN: cachear la duración por archivo+mtime. ffprobe se spawneaba por
+      // CADA video en CADA carga del listado (lento con muchos videos). El video no
+      // cambia de duración salvo que se reemplace (cambia mtime) → cache válido.
+      const cacheKey = `${filePath}:${stat.mtimeMs}`;
+      let durationSec: number | null = DURATION_CACHE.get(cacheKey) ?? null;
+      if (!DURATION_CACHE.has(cacheKey)) {
+        durationSec = await probeDuration(filePath);
+        if (durationSec !== null) DURATION_CACHE.set(cacheKey, durationSec);
+      }
 
       const [transcribed, cuts, rendered, projectExists] = await Promise.all([
         exists(path.join(TRANSCRIPTS_DIR, `${id}.json`)),
@@ -95,7 +109,7 @@ async function entriesFromDir(dir: string, archived: boolean): Promise<VideoEntr
         filename,
         sizeMb: +(stat.size / (1024 * 1024)).toFixed(1),
         modified: stat.mtime.toISOString(),
-        durationSec,
+        durationSec: durationSec ?? null,
         archived,
         status: { transcribed, cuts, rendered, projectExists },
       };
