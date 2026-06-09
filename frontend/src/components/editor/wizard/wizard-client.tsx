@@ -115,6 +115,21 @@ function humanStyleName(rawId: string): string {
   return STYLES.find((s) => s.id === id)?.name ?? id;
 }
 
+// Color del TEXTO de los subtítulos ("auto" = blanco / el del estilo). Colores
+// brillantes pensados para leerse sobre video con sombra/borde oscuro.
+const SUBTITLE_COLORS: { id: string; name: string; value: string }[] = [
+  { id: "auto", name: "Automático", value: "#ffffff" },
+  { id: "#ffffff", name: "Blanco", value: "#ffffff" },
+  { id: "#fde047", name: "Amarillo", value: "#fde047" },
+  { id: "#fbbf24", name: "Ámbar", value: "#fbbf24" },
+  { id: "#6ee7b7", name: "Menta", value: "#6ee7b7" },
+  { id: "#7dd3fc", name: "Celeste", value: "#7dd3fc" },
+  { id: "#f9a8d4", name: "Rosa", value: "#f9a8d4" },
+  { id: "#c4b5fd", name: "Lila", value: "#c4b5fd" },
+  { id: "#fdba74", name: "Naranja", value: "#fdba74" },
+  { id: "#a3e635", name: "Lima", value: "#a3e635" },
+];
+
 const PALETTE = [
   { name: "rosa coral", value: "#fb7185", mood: "urgencia" },
   { name: "violeta", value: "#a78bfa", mood: "autoridad" },
@@ -138,11 +153,13 @@ export function WizardClient() {
   const [selectedStyles, setSelectedStyles] = useState<StyleId[]>(["hype"]);
   const [accent, setAccent] = useState<string>("#fb7185");
   const [subtitleFont, setSubtitleFont] = useState<string>("auto");
+  // Color del TEXTO de los subtítulos ("auto" = el del estilo, normalmente blanco).
+  const [subtitleColor, setSubtitleColor] = useState<string>("auto");
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["instagram", "linkedin"]);
   // Aspect ratio del output. 9:16 vertical (TikTok/Reels) default, 16:9 horizontal (LinkedIn/YouTube).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
   // Plantillas guardables: combos favoritos (estilo+color+fuente+plataformas).
-  type Template = { id: string; name: string; styles: string[]; accentColor: string; subtitleFont: string; platforms: string[]; aspectRatio: "9:16" | "16:9" };
+  type Template = { id: string; name: string; styles: string[]; accentColor: string; subtitleFont: string; subtitleColor?: string; platforms: string[]; aspectRatio: "9:16" | "16:9" };
   const [templates, setTemplates] = useState<Template[]>([]);
   const [day, setDay] = useState<string>("");
   const [caption, setCaption] = useState<string>("");
@@ -242,6 +259,7 @@ export function WizardClient() {
     setSelectedStyles(t.styles as StyleId[]);
     setAccent(t.accentColor);
     setSubtitleFont(t.subtitleFont || "auto");
+    setSubtitleColor(t.subtitleColor || "auto");
     setSelectedPlatforms(t.platforms as PlatformId[]);
     setAspectRatio(t.aspectRatio === "16:9" ? "16:9" : "9:16");
     toast.success(`Plantilla "${t.name}" aplicada`);
@@ -259,6 +277,7 @@ export function WizardClient() {
           styles: selectedStyles,
           accentColor: accent,
           subtitleFont,
+          subtitleColor,
           platforms: selectedPlatforms,
           aspectRatio,
         }),
@@ -386,6 +405,7 @@ export function WizardClient() {
           styles: selectedStyles,
           accentColor: accent,
           subtitleFont,
+          subtitleColor,
           platforms: selectedPlatforms,
           aspectRatio,
           day: day ? parseInt(day, 10) : undefined,
@@ -804,6 +824,52 @@ export function WizardClient() {
                 </button>
               );
             })}
+          </div>
+
+          <h3 className="mb-2 mt-6 text-sm font-medium">Color del texto de los subtítulos</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            El color de las palabras (el resaltado de la palabra activa usa el color principal de
+            arriba). &quot;Automático&quot; usa el del estilo.
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {SUBTITLE_COLORS.map((c) => {
+              const selected = subtitleColor === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSubtitleColor(c.id)}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-all ${
+                    selected ? "border-foreground bg-muted/40 ring-1 ring-foreground/30" : "border-border hover:border-foreground/30"
+                  }`}
+                >
+                  {/* Muestra del color sobre fondo oscuro, como se ve en el video. */}
+                  <span
+                    className="flex h-8 w-10 items-center justify-center rounded bg-zinc-950 text-sm font-black uppercase"
+                    style={{ color: c.value, textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
+                  >
+                    {c.id === "auto" ? "Aa" : "Abc"}
+                  </span>
+                  <span className="text-xs font-medium">{c.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Preview en vivo: cómo se ven los subtítulos con color + resaltado + fuente. */}
+          <div className="mt-4 flex items-center justify-center rounded-lg bg-zinc-950 px-4 py-5">
+            <span
+              className="text-3xl font-black uppercase tracking-wide"
+              style={{
+                color: subtitleColor === "auto" ? "#ffffff" : subtitleColor,
+                fontFamily: FONT_PREVIEW[subtitleFont] || undefined,
+                textShadow: "0 2px 8px rgba(0,0,0,0.9)",
+              }}
+            >
+              Así se ven{" "}
+              <span style={{ color: accent, textShadow: `0 0 18px ${accent}88` }}>tus</span>{" "}
+              subtítulos
+            </span>
           </div>
 
           <h3 className="mb-2 mt-6 text-sm font-medium">Tipografía de los subtítulos</h3>

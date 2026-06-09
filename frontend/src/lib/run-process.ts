@@ -33,7 +33,14 @@ export function runProcess(
     // Node 17+ rechaza .cmd/.bat con shell:false en Windows (CVE-2024-27980 → EINVAL).
     // npx.cmd y otros wrappers necesitan shell:true. Para .exe nativos mantenemos shell:false.
     const isWindowsScript = process.platform === "win32" && /\.(cmd|bat|ps1)$/i.test(cmd);
-    const proc = spawn(cmd, args, { cwd, shell: isWindowsScript });
+    // PYTHONIOENCODING/PYTHONUTF8: en Windows, Python hereda cp1252 y corrompe acentos
+    // ("Año" → mojibake) en el JSON de stdout, rompiendo parseLastJsonLine. Forzamos UTF-8
+    // para TODOS los subprocess (inofensivo para ffmpeg/node).
+    const proc = spawn(cmd, args, {
+      cwd,
+      shell: isWindowsScript,
+      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+    });
     let stdout = "";
     let stderr = "";
     let timedOut = false;

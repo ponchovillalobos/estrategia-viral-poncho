@@ -33,6 +33,14 @@ interface QueueEntryView {
   detail?: string;
   startedAt?: number;
   finishedAt?: number;
+  /** ETA en segundos para jobs running (estimado por velocidad de progreso). */
+  etaSec?: number | null;
+}
+
+/** "~12 min" / "~45 s" legible para el ETA. */
+function formatEta(sec: number): string {
+  if (sec < 90) return `~${Math.max(5, Math.round(sec / 5) * 5)} s`;
+  return `~${Math.round(sec / 60)} min`;
 }
 
 interface QueueResponse {
@@ -163,6 +171,20 @@ function QueueRow({ entry, onDismiss }: { entry: QueueEntryView; onDismiss: () =
   const KindIcon = entry.kind === "long_form" ? Film : Scissors;
   const kindColor = entry.kind === "long_form" ? "text-violet-400" : "text-emerald-400";
   const isFinal = entry.status === "done" || entry.status === "failed";
+  const [cancelling, setCancelling] = useState(false);
+
+  async function cancelThis() {
+    setCancelling(true);
+    try {
+      await fetch(`/api/jobs/queue?action=cancel&jobId=${encodeURIComponent(entry.jobId)}`, {
+        method: "POST",
+      });
+    } catch {
+      /* el próximo poll refleja el estado real */
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   return (
     <div
@@ -185,7 +207,25 @@ function QueueRow({ entry, onDismiss }: { entry: QueueEntryView; onDismiss: () =
           )}
         </div>
         <div className="flex items-center gap-1">
+          {/* ETA estimado (sólo running con progreso medible) */}
+          {entry.status === "running" && entry.etaSec != null && (
+            <span className="font-mono-tab text-[9px] text-amber-300/90" title="Tiempo restante estimado">
+              {formatEta(entry.etaSec)}
+            </span>
+          )}
           <StatusBadge status={entry.status} position={entry.position} />
+          {/* Cancelar job que todavía no arrancó */}
+          {entry.status === "queued" && (
+            <button
+              type="button"
+              onClick={cancelThis}
+              disabled={cancelling}
+              className="rounded p-0.5 text-muted-foreground hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
+              title="Cancelar este job"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
           {isFinal && (
             <button
               type="button"

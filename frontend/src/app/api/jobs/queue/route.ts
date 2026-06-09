@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { getJob as getEditorJob } from "@/lib/job-store";
 import { getLongFormJob } from "@/lib/long-form-job-store";
 import { getResearch } from "@/lib/research-store";
-import { listQueue, forceUnstuck, cancelAllPending, type JobKind } from "@/lib/job-queue";
+import { listQueue, forceUnstuck, cancelAllPending, cancelPending, type JobKind } from "@/lib/job-queue";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,19 @@ interface QueueEntryView {
   detail?: string;
   startedAt?: number;
   finishedAt?: number;
+  /** ETA en segundos para jobs running (estimado por velocidad de progreso). */
+  etaSec?: number | null;
+}
+
+/**
+ * ETA honesto sin config: con el progreso (0-100) y el tiempo transcurrido,
+ * extrapola lo que falta. Recién confiable con progreso > 5%.
+ */
+function progressEta(progress: number, startedAt?: number): number | null {
+  if (!startedAt || progress <= 5 || progress >= 100) return null;
+  const elapsedSec = (Date.now() - startedAt) / 1000;
+  if (elapsedSec < 10) return null;
+  return Math.round((elapsedSec * (100 - progress)) / progress);
 }
 
 async function buildEntryFromQueue(
@@ -45,6 +58,7 @@ async function buildEntryFromQueue(
         : `${job.styles.length} estilos`,
       startedAt: job.startedAt,
       finishedAt: job.finishedAt,
+      etaSec: job.status === "running" ? progressEta(job.overallProgress, job.startedAt) : null,
     };
   }
   if (item.kind === "long_form") {
@@ -61,6 +75,7 @@ async function buildEntryFromQueue(
       detail: running ? running.label : undefined,
       startedAt: job.startedAt,
       finishedAt: job.finishedAt,
+      etaSec: job.status === "running" ? progressEta(job.overallProgress, job.startedAt) : null,
     };
   }
   // research
@@ -124,8 +139,19 @@ export async function POST(req: NextRequest) {
     const result = cancelAllPending();
     return NextResponse.json({ ok: true, ...result });
   }
+  if (action === "cancel") {
+    const jobId = req.nextUrl.searchParams.get("jobId");
+    if (!jobId) return NextResponse.json({ error: "falta jobId" }, { status: 400 });
+    const cancelled = cancelPending(jobId);
+    return NextResponse.json(
+      cancelled
+        ? { ok: true, jobId }
+        : { ok: false, error: "no está en cola (¿ya arrancó?)" },
+      { status: cancelled ? 200 : 404 }
+    );
+  }
   return NextResponse.json(
-    { error: "action=unstuck or action=cancel-all required" },
+    { error: "action=unstuck | cancel-all | cancel (con jobId) required" },
     { status: 400 }
   );
 }

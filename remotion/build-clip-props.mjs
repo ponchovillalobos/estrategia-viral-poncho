@@ -8,7 +8,10 @@
  *  - No aplica jump cuts (el clip ya viene del video CLEAN sin silencios)
  *
  * Uso:
- *   node build-clip-props.mjs <clip_id>     # ej: D13_clase_clip_01
+ *   node build-clip-props.mjs <clip_id> [style_id] [out_file]
+ *   - out_file (opcional): nombre del props file de salida (default "props.json").
+ *     Lo usa el render PARALELO de largos: cada worker escribe su propio
+ *     props_{clipId}_{styleId}.json para no pisarse entre sí.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -30,6 +33,7 @@ const HOST = process.env.VIRAL_API_HOST ?? "http://localhost:3000";
 
 const clipId = process.argv[2];
 const styleId = process.argv[3] || null; // opcional — si falta intenta legacy {clipId}.json
+const outName = process.argv[4] || "props.json"; // opcional — props file único (render paralelo)
 if (!clipId) {
   console.error("Uso: node build-clip-props.mjs <clip_id> [style_id]");
   console.error("  style_id opcional. Si se pasa, lee {clipId}_{style_id}.json");
@@ -161,7 +165,7 @@ if (_existsSync(graphicsPath)) {
   }
 }
 
-const outFile = path.join(__dirname, "props.json");
+const outFile = path.join(__dirname, path.basename(outName));
 writeFileSync(outFile, JSON.stringify(props, null, 2), "utf-8");
 console.log(
   `OK ${clipId} · subs:${props.words.length} · stickers:${props.wordStickers.length} · emphasis:${props.emphasisCards.length} · emojis:${props.floatingEmojis.length} · sfx:${props.sfxMarks.length} · duration:${props.videoDurationSec}s`

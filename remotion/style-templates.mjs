@@ -565,6 +565,7 @@ export function buildProjectForStyle(ctx, styleId) {
     return applyCapcutFx(
       {
         ...base,
+        graphics: true,
         subtitleStyle: "anton",
         bRollMode: "pip",
         vignette: true,
@@ -582,6 +583,7 @@ export function buildProjectForStyle(ctx, styleId) {
     return applyCapcutFx(
       {
         ...base,
+        graphics: true,
         subtitleStyle: "anton",
         bRollMode: "pip",
         vignette: true,
@@ -605,6 +607,7 @@ export function buildProjectForStyle(ctx, styleId) {
     return applyCapcutFx(
       {
         ...base,
+        graphics: true,
         subtitleStyle: "anton",
         bRollMode: "pip",
         vignette: true,
@@ -623,7 +626,7 @@ export function buildProjectForStyle(ctx, styleId) {
   }
 
   if (styleId === "supreme") {
-    return applyCapcutFx(buildSupremeStyle(ctx, styleId), ctx, {
+    return applyCapcutFx({ ...buildSupremeStyle(ctx, styleId), graphics: true }, ctx, {
       lut: "kodak_warm.cube",
       kinetic: "karaoke",
       endScreen: true,
@@ -650,6 +653,62 @@ export function buildProjectForStyle(ctx, styleId) {
         endScreen: true,
         progressBar: true,
         brandKit: true,
+      }
+    );
+  }
+
+  // ─── graphics_pro: MODO GRÁFICOS & MOTION (paridad con shorts/style-templates.ts).
+  // Las gráficas/íconos los genera generate_graphics.py → long_form/graphics/{clipId}.json
+  // y build-clip-props los mergea. Acá va la edición dinámica que las acompaña. ───
+  if (styleId === "graphics_pro") {
+    return applyCapcutFx(
+      {
+        ...base,
+        graphics: true,
+        subtitleStyle: "anton",
+        vignette: true,
+        captionBounce: true,
+        wordStickers: buildStickers(ctx, 4),
+        floatingEmojis: buildFloatingEmojis(ctx, 3),
+        zoomMarks: pickKeywords(ctx, 4).map((kw) => ({ at: kw.start, duration: 0.6, scale: 1.12 })),
+      },
+      ctx,
+      {
+        lut: "teal_orange.cube",
+        kinetic: "karaoke",
+        endScreen: true,
+        progressBar: true,
+        lottieStickers: true,
+      }
+    );
+  }
+
+  // ─── graphics_max: gráficos + la edición más intensa (paridad con shorts). ───
+  if (styleId === "graphics_max") {
+    return applyCapcutFx(
+      {
+        ...base,
+        graphics: true,
+        subtitleStyle: "anton",
+        vignette: true,
+        captionBounce: true,
+        enableJumpCuts: true,
+        wordStickers: buildStickers(ctx, 6),
+        floatingEmojis: buildFloatingEmojis(ctx, 4),
+        zoomMarks: pickKeywords(ctx, 5).map((kw) => ({ at: kw.start, duration: 0.6, scale: 1.14 })),
+        reactionZooms: pickKeywords(ctx, 3).slice(-3).map((kw) => ({ at: kw.start, intensity: 1.42, duration: 0.22 })),
+        stutterMarks: pickKeywords(ctx, 2).map((kw) => ({ at: Math.max(0, kw.start - 0.15), duration: 0.18 })),
+      },
+      ctx,
+      {
+        lut: "cyberpunk.cube",
+        kinetic: "karaoke",
+        mirror: true,
+        speedRamps: true,
+        endScreen: true,
+        progressBar: true,
+        iconStickers: true,
+        lottieStickers: true,
       }
     );
   }

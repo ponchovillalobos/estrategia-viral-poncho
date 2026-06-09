@@ -59,7 +59,10 @@ const { width: aspectWidth, height: aspectHeight } =
     ? { width: 1920, height: 1080 }
     : { width: 1080, height: 1920 };
 
-const VALID_STYLES = ["silent", "punch", "hype", "hype_max", "hype_max_sfx", "supreme"];
+const VALID_STYLES = [
+  "silent", "punch", "hype", "hype_max", "hype_max_sfx", "supreme",
+  "graphics_pro", "graphics_max",
+];
 if (!VALID_STYLES.includes(styleId)) {
   console.error(`style_id inválido '${styleId}'. Válidos: ${VALID_STYLES.join(", ")}`);
   process.exit(1);

@@ -210,6 +210,63 @@ export async function sweepShortOrphans(): Promise<{ deleted: number; orphans: s
   return { deleted, orphans: [...orphanOwners] };
 }
 
+/**
+ * F0.5 — Limpieza de ARTEFACTOS de render (no huérfanos, sino basura del proceso):
+ *   - SIEMPRE: temporales `__rendering.mp4`, intermedios `_raw.mp4`/`_nolut.mp4` y
+ *     locks `.__lock` con más de 24h (un render real nunca dura tanto).
+ *   - OPT-IN (env `VIRAL_RENDER_RETENTION_DAYS=N`): renders finales con más de N días.
+ *     Por default NO se borran renders finales — el user puede tener renders viejos
+ *     que aún quiere publicar. Activar sólo si el disco preocupa.
+ * Cada borrado queda auditado en `{DATA_ROOT}/disk-audit.log`.
+ */
+export async function sweepStaleArtifacts(): Promise<{ deleted: number }> {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const retentionDays = Number(process.env.VIRAL_RENDER_RETENTION_DAYS);
+  const auditLines: string[] = [];
+  let deleted = 0;
+
+  const rmAudited = async (dir: string, f: string, reason: string) => {
+    try {
+      await fs.rm(path.join(dir, f), { force: true });
+      deleted++;
+      auditLines.push(`[${new Date().toISOString()}] DELETE ${path.join(dir, f)} (${reason})`);
+    } catch {
+      /* best-effort */
+    }
+  };
+
+  for (const dir of [RENDERS_DIR, LF_RENDERS]) {
+    for (const f of await listSafe(dir)) {
+      let ageMs: number;
+      try {
+        ageMs = Date.now() - (await fs.stat(path.join(dir, f))).mtimeMs;
+      } catch {
+        continue;
+      }
+      const isArtifact =
+        f.includes(".__rendering.") || f.endsWith(".__lock") ||
+        f.endsWith("_raw.mp4") || f.endsWith("_nolut.mp4");
+      if (isArtifact && ageMs > DAY_MS) {
+        await rmAudited(dir, f, "artefacto de render >24h");
+        continue;
+      }
+      if (
+        Number.isFinite(retentionDays) && retentionDays >= 1 &&
+        f.endsWith(".mp4") && !isArtifact && ageMs > retentionDays * DAY_MS
+      ) {
+        await rmAudited(dir, f, `retención ${retentionDays}d`);
+      }
+    }
+  }
+
+  if (auditLines.length > 0) {
+    const auditFile = path.join(path.dirname(RENDERS_DIR), "disk-audit.log");
+    await fs.appendFile(auditFile, auditLines.join("\n") + "\n", "utf-8").catch(() => {});
+    console.log(`[artifact-sweep] borrados ${deleted} artefacto(s) — ver disk-audit.log`);
+  }
+  return { deleted };
+}
+
 // Throttle en globalThis (sobrevive a hot-reload; se resetea al reiniciar el server,
 // que de todas formas dispara un sweep de boot).
 const g = globalThis as unknown as { __lastOrphanSweep?: number };
@@ -225,5 +282,8 @@ export function maybeSweepOrphans(): void {
   );
   void sweepShortOrphans().catch((e) =>
     console.warn(`[orphan-sweep] shorts falló: ${e instanceof Error ? e.message : e}`),
+  );
+  void sweepStaleArtifacts().catch((e) =>
+    console.warn(`[artifact-sweep] falló: ${e instanceof Error ? e.message : e}`),
   );
 }

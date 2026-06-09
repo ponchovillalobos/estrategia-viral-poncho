@@ -17,9 +17,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from config import (
@@ -40,6 +42,28 @@ PYTHON_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = PYTHON_DIR.parent
 REMOTION_DIR = PROJECT_ROOT / "remotion"
 VENV_PYTHON = PYTHON_DIR / "venv" / "Scripts" / "python.exe"
+
+# ── Render paralelo de clips (F0.2 auditoría) ───────────────────────────────
+# Cuántos renders de Remotion corren A LA VEZ. 2 por default: el render no
+# satura el CPU al 100% (arranque de browser, encoding, I/O), así que 2 workers
+# dan ~2x throughput real. Override con env LF_RENDER_WORKERS=1 para el modo
+# secuencial clásico (o 3 en máquinas con muchos cores).
+def _render_workers() -> int:
+    try:
+        n = int(os.environ.get("LF_RENDER_WORKERS", "2"))
+        return max(1, min(4, n))
+    except ValueError:
+        return 2
+
+
+def _remotion_concurrency(workers: int) -> int:
+    """Workers internos de cada `remotion render`. Repartimos cores-1 entre los
+    renders paralelos para no sobre-suscribir el CPU."""
+    override = os.environ.get("VIRAL_REMOTION_CONCURRENCY")
+    if override and override.isdigit():
+        return max(1, int(override))
+    cores = os.cpu_count() or 4
+    return max(1, (cores - 1) // max(1, workers))
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> None:
@@ -389,12 +413,16 @@ def step_render_clip(
     style_id: str = "supreme",
     accent_color: str | None = None,
     aspect_ratio: str = "9:16",
+    remotion_concurrency: int = 0,
 ) -> Path:
     """Genera proyecto + props + render con Remotion para un (clip, style) específico.
 
     Output: long_form/renders/{clip_id}_{style_id}.mp4
     aspect_ratio: "9:16" vertical (default) o "16:9" horizontal.
+    remotion_concurrency: workers internos de Remotion (0 = auto según workers del pool).
     """
+    if remotion_concurrency <= 0:
+        remotion_concurrency = _remotion_concurrency(_render_workers())
     clip_id = f"{video_id}_c{clip_index:02d}_{slug}"
     # 1) build project JSON con el estilo elegido + aspect ratio
     #    Si pasamos aspect pero no accent, le metemos accent vacío para preservar el orden de args
@@ -411,19 +439,33 @@ def step_render_clip(
     # 1.5) motion tracking opt-in (estilos que lo declaran, ej. hype): parchea trackPath
     #      sobre el clip antes de armar los props. Best-effort.
     _apply_tracking(clip_id, style_id)
-    # 2) build props.json (pasamos styleId para que cargue el project file correcto)
-    run(["node", str(REMOTION_DIR / "build-clip-props.mjs"), clip_id, style_id], cwd=REMOTION_DIR)
+    # 2) build props — archivo ÚNICO por clip+estilo: con render paralelo, dos workers
+    #    escribiendo "props.json" se pisarían (un clip renderizaría los props del otro).
+    props_name = f"props_{clip_id}_{style_id}.json"
+    run(
+        ["node", str(REMOTION_DIR / "build-clip-props.mjs"), clip_id, style_id, props_name],
+        cwd=REMOTION_DIR,
+    )
     # 3) render — nombre incluye styleId para no pisar otros estilos del mismo clip
     out = LF_RENDERS / f"{clip_id}_{style_id}.mp4"
-    run([
-        "npx.cmd" if sys.platform == "win32" else "npx",
-        "remotion",
-        "render",
-        "src/index.ts",
-        "ViralVideo",
-        str(out),
-        "--props=props.json",
-    ], cwd=REMOTION_DIR)
+    try:
+        run([
+            "npx.cmd" if sys.platform == "win32" else "npx",
+            "remotion",
+            "render",
+            "src/index.ts",
+            "ViralVideo",
+            str(out),
+            "--concurrency",
+            str(remotion_concurrency),
+            f"--props={props_name}",
+        ], cwd=REMOTION_DIR)
+    finally:
+        # limpiar el props temporal (best-effort)
+        try:
+            (REMOTION_DIR / props_name).unlink(missing_ok=True)
+        except OSError:
+            pass
     # 4) post-fx: LUT color grade + audio mastering (paridad con shorts). Best-effort.
     _apply_post_fx(out, clip_id, style_id)
     return out
@@ -449,7 +491,7 @@ def main() -> int:
     parser.add_argument(
         "--styles",
         default="supreme",
-        help="Estilos de render separados por coma (silent,punch,hype,hype_max,hype_max_sfx,supreme). Default: supreme",
+        help="Estilos de render separados por coma (silent,punch,hype,hype_max,hype_max_sfx,supreme,graphics_pro,graphics_max). Default: supreme",
     )
     parser.add_argument(
         "--accent-color",
@@ -584,10 +626,15 @@ def main() -> int:
     for c in clips_info:
         print(f"  - {c['clip_id']} ({c.get('duration', '?')}s)", file=sys.stderr)
 
-    # Modo Gráficos & Motion: charts + titulares poderosos por clip, auto desde el
+    # Modo Gráficos & Motion: charts + íconos visuales por clip, auto desde el
     # transcript de cada clip (que extract_clips ya dejó alineado palabra-por-palabra).
-    if args.graphics and clips_info:
-        print("\n========== Modo Gráficos: charts + titulares por clip ==========", file=sys.stderr)
+    # Se activa con --graphics O si algún estilo elegido los trae (paridad con shorts:
+    # hype/hype_max/hype_max_sfx/supreme/graphics_* generan graphics: true).
+    GRAPHICS_STYLES = {"hype", "hype_max", "hype_max_sfx", "supreme", "graphics_pro", "graphics_max"}
+    requested_styles = {s.strip() for s in args.styles.split(",") if s.strip()}
+    wants_graphics = args.graphics or bool(requested_styles & GRAPHICS_STYLES)
+    if wants_graphics and clips_info:
+        print("\n========== Modo Gráficos: charts + íconos por clip ==========", file=sys.stderr)
         for c in clips_info:
             step_graphics(c["clip_id"], use_llm=not args.use_heuristic)
 
@@ -595,7 +642,10 @@ def main() -> int:
     if args.render and clips_info:
         print("\n========== STEP 7: render con Remotion ==========", file=sys.stderr)
         styles = [s.strip() for s in args.styles.split(",") if s.strip()]
-        VALID_STYLES = {"silent", "punch", "hype", "hype_max", "hype_max_sfx", "supreme"}
+        VALID_STYLES = {
+            "silent", "punch", "hype", "hype_max", "hype_max_sfx", "supreme",
+            "graphics_pro", "graphics_max",
+        }
         invalid = [s for s in styles if s not in VALID_STYLES]
         if invalid:
             print(f"[error] estilos inválidos: {invalid}. Válidos: {sorted(VALID_STYLES)}", file=sys.stderr)
@@ -604,25 +654,54 @@ def main() -> int:
         limit = args.max_clips if args.max_clips else len(clips_info)
         clips_to_render = clips_info[:limit]
         n_clips = len(clips_to_render)
-        for ci, c in enumerate(clips_to_render, start=1):
-            for si, style_id in enumerate(styles, start=1):
-                # Marcador que la ruta surfacea en el panel: "clip 2/7 · estilo supreme (1/3)".
-                # Da contexto durante el render largo en vez de una barra muda.
-                print(
-                    f"[render] clip {ci}/{n_clips} · estilo {style_id} ({si}/{len(styles)})",
-                    file=sys.stderr, flush=True,
-                )
+        # ── Render PARALELO (F0.2): pool de N workers (default 2, env LF_RENDER_WORKERS).
+        # Cada (clip, estilo) es independiente: project/props/output únicos por par.
+        # Con 2 workers el lote baja de ~80 min a ~35-40 min (15 clips supreme).
+        tasks = [
+            (ci, c, si, style_id)
+            for ci, c in enumerate(clips_to_render, start=1)
+            for si, style_id in enumerate(styles, start=1)
+        ]
+        workers = min(_render_workers(), max(1, len(tasks)))
+        rc = _remotion_concurrency(workers)
+        print(
+            f"[render] {workers} render(s) en paralelo · --concurrency {rc} c/u",
+            file=sys.stderr, flush=True,
+        )
+        done_count = 0
+
+        def _render_one(task: tuple) -> tuple:
+            ci, c, si, style_id = task
+            # Marcador que la ruta surfacea en el panel: "clip 2/7 · estilo supreme (1/3)".
+            print(
+                f"[render] clip {ci}/{n_clips} · estilo {style_id} ({si}/{len(styles)})",
+                file=sys.stderr, flush=True,
+            )
+            out = step_render_clip(
+                args.video_id,
+                c["index"],
+                c["slug"],
+                style_id=style_id,
+                accent_color=args.accent_color,
+                aspect_ratio=args.aspect_ratio,
+                remotion_concurrency=rc,
+            )
+            return (c["index"], style_id, out)
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_render_one, t): t for t in tasks}
+            for fut in as_completed(futures):
+                ci, c, si, style_id = futures[fut]
                 try:
-                    out = step_render_clip(
-                        args.video_id,
-                        c["index"],
-                        c["slug"],
-                        style_id=style_id,
-                        accent_color=args.accent_color,
-                        aspect_ratio=args.aspect_ratio,
+                    _, _, out = fut.result()
+                    done_count += 1
+                    print(
+                        f"[ok] render -> {out} ({done_count}/{len(tasks)} listos)",
+                        file=sys.stderr, flush=True,
                     )
-                    print(f"[ok] render -> {out}", file=sys.stderr)
                 except subprocess.CalledProcessError as e:
+                    print(f"[fail] render clip {c['index']} style {style_id}: {e}", file=sys.stderr)
+                except Exception as e:  # noqa: BLE001 — un clip fallido no tumba el lote
                     print(f"[fail] render clip {c['index']} style {style_id}: {e}", file=sys.stderr)
 
     elapsed = time.time() - t_total

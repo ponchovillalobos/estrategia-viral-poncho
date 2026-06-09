@@ -20,6 +20,7 @@ import { autoMatchBroll, type BrollClip } from "@/lib/pexels";
 import { writeJsonFileAtomic } from "@/lib/atomic-write";
 import { readSettings } from "@/lib/user-settings";
 import { runProcess } from "@/lib/run-process";
+import { remotionConcurrency, renameWithRetry } from "@/lib/render-utils";
 import {
   pickTopKeywords,
   sanitizeForFilename,
@@ -223,6 +224,10 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         ...(body.subtitleFont && body.subtitleFont !== "auto"
           ? { subtitleFont: body.subtitleFont }
           : {}),
+        // Color del TEXTO de los subtítulos elegido en el wizard ("auto" = el del estilo).
+        ...(body.subtitleColor && body.subtitleColor !== "auto"
+          ? { subtitleColor: body.subtitleColor }
+          : {}),
       };
 
       await applyBeatSync(project, transcript.duration);
@@ -276,7 +281,16 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       const outArg = needsQuote ? `"${outPath}"` : outPath;
       const renderRun = await runProcess(
         npxExe,
-        ["remotion", "render", "src/index.ts", "ViralVideo", outArg, "--props=props.json"],
+        [
+          "remotion",
+          "render",
+          "src/index.ts",
+          "ViralVideo",
+          outArg,
+          "--concurrency",
+          String(remotionConcurrency()),
+          "--props=props.json",
+        ],
         REMOTION_DIR,
         (chunk) => {
           // Remotion emite MUCHAS líneas "Rendered X/Y" muy seguidas y el stream las
@@ -437,7 +451,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       }
 
       // Publicar atómicamente: el .mp4 final aparece de una sola pieza recién acá.
-      await fs.rename(outPath, finalOut);
+      // (con retry ante locks transitorios de antivirus/indexador sobre el archivo)
+      await renameWithRetry(outPath, finalOut);
       updateStep(job.id, styleId, { status: "ok", progress: 100, output: finalOut });
     } catch (err) {
       // Si quedó un temporal a medias por la excepción, limpiarlo (projectId ya resuelto).

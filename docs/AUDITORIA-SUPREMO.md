@@ -1,5 +1,23 @@
 # Auditoría Suprema + Plan de Mejora — 2026-06-09
 
+> **Estado de ejecución (actualizado 2026-06-09):**
+> - ✅ **FASE 0 COMPLETA**: `--concurrency cores-1` en los 3 puntos de render (shorts,
+>   auto-build, largos); render de clips de largos PARALELO (pool de 2, env
+>   `LF_RENDER_WORKERS`, props file único por clip+estilo); `PYTHONIOENCODING=utf-8`
+>   en todos los subprocess; file lock por render (`{id}.__lock`, stale 30 min) +
+>   `renameWithRetry` ante locks de OneDrive/antivirus; retención de artefactos
+>   (intermedios >24h siempre; renders finales sólo con env
+>   `VIRAL_RENDER_RETENTION_DAYS`) con auditoría en `disk-audit.log`; ETA por job en
+>   la cola + cancelación individual (`?action=cancel&jobId=`) + fix de cancel-all
+>   que dejaba jobs "queued" eternos; **paridad .ts/.mjs**: `graphics: true` agregado
+>   a hype/hype_max/hype_max_sfx/supreme de largos, estilos `graphics_pro`/`graphics_max`
+>   portados a largos (con generación automática de gráficos cuando el estilo los trae)
+>   y test automático `node remotion/check-style-parity.mjs` (exit 1 si divergen).
+> - ✅ **Pedido del user**: selector de COLOR de subtítulos en el wizard (paso 3) con
+>   9 colores + automático, preview en vivo ("Así se ven TUS subtítulos" con fuente +
+>   color + resaltado), guardado en plantillas y cableado hasta el render.
+> - ⏳ Siguiente: FASE 1 (director emocional).
+
 > Auditoría con 6 agentes en paralelo: motor Remotion/FX, pipeline Python/IA,
 > frontend/APIs/UX, pipeline de largos, robustez/rendimiento, y estado del arte
 > 2025-2026 del mercado (Opus Clip, Submagic, Captions.ai, Descript, CapCut,

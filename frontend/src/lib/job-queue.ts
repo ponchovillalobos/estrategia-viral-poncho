@@ -210,6 +210,50 @@ export function forceUnstuck(): { activeBefore: number; pendingBefore: number } 
   return { activeBefore, pendingBefore };
 }
 
+/** Marca un job como cancelado en su store (para que el panel no lo muestre "queued" eterno). */
+function markCancelled(kind: JobKind, jobId: string) {
+  if (kind === "editor") {
+    const job = getEditorJob(jobId);
+    if (!job) return;
+    job.status = "failed";
+    job.queuePosition = undefined;
+    job.finishedAt = Date.now();
+    for (const step of job.steps) {
+      if (step.status === "pending") {
+        updateStep(job.id, step.styleId, { status: "fail", error: "cancelado por el usuario" });
+      }
+    }
+  } else if (kind === "long_form") {
+    const job = getLongFormJob(jobId);
+    if (!job) return;
+    job.status = "failed";
+    job.queuePosition = undefined;
+    job.finishedAt = Date.now();
+    for (const step of job.steps) {
+      if (step.status === "pending") {
+        updateLongFormStep(job.id, step.key, { status: "fail", message: "cancelado por el usuario" });
+      }
+    }
+  } else if (kind === "research") {
+    updateResearch(jobId, { status: "failed", lastError: "cancelado por el usuario" }).catch(() => {});
+  }
+}
+
+/**
+ * Cancela UN job pendiente por id (no toca los running). Devuelve si lo encontró.
+ * Marca el job como failed/"cancelado" en su store y re-numera posiciones.
+ */
+export function cancelPending(jobId: string): boolean {
+  const idx = QUEUE.pending.findIndex((e) => e.jobId === jobId);
+  if (idx < 0) return false;
+  const [entry] = QUEUE.pending.splice(idx, 1);
+  markCancelled(entry.kind, entry.jobId);
+  for (let i = 0; i < QUEUE.pending.length; i++) {
+    markQueued(QUEUE.pending[i].kind, QUEUE.pending[i].jobId, i + 1);
+  }
+  return true;
+}
+
 /**
  * Cancela todos los pending y limpia active. NO mata los runners ya disparados
  * (esos siguen corriendo en background hasta resolver). Para uso cuando el user
@@ -218,6 +262,9 @@ export function forceUnstuck(): { activeBefore: number; pendingBefore: number } 
 export function cancelAllPending(): { pendingCancelled: number; activeBefore: number } {
   const pendingCancelled = QUEUE.pending.length;
   const activeBefore = QUEUE.active.size;
+  // BUG FIX (auditoría): antes sólo se vaciaba la cola sin marcar los jobs → quedaban
+  // "queued" para siempre en el panel. Ahora cada uno queda failed/"cancelado".
+  for (const e of QUEUE.pending) markCancelled(e.kind, e.jobId);
   QUEUE.pending = [];
   QUEUE.active.clear();
   ACTIVE_KINDS.clear();

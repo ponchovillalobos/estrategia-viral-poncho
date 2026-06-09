@@ -16,6 +16,8 @@ interface Template {
   styles: string[];
   accentColor: string;
   subtitleFont: string;
+  /** Color del TEXTO de los subtítulos ("auto" = el del estilo). */
+  subtitleColor?: string;
   platforms: string[];
   aspectRatio: "9:16" | "16:9";
   createdAt: string;
@@ -61,6 +63,7 @@ export async function POST(req: NextRequest) {
     styles: body.styles,
     accentColor: body.accentColor || "#fb7185",
     subtitleFont: body.subtitleFont || "auto",
+    subtitleColor: body.subtitleColor || "auto",
     platforms: Array.isArray(body.platforms) ? body.platforms : [],
     aspectRatio: body.aspectRatio === "16:9" ? "16:9" : "9:16",
     createdAt: new Date().toISOString(),
