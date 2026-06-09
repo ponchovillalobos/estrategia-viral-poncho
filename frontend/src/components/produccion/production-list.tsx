@@ -550,7 +550,7 @@ export function ProductionList() {
                           ? "Generá un caption primero con ✨"
                           : instagramConnected
                             ? `Publicar AHORA en Instagram${instagramHandle ? ` (${instagramHandle})` : ""}`
-                            : `Bridge manual Instagram${instagramHandle ? ` (${instagramHandle})` : ""} — conectá IG en Settings para publicar directo`
+                            : `Publicar en Instagram con un paso extra (te copia el video y abre IG)${instagramHandle ? ` — ${instagramHandle}` : ""}. Conectá IG en Configuración para publicar directo.`
                       }
                       className="flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/5 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-amber-300 hover:bg-amber-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
                     >

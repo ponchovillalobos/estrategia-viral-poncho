@@ -106,6 +106,17 @@
 >     ícono. Verificado en vivo (JPEG 200).
 >   - **Estilos Gráficos & Motion ahora elegibles en largos** (graphics_pro/max ya
 >     estaban portados al pipeline en F0; faltaban en la lista del wizard).
+> - ✅ **Pulido de UI/UX (2026-06-09, auditoría página por página)**: veredicto —
+>   NINGUNA sección muerta (todo funciona); los problemas eran de claridad. Cambios:
+>   home con 4 acciones (Videos largos promovido a acción principal), /metricas con
+>   las instrucciones "de dónde saco los números" ARRIBA del formulario y labels
+>   humanos ("Avg watch time"→"Tiempo promedio visto", "Project ID"→"Nombre del
+>   short", "retention3s"→"% que sigue viendo al segundo 3"), etiqueta
+>   "Subtítulos"→"Transcripción" en la lista de videos, empty state que dice el
+>   siguiente paso, tabs del editor manual renombrados (Meta→Info, B-roll→Videos de
+>   apoyo, FX→Efectos, Export→Generar) + badge "edición manual" que explica cuándo
+>   usarlo, "Bridge manual"→texto claro en producción, y Pixabay marcado como
+>   OPCIONAL (ya hay 54 pistas + 67 SFX sin key). Las 10 páginas responden 200.
 > - ⏳ Pendiente (futuro): @remotion/player embebido + timeline visual arrastrable,
 >   hook reorder + loop perfecto (requiere re-corte), b-roll CLIP local, multicam
 >   (sherpa-onnx), 3D en headlines/mirror, LUT real por frame, voz 1.05x +

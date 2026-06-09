@@ -447,9 +447,10 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                 </a>
               </div>
               <p className="text-[11px] text-amber-200/70">
-                Registrate en Pixabay (gratis), pegá tu API key acá y el modo
-                cinematográfico descarga ~21 SFX + 7 pistas de música CC0 reales
-                para usarlos en los renders. Sin cuotas estrictas, uso comercial OK.
+                <strong>Opcional</strong> — el sistema ya trae 54 pistas de música y 67
+                sonidos gratis SIN ninguna key. Esto solo suma variedad extra: registrate
+                en Pixabay (gratis), pegá tu API key y el modo cinematográfico descarga
+                ~21 SFX + 7 pistas CC0 adicionales. Uso comercial OK.
               </p>
               <div className="space-y-1.5">
                 <Label className="text-xs">API key</Label>

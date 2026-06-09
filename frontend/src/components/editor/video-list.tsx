@@ -152,8 +152,8 @@ export function VideoList() {
           <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
             ¿Qué significan las etiquetas?
             <HelpHint label="Qué significan las etiquetas de cada video" width="w-72">
-              Cada video muestra su progreso: <strong>Subtítulos</strong> = ya le sacamos el
-              texto de lo que se dice; <strong>Cortes</strong> = le quitamos los silencios;{" "}
+              Cada video muestra su progreso: <strong>Transcripción</strong> = ya le sacamos
+              el texto de lo que se dice; <strong>Cortes</strong> = le quitamos los silencios;{" "}
               <strong>Listo</strong> = ya tiene un video final generado.
             </HelpHint>
           </span>
@@ -207,7 +207,9 @@ export function VideoList() {
           <FileVideo className="mx-auto mb-3 h-10 w-10 text-muted-foreground opacity-60" />
           <p className="text-base font-medium text-foreground">Todavía no tenés videos</p>
           <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-            Subí tu primer video desde la computadora para empezar a crear tu short viral.
+            Subí tu primer video desde la computadora. Después tocá{" "}
+            <strong className="text-foreground">«Crear automático»</strong> y la IA lo edita
+            por vos: subtítulos, efectos, música y descripción listos para publicar.
           </p>
           <Button
             className="mt-4"
@@ -306,7 +308,7 @@ export function VideoList() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-1.5 text-[10px]">
-                <StatusBadge label="Subtítulos" on={v.status.transcribed} />
+                <StatusBadge label="Transcripción" on={v.status.transcribed} />
                 <StatusBadge label="Cortes" on={v.status.cuts} />
                 <StatusBadge label="Listo" on={v.status.rendered} />
               </div>

@@ -88,8 +88,9 @@ export function MetricsForm() {
     <Card className="border-border bg-card p-6">
       <h3 className="text-lg font-medium">Nueva entrada</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Pegá las métricas del post de un día específico. Los campos opcionales
-        (watch time, retención, project ID) habilitan insights más profundos.
+        Pegá los números de un post que publicaste. Con solo vistas/likes/comentarios ya
+        sirve; los campos opcionales (tiempo de visualización, nombre del short) permiten
+        rankear qué hooks y estilos te funcionan mejor.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-5 space-y-4">
@@ -139,8 +140,10 @@ export function MetricsForm() {
 
         <div className="space-y-1.5">
           <Label htmlFor="projectId">
-            Project ID{" "}
-            <span className="text-muted-foreground">(opcional, pero habilita ranking de hooks)</span>
+            Nombre del short{" "}
+            <span className="text-muted-foreground">
+              (opcional — el nombre que aparece en «Mis videos»; habilita el ranking de hooks)
+            </span>
           </Label>
           <Input
             id="projectId"
@@ -225,7 +228,7 @@ export function MetricsForm() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="avgWatchTime">
-              Avg watch time <span className="text-muted-foreground">(seg)</span>
+              Tiempo promedio visto <span className="text-muted-foreground">(segundos)</span>
             </Label>
             <Input
               id="avgWatchTime"
@@ -256,7 +259,8 @@ export function MetricsForm() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="retention3s">
-              Retención al segundo 3 <span className="text-muted-foreground">(%)</span>
+              % que sigue viendo al segundo 3{" "}
+              <span className="text-muted-foreground">(mide si el hook engancha)</span>
             </Label>
             <Input
               id="retention3s"

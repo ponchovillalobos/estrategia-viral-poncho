@@ -221,6 +221,12 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
         </Link>
         <span className="font-mono-tab text-xs text-muted-foreground">·</span>
         <h1 className="font-mono-tab text-base">{projectId}</h1>
+        <span
+          className="rounded bg-sky-500/15 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-sky-300"
+          title="Acá ajustás a mano un video ya generado. Para crear uno nuevo desde cero, usá «Crear automático» en la pantalla anterior."
+        >
+          edición manual
+        </span>
         <button
           type="button"
           onClick={() => setRenameOpen(true)}
@@ -270,22 +276,23 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
           <Tabs defaultValue="subs" className="p-4">
             <TabsList className="w-full">
               <TabsTrigger value="meta" className="flex-1">
-                Meta
+                Info
               </TabsTrigger>
               <TabsTrigger value="subs" className="flex-1">
                 Subtítulos
               </TabsTrigger>
               <TabsTrigger value="broll" className="flex-1">
-                B-roll
+                Videos de apoyo
               </TabsTrigger>
               <TabsTrigger value="music" className="flex-1">
                 Música
               </TabsTrigger>
               <TabsTrigger value="fx" className="flex-1">
-                FX
+                Efectos
               </TabsTrigger>
-              <TabsTrigger value="export" className="flex-1">
-                <Wand2 className="h-3.5 w-3.5" />
+              <TabsTrigger value="export" className="flex-1" title="Generar el video final">
+                <Wand2 className="mr-1 h-3.5 w-3.5" />
+                Generar
               </TabsTrigger>
             </TabsList>
 

@@ -13,6 +13,13 @@ const ACTIONS = [
     primary: true,
   },
   {
+    href: "/largos",
+    title: "Cortar un video largo",
+    desc: "Subí un curso o charla y la IA extrae los mejores clips virales.",
+    icon: Film,
+    primary: false,
+  },
+  {
     href: "/produccion",
     title: "Ver mis videos",
     desc: "Tus shorts ya editados, listos para publicar.",
@@ -38,7 +45,6 @@ const FLOW = [
 const SECONDARY = [
   { href: "/metricas", label: "Ver resultados", icon: LineChart },
   { href: "/research", label: "Buscar inspiración", icon: Telescope },
-  { href: "/largos", label: "Videos largos", icon: Film },
 ] as const;
 
 export default function Home() {
@@ -63,8 +69,8 @@ export default function Home() {
         </p>
       </header>
 
-      {/* 3 acciones principales */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* 4 acciones principales */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {ACTIONS.map(({ href, title, desc, icon: Icon, primary }) => (
           <Link
             key={href}

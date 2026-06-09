@@ -10,17 +10,47 @@ export default function MetricasPage() {
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Métricas reales · server-persisted"
-        title="Mis métricas"
-        description="Pegá las métricas de tus posts o usá «Sincronizar LinkedIn» para traer las reales de tus posts publicados desde la app. Si cargás project ID + avg watch time + duración, se rankean qué hooks y captions performaron mejor."
+        eyebrow="Resultados de tus publicaciones"
+        title="Mis resultados"
+        description="Anotá acá cómo le fue a cada video que publicaste (vistas, likes, comentarios). Con eso el sistema aprende qué hooks y descripciones te funcionan mejor. Si publicaste en LinkedIn desde la app, el botón «Sincronizar LinkedIn» trae los números solo."
         color={SECTION_COLORS.metricas}
       >
         <LinkedInSyncButton />
       </SectionHeader>
 
-      <MetricsInsights />
+      {/* Las instrucciones van PRIMERO: sin saber de dónde copiar los números,
+          el formulario de abajo no se entiende. */}
+      <section className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-5 text-sm">
+        <p className="font-medium text-amber-200">
+          📋 ¿De dónde saco los números? (1 minuto por video)
+        </p>
+        <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
+          <li>
+            <span className="font-mono-tab text-foreground">TikTok</span> · App
+            → tu video → ··· → Datos del video. Copiá vistas, likes, comentarios,
+            compartidos, guardados. Para el tiempo de visualización → «Análisis» →
+            «Tiempo promedio visualizado».
+          </li>
+          <li>
+            <span className="font-mono-tab text-foreground">Instagram</span> ·
+            App → tu reel → ver Insights. Anotá alcance (como vistas), likes,
+            comentarios, guardados, compartidos. Tiempo → «Tiempo de reproducción promedio».
+          </li>
+          <li>
+            <span className="font-mono-tab text-foreground">LinkedIn</span> ·
+            Tu post → «ver analytics». Anotá impresiones (como vistas), reacciones
+            (likes), comentarios, reposts (compartidos).
+          </li>
+          <li>
+            <span className="font-mono-tab text-foreground">Facebook</span> ·
+            Post → «ver insights». Vistas (alcance), likes, comentarios, compartidos.
+          </li>
+        </ul>
+      </section>
 
       <MetricsForm />
+
+      <MetricsInsights />
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">Historial</h2>
@@ -28,32 +58,6 @@ export default function MetricasPage() {
       </div>
 
       <MetricsTable />
-
-      <section className="rounded-lg border border-dashed border-border bg-card/50 p-5 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">Cómo sacar las métricas</p>
-        <ul className="mt-3 space-y-2 text-xs">
-          <li>
-            <span className="font-mono-tab text-foreground">TikTok</span> · App
-            → tu video → ··· → Datos del video. Copiá views, likes, comments,
-            shares, saves. Para watch time → «Análisis» → «Tiempo promedio
-            visualizado».
-          </li>
-          <li>
-            <span className="font-mono-tab text-foreground">Instagram</span> ·
-            App → tu reel → ver Insights. Anotá reach (como views), likes, comments, saves,
-            shares. Watch time → «Tiempo de reproducción promedio».
-          </li>
-          <li>
-            <span className="font-mono-tab text-foreground">LinkedIn</span> ·
-            Tu post → «ver analytics». Anotá impresiones (como views), reacciones (likes),
-            comments, reposts (shares). LinkedIn ahora muestra «tiempo de reproducción promedio».
-          </li>
-          <li>
-            <span className="font-mono-tab text-foreground">Facebook</span> ·
-            Post → «ver insights». Views (alcance), likes, comments, shares.
-          </li>
-        </ul>
-      </section>
     </div>
   );
 }
