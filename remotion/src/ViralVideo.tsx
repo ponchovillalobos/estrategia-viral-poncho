@@ -131,6 +131,9 @@ export const viralVideoSchema = z.object({
   subtitleFont: z
     .enum(["auto", "bebas", "anton", "montserrat", "poppins", "oswald", "bangers", "luckiest", "archivo", "teko", "righteous"])
     .default("auto"),
+  // F2 — Posición vertical del subtítulo. "top" cuando la cara del speaker queda
+  // abajo del frame (lo computa el tracking): el texto nunca tapa la cara.
+  subtitlePosition: z.enum(["bottom", "top"]).default("bottom"),
   animations: z.array(animationSchema).default([]),
   emphasisCards: z.array(emphasisCardSchema).default([]),
   bRollMode: z.enum(["fullscreen", "pip"]).default("fullscreen"),
@@ -199,6 +202,7 @@ export const defaultProps: ViralVideoProps = {
   subtitleColor: "#ffffff",
   subtitleHighlight: "#34d399",
   subtitleFont: "auto",
+  subtitlePosition: "bottom",
   animations: [],
   emphasisCards: [],
   bRollMode: "fullscreen",
@@ -249,6 +253,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   subtitleColor,
   subtitleHighlight,
   subtitleFont,
+  subtitlePosition,
   animations,
   emphasisCards,
   bRollMode,
@@ -578,6 +583,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           colorRotation={colorRotation}
           bounce={captionBounce}
           subtitleStyle={subtitleStyle}
+          position={subtitlePosition}
         />
       ) : (
         <KineticSubtitleLayer
@@ -588,6 +594,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           fontFamily={fontFamily}
           color={subtitleColor}
           highlight={subtitleHighlight}
+          position={subtitlePosition}
         />
       )}
 

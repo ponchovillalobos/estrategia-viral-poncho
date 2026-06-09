@@ -32,8 +32,26 @@
 > - ⏳ Pendiente F1 (mejoras): modelo de emoción de voz (SpeechBrain) y detección de
 >   risas (PANNs) como señales extra; música elegida por mood (requiere manifest de
 >   moods de los tracks CC0).
-> - ⏳ Siguiente: FASE 2 (ritmo real: muletillas ES, silence removal con aire,
->   micro punch-ins, hook reorder + loop).
+> - ✅ **FASE 2 (núcleo) — RITMO REAL**:
+>   1. **Muletillas en español** (`python/detect_fillers.py`, único en el mercado
+>      hispano): usa los timestamps de WhisperX para cortar "eh/em/mmm/ajá" siempre,
+>      y "este/pues/bueno/entonces/o sea" SOLO con firma acústica de duda (pausa
+>      ≥0.3s alrededor o palabra estirada >0.45s) — "este video es…" jamás se corta.
+>      Deja 50ms de aire por corte (patrón auto-editor). Se integra al flujo de jump
+>      cuts (detect_silences → **detect_fillers** → cut_silences) e invalida el
+>      `_cut.mp4` cacheado para no desincronizar subtítulos. Verificado con
+>      transcripts reales: detectó las muletillas reales y CERO falsos positivos
+>      sobre demostrativos legítimos.
+>   2. **Micro punch-ins** (tendencia 2026): zoom sutil 8%/0.5s en los picos
+>      emocionales moderados (arousal 0.35-0.55) — premium sin marear. En shorts
+>      (applyEmotionDirector) y largos (_apply_emotion).
+>   3. **Subtítulos fuera de la cara**: prop `subtitlePosition` (bottom/top) en el
+>      motor (SubtitleLayer + KineticSubtitleLayer); el tracking computa la altura
+>      media de la cara y si vive en la zona baja (y>0.62) el texto sube. En shorts
+>      y largos. Verificado con still real.
+> - ⏳ Pendiente F2: hook reorder + loop perfecto (requiere re-corte de video,
+>   diseñarlo como opt-in), voz 1.05x, DeepFilterNet studio sound.
+> - ⏳ Siguiente: FASE 3 (motor visual: motion blur, partículas, 3D, LUT dinámico).
 
 > Auditoría con 6 agentes en paralelo: motor Remotion/FX, pipeline Python/IA,
 > frontend/APIs/UX, pipeline de largos, robustez/rendimiento, y estado del arte

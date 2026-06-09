@@ -441,6 +441,8 @@ interface KineticSubtitleLayerProps {
   fontFamily: string;
   color: string;
   highlight: string;
+  /** F2 — "top" cuando la cara del speaker está abajo (auto-cómputo del tracking). */
+  position?: "bottom" | "top";
 }
 
 /**
@@ -457,7 +459,13 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
   fontFamily,
   color,
   highlight,
+  position = "bottom",
 }) => {
+  // Posición vertical: abajo (default histórico) o arriba si la cara está abajo.
+  const placementStyle =
+    position === "top"
+      ? ({ justifyContent: "flex-start", paddingTop: 280 } as const)
+      : ({ justifyContent: "flex-end", paddingBottom: 320 } as const);
   // PERF: agrupar palabras en líneas + mapa palabra→línea SOLO cuando cambia `words`,
   // no en cada frame. Sin esto, KineticSubtitleLayer en modo "karaoke" hacía
   // groupWordsIntoLines + lines.find() cada frame (~360k iteraciones de más a 30fps × 60s).
@@ -499,9 +507,8 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
     return (
       <AbsoluteFill
         style={{
-          justifyContent: "flex-end",
+          ...placementStyle,
           alignItems: "center",
-          paddingBottom: 320,
           pointerEvents: "none",
         }}
       >
@@ -614,9 +621,8 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
   return (
     <AbsoluteFill
       style={{
-        justifyContent: "flex-end",
+        ...placementStyle,
         alignItems: "center",
-        paddingBottom: 320,
         pointerEvents: "none",
       }}
     >

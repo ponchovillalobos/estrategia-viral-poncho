@@ -85,6 +85,8 @@ export interface ResolvedProject {
   subtitleFont?: string;
   // Color del TEXTO de los subtítulos elegido en el wizard ("auto" = el del estilo).
   subtitleColor?: string;
+  // F2 — "top" si el tracking detectó la cara en la zona baja (no tapar al speaker).
+  subtitlePosition?: "bottom" | "top";
   // F1 — Director emocional: ducking de música + mood + SFX modulados por arousal.
   musicVolumeCurve?: { t: number; v: number }[];
   mood?: string;

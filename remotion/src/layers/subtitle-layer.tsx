@@ -21,6 +21,8 @@ export const SubtitleLayer: React.FC<{
   colorRotation?: string[];
   bounce?: boolean;
   subtitleStyle?: "bebas" | "anton" | "cinematic";
+  /** F2 — "top" cuando la cara del speaker está abajo (auto-cómputo del tracking). */
+  position?: "bottom" | "top";
 }> = ({
   words,
   currentTime,
@@ -31,6 +33,7 @@ export const SubtitleLayer: React.FC<{
   colorRotation = [],
   bounce = false,
   subtitleStyle = "bebas",
+  position = "bottom",
 }) => {
   let activeIndex = -1;
   for (let idx = 0; idx < words.length; idx++) {
@@ -83,9 +86,10 @@ export const SubtitleLayer: React.FC<{
   return (
     <AbsoluteFill
       style={{
-        justifyContent: "flex-end",
+        ...(position === "top"
+          ? { justifyContent: "flex-start" as const, paddingTop: isCinematic ? 200 : 280 }
+          : { justifyContent: "flex-end" as const, paddingBottom: isCinematic ? 220 : 320 }),
         alignItems: "center",
-        paddingBottom: isCinematic ? 220 : 320,
         pointerEvents: "none",
       }}
     >

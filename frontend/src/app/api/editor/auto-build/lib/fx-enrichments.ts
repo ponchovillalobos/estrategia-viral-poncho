@@ -135,9 +135,9 @@ export async function applyEmotionDirector(
     }
 
     // 2) Zooms de reacción en picos emocionales — solo en estilos ya dinámicos.
-    const zoomCount = (project.zoomMarks as unknown[] | undefined)?.length ?? 0;
+    const existingZm = (project.zoomMarks ?? []) as { at: number }[];
     const existingRz = (project.reactionZooms ?? []) as { at: number }[];
-    const isDynamic = zoomCount > 0 || existingRz.length > 0;
+    const isDynamic = existingZm.length > 0 || existingRz.length > 0;
     if (isDynamic && Array.isArray(e.peaks)) {
       const added = e.peaks
         .filter((p) => p.score >= 0.55)
@@ -146,6 +146,15 @@ export async function applyEmotionDirector(
         .map((p) => ({ at: p.t, intensity: 1.35, duration: 0.25 }));
       if (added.length > 0) {
         project.reactionZooms = [...existingRz, ...added];
+      }
+      // 2b) MICRO PUNCH-INS (tendencia 2026): en los picos moderados, un zoom sutil
+      // del 8% en vez de corte duro — se siente "premium" sin marear.
+      const micro = e.peaks
+        .filter((p) => p.score >= 0.35 && p.score < 0.55)
+        .filter((p) => !existingZm.some((z) => Math.abs(z.at - p.t) < 2.0))
+        .map((p) => ({ at: p.t, duration: 0.5, scale: 1.08 }));
+      if (micro.length > 0) {
+        project.zoomMarks = [...existingZm, ...micro];
       }
     }
 
@@ -196,6 +205,18 @@ export async function applyTracking(
     const parsed = line ? (JSON.parse(line) as { points?: unknown[] }) : null;
     const pts = parsed?.points ?? [];
     project.trackPath = pts;
+    // F2 — Subtítulos FUERA de la cara: si la cara vive en la zona baja del frame
+    // (donde van los subtítulos), el texto se mueve arriba. Nunca tapa al speaker.
+    const ys = (pts as { y?: number }[])
+      .map((p) => p.y)
+      .filter((y): y is number => typeof y === "number");
+    if (ys.length > 3) {
+      const avgY = ys.reduce((a, b) => a + b, 0) / ys.length;
+      if (avgY > 0.62) {
+        project.subtitlePosition = "top";
+        console.log(`[auto-build] cara abajo (y=${avgY.toFixed(2)}) → subtítulos ARRIBA`);
+      }
+    }
     console.log(`[auto-build] motion tracking: ${pts.length} puntos de cara`);
   } catch (err) {
     console.warn("[auto-build] tracking falló:", err);

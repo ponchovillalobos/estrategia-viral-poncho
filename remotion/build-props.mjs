@@ -153,6 +153,8 @@ const props = {
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",
   subtitleFont: project.subtitleFont ?? "auto",
+  // F2 — subtítulos fuera de la cara: "top" si el tracking detectó la cara abajo.
+  subtitlePosition: project.subtitlePosition ?? "bottom",
   animations: animationsRemapped,
   emphasisCards: emphasisCardsRemapped,
   bRollMode: project.bRollMode ?? "fullscreen",

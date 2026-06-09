@@ -320,6 +320,12 @@ def _apply_tracking(clip_id: str, style_id: str) -> None:
         if not points:
             return
         data["trackPath"] = points
+        # F2 — subtítulos fuera de la cara (paridad con shorts): cara en zona baja
+        # del frame → el subtítulo va arriba para no tapar al speaker.
+        ys = [p.get("y") for p in points if isinstance(p.get("y"), (int, float))]
+        if len(ys) > 3 and sum(ys) / len(ys) > 0.62:
+            data["subtitlePosition"] = "top"
+            print(f"[tracking] cara abajo → subtítulos ARRIBA ({clip_id})", file=sys.stderr)
         project_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         print(f"[tracking] {len(points)} puntos de cara → {clip_id}_{style_id}", file=sys.stderr)
     except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
@@ -370,16 +376,27 @@ def _apply_emotion(clip_id: str, style_id: str) -> None:
         if data.get("musicTrack") and len(e.get("ducking") or []) > 1:
             data["musicVolumeCurve"] = e["ducking"]
         existing_rz = data.get("reactionZooms") or []
-        is_dynamic = bool(data.get("zoomMarks")) or bool(existing_rz)
+        existing_zm = data.get("zoomMarks") or []
+        is_dynamic = bool(existing_zm) or bool(existing_rz)
         if is_dynamic:
+            peaks = e.get("peaks") or []
             added = [
                 {"at": p["t"], "intensity": 1.35, "duration": 0.25}
-                for p in (e.get("peaks") or [])
+                for p in peaks
                 if p.get("score", 0) >= 0.55
                 and not any(abs(z.get("at", -99) - p["t"]) < 2.5 for z in existing_rz)
             ][:3]
             if added:
                 data["reactionZooms"] = existing_rz + added
+            # Micro punch-ins (paridad con shorts): zoom sutil 8% en picos moderados.
+            micro = [
+                {"at": p["t"], "duration": 0.5, "scale": 1.08}
+                for p in peaks
+                if 0.35 <= p.get("score", 0) < 0.55
+                and not any(abs(z.get("at", -99) - p["t"]) < 2.0 for z in existing_zm)
+            ]
+            if micro:
+                data["zoomMarks"] = existing_zm + micro
         project_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         print(
             f"[emotion] {clip_id}: mood={e.get('mood')} · {len(e.get('peaks') or [])} picos",

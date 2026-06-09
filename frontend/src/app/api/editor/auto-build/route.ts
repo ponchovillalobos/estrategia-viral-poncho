@@ -85,6 +85,10 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       await fs.access(cutMp4);
     } catch {
       await runProcess(PYTHON_EXE, [path.join(PYTHON_DIR, "detect_silences.py"), `${videoId}.mp4`], PYTHON_DIR, undefined, 300_000);
+      // F2 — Muletillas en español: resta "eh/este…/o sea" (con firma de duda) de los
+      // keep_segments ANTES de cortar. El _cut.mp4 sale sin silencios NI muletillas,
+      // y los subtítulos las pierden solos en el remap. Best-effort.
+      await runProcess(PYTHON_EXE, [path.join(PYTHON_DIR, "detect_fillers.py"), videoId], PYTHON_DIR, undefined, 60_000);
       await runProcess(PYTHON_EXE, [path.join(PYTHON_DIR, "cut_silences.py"), `${videoId}.mp4`], PYTHON_DIR, undefined, 600_000);
     }
   }
