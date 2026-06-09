@@ -46,6 +46,10 @@ import { WordStickerLayer } from "./layers/word-sticker-layer";
 import { EmphasisCardLayer } from "./layers/emphasis-card-layer";
 import { SubtitleLayer } from "./layers/subtitle-layer";
 import { ParticleLayer, particleBurstSchema } from "./layers/particle-layer";
+import {
+  AnimatedBackgroundLayer,
+  animatedBackgroundSchema,
+} from "./layers/animated-background-layer";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -189,6 +193,9 @@ export const viralVideoSchema = z.object({
   lottieStickers: z.array(lottieStickerSchema).default([]),
   // F3 — Partículas procedurales (confeti/chispas/brasas/lluvia de emojis). Opt-in.
   particleBursts: z.array(particleBurstSchema).default([]),
+  // MOTION PRO — Fondo animado (aurora/mesh/grid), opcionalmente audio-reactivo.
+  // null = sin fondo (render idéntico al histórico).
+  animatedBackground: animatedBackgroundSchema.nullable().default(null),
 });
 
 type ViralVideoProps = z.infer<typeof viralVideoSchema>;
@@ -244,6 +251,7 @@ export const defaultProps: ViralVideoProps = {
   kineticHeadlines: [],
   lottieStickers: [],
   particleBursts: [],
+  animatedBackground: null,
 };
 
 export const ViralVideo: React.FC<ViralVideoProps> = ({
@@ -294,6 +302,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   kineticHeadlines,
   lottieStickers,
   particleBursts,
+  animatedBackground,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -741,6 +750,11 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         .map((s, i) => (
           <LottieStickerLayer key={`ls-${i}-${s.at}`} sticker={s} currentTime={currentTime} />
         ))}
+
+      {/* MOTION PRO — Fondo animado (aurora/mesh/grid), pulsa con la música. */}
+      {animatedBackground && (
+        <AnimatedBackgroundLayer bg={animatedBackground} musicUrl={musicUrl} />
+      )}
 
       {/* F3 — Partículas procedurales (confeti/chispas/brasas/lluvia de emojis). */}
       {particleBursts

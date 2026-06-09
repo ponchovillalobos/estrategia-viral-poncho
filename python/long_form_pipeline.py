@@ -736,7 +736,10 @@ def main() -> int:
     # transcript de cada clip (que extract_clips ya dejó alineado palabra-por-palabra).
     # Se activa con --graphics O si algún estilo elegido los trae (paridad con shorts:
     # hype/hype_max/hype_max_sfx/supreme/graphics_* generan graphics: true).
-    GRAPHICS_STYLES = {"hype", "hype_max", "hype_max_sfx", "supreme", "graphics_pro", "graphics_max"}
+    GRAPHICS_STYLES = {
+        "hype", "hype_max", "hype_max_sfx", "supreme", "graphics_pro", "graphics_max",
+        "motion_pro", "motion_beat", "motion_grid",
+    }
     requested_styles = {s.strip() for s in args.styles.split(",") if s.strip()}
     wants_graphics = args.graphics or bool(requested_styles & GRAPHICS_STYLES)
     if wants_graphics and clips_info:
@@ -751,6 +754,7 @@ def main() -> int:
         VALID_STYLES = {
             "silent", "punch", "hype", "hype_max", "hype_max_sfx", "supreme",
             "graphics_pro", "graphics_max",
+            "motion_pro", "motion_beat", "motion_grid",
         }
         invalid = [s for s in styles if s not in VALID_STYLES]
         if invalid:

@@ -1,4 +1,4 @@
-// Helpers puros usados por auto-build/route.ts.
+﻿// Helpers puros usados por auto-build/route.ts.
 //
 // Cada función vive fuera del route handler para que la lógica de archivo / I/O esté
 // localizada y se pueda razonar (y testear) sin arrastrar todo el flujo de render.
@@ -23,6 +23,9 @@ export const STYLE_SHORT_LABEL: Record<StyleId, string> = {
   text_behind: "TextoDetras",
   graphics_pro: "Graficos",
   graphics_max: "GraficosMax",
+  motion_pro: "MotionPro",
+  motion_beat: "MotionBeat",
+  motion_grid: "MotionGrid",
 };
 
 /** Resuelve aspect ratio → dimensiones de output en píxeles. */

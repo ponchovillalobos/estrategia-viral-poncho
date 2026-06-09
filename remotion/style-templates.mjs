@@ -684,6 +684,51 @@ export function buildProjectForStyle(ctx, styleId) {
     );
   }
 
+  // ─── MOTION PRO (paridad con shorts): animación pura, limpia, SIN emojis. ───
+  if (styleId === "motion_pro" || styleId === "motion_beat" || styleId === "motion_grid") {
+    const bgKind =
+      styleId === "motion_beat" ? "mesh" : styleId === "motion_grid" ? "grid" : "aurora";
+    const isBeat = styleId === "motion_beat";
+    return applyCapcutFx(
+      {
+        ...base,
+        graphics: true,
+        subtitleStyle: "anton",
+        vignette: true,
+        captionBounce: false,
+        musicTrack: pickRandomMusicTrack(ctx.videoId),
+        musicVolume: isBeat ? 0.22 : 0.14,
+        zoomMarks: pickKeywords(ctx, isBeat ? 5 : 4).map((kw) => ({
+          at: kw.start,
+          duration: 0.5,
+          scale: isBeat ? 1.1 : 1.08,
+        })),
+        ...(isBeat
+          ? {
+              reactionZooms: pickKeywords(ctx, 2).slice(-2).map((kw) => ({
+                at: kw.start,
+                intensity: 1.3,
+                duration: 0.22,
+              })),
+            }
+          : {}),
+        animatedBackground: {
+          kind: bgKind,
+          colors: [ctx.accentColor, "#22d3ee", "#a78bfa"],
+          opacity: isBeat ? 0.6 : 0.48,
+          audioReactive: true,
+        },
+      },
+      ctx,
+      {
+        lut: styleId === "motion_grid" ? "cyberpunk.cube" : "kodak_warm.cube",
+        kinetic: "karaoke",
+        endScreen: true,
+        progressBar: true,
+      }
+    );
+  }
+
   // ─── graphics_max: gráficos + la edición más intensa (paridad con shorts). ───
   if (styleId === "graphics_max") {
     return applyCapcutFx(

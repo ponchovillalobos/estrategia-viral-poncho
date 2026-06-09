@@ -49,7 +49,7 @@ const FONT_PREVIEW: Record<string, string> = {
   righteous: _right.style.fontFamily,
 };
 
-type StyleId = "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme" | "broll_full" | "broll_pip" | "text_behind" | "graphics_pro" | "graphics_max";
+type StyleId = "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme" | "broll_full" | "broll_pip" | "text_behind" | "graphics_pro" | "graphics_max" | "motion_pro" | "motion_beat" | "motion_grid";
 type PlatformId = "tiktok" | "instagram" | "linkedin" | "facebook";
 
 interface VideoEntry {
@@ -92,6 +92,9 @@ const STYLES: { id: StyleId; name: string; tagline: string; emoji: string; recom
   { id: "text_behind", name: "Texto detrás de vos", tagline: "Efecto CapCut clásico: una palabra grande queda DETRÁS del sujeto.", emoji: "🧍" },
   { id: "graphics_pro", name: "Gráficos & Motion", tagline: "Suma gráficas animadas y titulares poderosos (de lo que decís) + zooms y transiciones.", emoji: "📊" },
   { id: "graphics_max", name: "Gráficos Max", tagline: "Gráficos al máximo: cortes rápidos, zooms de reacción y stutter. La más intensa.", emoji: "📈" },
+  { id: "motion_pro", name: "Motion Pro", tagline: "Animación pura y LIMPIA: fondo aurora que pulsa con la música, gráficas, sin emojis.", emoji: "✨" },
+  { id: "motion_beat", name: "Motion Beat", tagline: "El fondo late al ritmo de la música (gradiente vivo) + zooms al beat. Limpio y con energía.", emoji: "🎧" },
+  { id: "motion_grid", name: "Motion Grid", tagline: "Look retro-tech futurista: cuadrícula en perspectiva + gráficas. Sin emojis.", emoji: "🌐" },
 ];
 
 // Fuentes de subtítulo disponibles (Google Fonts gratis). "auto" = la del estilo.

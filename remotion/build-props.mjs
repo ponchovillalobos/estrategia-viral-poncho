@@ -154,6 +154,8 @@ const props = {
   musicVolumeCurve: filterAndRemap(project.musicVolumeCurve || [], ["t"]),
   // F3 — Partículas procedurales (confeti/chispas/brasas). Remapean igual.
   particleBursts: filterAndRemap(project.particleBursts || [], ["at"]),
+  // MOTION PRO — fondo animado (objeto sin timestamps, pass-through).
+  animatedBackground: project.animatedBackground ?? null,
   subtitleStyle: project.subtitleStyle ?? "bebas",
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",

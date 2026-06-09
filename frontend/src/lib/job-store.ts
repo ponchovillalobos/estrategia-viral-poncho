@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Job store del server para tracking de renders del wizard.
  *
  * En Next.js dev, este Map sobrevive entre requests (módulo se carga 1 vez). Además se
@@ -26,7 +26,10 @@ export type StyleId =
   | "broll_pip"
   | "text_behind"
   | "graphics_pro"
-  | "graphics_max";
+  | "graphics_max"
+  | "motion_pro"
+  | "motion_beat"
+  | "motion_grid";
 
 export interface JobStep {
   styleId: StyleId;

@@ -71,6 +71,7 @@ const { width: aspectWidth, height: aspectHeight } =
 const VALID_STYLES = [
   "silent", "punch", "hype", "hype_max", "hype_max_sfx", "supreme",
   "graphics_pro", "graphics_max",
+  "motion_pro", "motion_beat", "motion_grid",
 ];
 if (!VALID_STYLES.includes(styleId)) {
   console.error(`style_id inválido '${styleId}'. Válidos: ${VALID_STYLES.join(", ")}`);

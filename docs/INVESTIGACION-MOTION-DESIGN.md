@@ -1,5 +1,16 @@
 # Investigación: Motion Design en Remotion — 2026-06-09
 
+> **EJECUTADO (mismo día)**: Fase A+B implementadas — 3 estilos nuevos en el
+> selector de shorts Y largos: **Motion Pro ✨** (fondo aurora audio-reactivo,
+> limpio, sin emojis), **Motion Beat 🎧** (gradiente mesh que late con la música
+> + zooms al beat) y **Motion Grid 🌐** (cuadrícula retro-tech en perspectiva).
+> Motor: `remotion/src/layers/animated-background-layer.tsx` (aurora/mesh/grid,
+> `visualizeAudio` + `useWindowedAudioData` de @remotion/media-utils → el fondo
+> PULSA con los graves de la música; sin música respira suave). Los 3 estilos:
+> música CC0 automática + ducking del director emocional + charts + karaoke,
+> CERO stickers/emojis. Vendor de referencia: `remotion/vendor/remotion-scenes`
+> (201+ escenas MIT clonadas al repo para las fases C/D).
+
 > Pedido del user: estilo de videos con PURAS animaciones, muy limpio, sin emojis
 > ni tanto texto — gráficas, zooms, personajes, fondos que cambian al ritmo.
 > Qué existe en el ecosistema Remotion (gratis, MIT, sin API keys) y qué nos falta.

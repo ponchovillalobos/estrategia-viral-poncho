@@ -93,6 +93,8 @@ const props = {
   musicVolumeCurve: project.musicVolumeCurve || [],
   // F3 — Partículas procedurales (pass-through).
   particleBursts: project.particleBursts || [],
+  // MOTION PRO — fondo animado (pass-through).
+  animatedBackground: project.animatedBackground ?? null,
   subtitleStyle: project.subtitleStyle ?? "anton",
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",

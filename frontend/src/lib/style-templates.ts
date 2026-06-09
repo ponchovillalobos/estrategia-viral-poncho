@@ -23,7 +23,12 @@ export type StyleId =
   // Modo Gráficos & Motion en shorts: gráficas animadas + titulares poderosos,
   // COMBINADO con la edición dinámica (zooms, transiciones, y en _max jump cuts).
   | "graphics_pro"
-  | "graphics_max";
+  | "graphics_max"
+  // MOTION PRO — animación pura estilo motion design: limpio, SIN emojis ni
+  // stickers; fondos animados (audio-reactivos), charts y subtítulos minimal.
+  | "motion_pro"
+  | "motion_beat"
+  | "motion_grid";
 
 export interface BuildContext {
   videoId: string;
@@ -937,6 +942,56 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
     );
   }
 
+  // ─── MOTION PRO: animación pura, limpia, SIN emojis/stickers. El protagonismo
+  // es del motion design: fondo animado audio-reactivo + charts + karaoke minimal.
+  if (styleId === "motion_pro" || styleId === "motion_beat" || styleId === "motion_grid") {
+    const bgKind =
+      styleId === "motion_beat" ? ("mesh" as const)
+      : styleId === "motion_grid" ? ("grid" as const)
+      : ("aurora" as const);
+    const isBeat = styleId === "motion_beat";
+    return applyCapcutFx(
+      {
+        ...base,
+        graphics: true,
+        subtitleStyle: "anton" as const,
+        vignette: true,
+        captionBounce: false,
+        // SIN wordStickers / floatingEmojis / emphasisCards — limpio a propósito.
+        musicTrack: pickRandomMusicTrack(ctx.videoId),
+        musicVolume: isBeat ? 0.22 : 0.14,
+        // Micro punch-ins sutiles (el director emocional suma más en los picos).
+        zoomMarks: pickKeywords(ctx, isBeat ? 5 : 4).map((kw) => ({
+          at: kw.start,
+          duration: 0.5,
+          scale: isBeat ? 1.1 : 1.08,
+        })),
+        ...(isBeat
+          ? {
+              reactionZooms: pickKeywords(ctx, 2).slice(-2).map((kw) => ({
+                at: kw.start,
+                intensity: 1.3,
+                duration: 0.22,
+              })),
+            }
+          : {}),
+        animatedBackground: {
+          kind: bgKind,
+          colors: [ctx.accentColor, "#22d3ee", "#a78bfa"],
+          opacity: isBeat ? 0.6 : 0.48,
+          audioReactive: true,
+        },
+      },
+      ctx,
+      {
+        lut: styleId === "motion_grid" ? "cyberpunk.cube" : "kodak_warm.cube",
+        kinetic: "karaoke",
+        endScreen: true,
+        progressBar: true,
+      }
+    );
+  }
+
   // ─── graphics_max: lo mismo PERO al máximo — jump cuts, reaction zooms, stutter,
   // speed ramps y mirror. Para quien quiere gráficos + la edición más intensa. ───
   if (styleId === "graphics_max") {
@@ -1006,6 +1061,21 @@ export const STYLE_INFO: Record<StyleId, { name: string; tagline: string; emoji:
     name: "Gráficos & Motion",
     tagline: "Gráficas animadas + titulares poderosos + zooms y transiciones",
     emoji: "📊",
+  },
+  motion_pro: {
+    name: "Motion Pro",
+    tagline: "Animación pura y limpia: fondo aurora que pulsa con la música, sin emojis",
+    emoji: "✨",
+  },
+  motion_beat: {
+    name: "Motion Beat",
+    tagline: "El fondo late al ritmo de la música (gradiente vivo) + zooms al beat",
+    emoji: "🎧",
+  },
+  motion_grid: {
+    name: "Motion Grid",
+    tagline: "Look retro-tech: cuadrícula en perspectiva + gráficas, limpio y futurista",
+    emoji: "🌐",
   },
   graphics_max: {
     name: "Gráficos Max",
