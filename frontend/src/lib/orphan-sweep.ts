@@ -259,6 +259,17 @@ export async function sweepStaleArtifacts(): Promise<{ deleted: number }> {
     }
   }
 
+  // Vistas previas de estilos (F4): caché barata — se regeneran al click. >7 días fuera.
+  const previewsDir = path.join(path.dirname(RENDERS_DIR), "previews");
+  for (const f of await listSafe(previewsDir)) {
+    try {
+      const ageMs = Date.now() - (await fs.stat(path.join(previewsDir, f))).mtimeMs;
+      if (ageMs > 7 * DAY_MS) await rmAudited(previewsDir, f, "preview >7d");
+    } catch {
+      /* best-effort */
+    }
+  }
+
   if (auditLines.length > 0) {
     const auditFile = path.join(path.dirname(RENDERS_DIR), "disk-audit.log");
     await fs.appendFile(auditFile, auditLines.join("\n") + "\n", "utf-8").catch(() => {});

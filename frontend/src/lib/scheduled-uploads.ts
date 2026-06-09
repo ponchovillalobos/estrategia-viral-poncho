@@ -178,7 +178,16 @@ async function runTick(): Promise<void> {
   const store = await readStore();
   const now = Date.now();
   const due = store.uploads.filter(
-    (u) => u.status === "pending" && u.scheduledAt <= now
+    (u) =>
+      (u.status === "pending" && u.scheduledAt <= now) ||
+      // F4 — RETRY automático: un fallo transitorio (red, token, API caída) se
+      // reintenta hasta 3 veces con 10 min de espera, dentro de las 24h del
+      // horario programado. Después de eso queda "failed" definitivo.
+      (u.status === "failed" &&
+        u.attempts > 0 &&
+        u.attempts < 3 &&
+        now - u.updatedAt >= 10 * 60_000 &&
+        now - u.scheduledAt < 24 * 60 * 60_000)
   );
   for (const upload of due) {
     await processUpload(upload);

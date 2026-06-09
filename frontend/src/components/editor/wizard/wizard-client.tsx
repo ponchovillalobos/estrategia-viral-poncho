@@ -155,6 +155,9 @@ export function WizardClient() {
   const [subtitleFont, setSubtitleFont] = useState<string>("auto");
   // Color del TEXTO de los subtítulos ("auto" = el del estilo, normalmente blanco).
   const [subtitleColor, setSubtitleColor] = useState<string>("auto");
+  // F4 — Vista previa REAL: un frame del video del user con el estilo aplicado.
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["instagram", "linkedin"]);
   // Aspect ratio del output. 9:16 vertical (TikTok/Reels) default, 16:9 horizontal (LinkedIn/YouTube).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
@@ -297,6 +300,34 @@ export function WizardClient() {
       loadTemplates();
     } catch {
       /* ignore */
+    }
+  }
+
+  // F4 — Genera un still real (35% del video, FX del estilo, color y fuente elegidos).
+  async function generateStylePreview() {
+    if (!firstSelected || selectedStyles.length === 0) return;
+    setPreviewLoading(true);
+    setPreviewUrl(null);
+    try {
+      const r = await fetch("/api/editor/style-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoId: firstSelected.id,
+          styleId: selectedStyles[0],
+          accentColor: accent,
+          subtitleFont,
+          subtitleColor,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.url) throw new Error(d.error ?? "no se pudo generar la vista previa");
+      setPreviewUrl(`${d.url}&ts=${Date.now()}`);
+      if (d.cached) toast.success("Vista previa lista (caché)");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPreviewLoading(false);
     }
   }
 
@@ -870,6 +901,31 @@ export function WizardClient() {
               <span style={{ color: accent, textShadow: `0 0 18px ${accent}88` }}>tus</span>{" "}
               subtítulos
             </span>
+          </div>
+
+          {/* F4 — Vista previa REAL: un frame de TU video con el estilo + color + fuente. */}
+          <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3 text-center">
+            <button
+              type="button"
+              onClick={generateStylePreview}
+              disabled={previewLoading || selectedStyles.length === 0}
+              className="rounded-md bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-300 ring-1 ring-emerald-500/40 transition hover:bg-emerald-500/25 disabled:opacity-50"
+            >
+              {previewLoading
+                ? "Generando vista previa real (~30s)…"
+                : "🎬 Vista previa REAL con tu video"}
+            </button>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Renderiza un cuadro de tu video con el estilo &quot;{STYLES.find((s) => s.id === selectedStyles[0])?.name ?? "—"}&quot;, el color y la fuente elegidos.
+            </p>
+            {previewUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewUrl}
+                alt="Vista previa del estilo sobre tu video"
+                className="mx-auto mt-3 max-h-[420px] rounded-lg border border-border shadow-lg"
+              />
+            )}
           </div>
 
           <h3 className="mb-2 mt-6 text-sm font-medium">Tipografía de los subtítulos</h3>

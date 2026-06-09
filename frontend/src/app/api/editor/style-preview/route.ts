@@ -1,0 +1,169 @@
+/**
+ * F4 — VISTA PREVIA por estilo (auditoría: "elegís el estilo a ciegas").
+ *
+ * POST {videoId, styleId, accentColor?, subtitleFont?, subtitleColor?}
+ *   → arma el project del estilo sobre TU video (sin renderizarlo entero),
+ *     saca UN still al 35% de la duración con los FX reales (subtítulos, color,
+ *     fuente, gráficos del estilo) y devuelve la URL del PNG. ~15-40s.
+ *   Cachea por combinación (video+estilo+color+fuente): la segunda vez es instantáneo.
+ *
+ * GET ?file=<nombre.png> → sirve el PNG (solo nombres saneados, sin paths).
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { DATA_ROOT, REMOTION_DIR, TRANSCRIPTS_DIR } from "@/lib/paths";
+import { buildProjectForStyle, type BuildContext } from "@/lib/style-templates";
+import { pickTopKeywords, type TranscriptWord } from "@/lib/content-title";
+import { runProcess } from "@/lib/run-process";
+import { writeJsonFileAtomic } from "@/lib/atomic-write";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
+const PREVIEWS_DIR = path.join(DATA_ROOT, "previews");
+
+/** Nombre seguro para archivos/props (sin espacios ni símbolos — evita el bug de
+ *  quoting de spawn shell:true en Windows). */
+function safe(s: string): string {
+  return s.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = (await req.json()) as {
+      videoId?: string;
+      styleId?: string;
+      accentColor?: string;
+      subtitleFont?: string;
+      subtitleColor?: string;
+    };
+    const { videoId, styleId } = body;
+    if (!videoId || !styleId) {
+      return NextResponse.json({ error: "videoId y styleId requeridos" }, { status: 400 });
+    }
+    const accentColor = body.accentColor || "#fb7185";
+
+    const transcriptPath = path.join(TRANSCRIPTS_DIR, `${videoId}.json`);
+    let transcript: { duration: number; words: TranscriptWord[] };
+    try {
+      transcript = JSON.parse(await fs.readFile(transcriptPath, "utf-8"));
+    } catch {
+      return NextResponse.json(
+        { error: "el video no está transcrito todavía" },
+        { status: 404 }
+      );
+    }
+
+    await fs.mkdir(PREVIEWS_DIR, { recursive: true });
+    const cacheKey = safe(
+      `${videoId}_${styleId}_${accentColor.replace("#", "")}_${body.subtitleFont ?? "auto"}_${(body.subtitleColor ?? "auto").replace("#", "")}`
+    );
+    const outPng = path.join(PREVIEWS_DIR, `${cacheKey}.png`);
+    const url = `/api/editor/style-preview?file=${encodeURIComponent(`${cacheKey}.png`)}`;
+
+    // Cache hit → instantáneo.
+    if (await fs.access(outPng).then(() => true).catch(() => false)) {
+      return NextResponse.json({ ok: true, url, cached: true });
+    }
+
+    // Contexto mínimo (sin cinematic/b-roll: el still muestra subtítulos+FX+color).
+    const ctx: BuildContext = {
+      videoId,
+      duration: transcript.duration,
+      keywords: pickTopKeywords(transcript.words, 7),
+      accentColor,
+      caption: "",
+      day: undefined,
+      width: 1080,
+      height: 1920,
+      imageOverlays: [],
+      filmGrain: false,
+      subtitleCinematic: false,
+      autoSfxMarks: [],
+      autoCameraMoves: [],
+      autoStutterMarks: [],
+      cinematicDensity: "medium",
+    };
+
+    const project = {
+      ...buildProjectForStyle(ctx, styleId as Parameters<typeof buildProjectForStyle>[1]),
+      id: cacheKey,
+      videoId,
+      // El preview NO depende del _cut.mp4 (quizá no existe aún) ni de música.
+      enableJumpCuts: false,
+      musicTrack: null,
+      ...(body.subtitleFont && body.subtitleFont !== "auto"
+        ? { subtitleFont: body.subtitleFont }
+        : {}),
+      ...(body.subtitleColor && body.subtitleColor !== "auto"
+        ? { subtitleColor: body.subtitleColor }
+        : {}),
+    };
+    const projectPath = path.join(PREVIEWS_DIR, `${cacheKey}.json`);
+    await writeJsonFileAtomic(projectPath, project);
+
+    const propsName = `props_preview_${cacheKey}.json`;
+    const buildRun = await runProcess(
+      "node",
+      ["build-props.mjs", videoId, projectPath, propsName],
+      REMOTION_DIR,
+      undefined,
+      120_000
+    );
+    if (!buildRun.ok) {
+      return NextResponse.json(
+        { error: `build-props: ${buildRun.stderr.slice(-300)}` },
+        { status: 500 }
+      );
+    }
+
+    // Frame al 35% de la duración: suele haber cara + subtítulo activo.
+    const frame = Math.max(1, Math.floor(transcript.duration * 0.35 * 30));
+    const npxExe = process.platform === "win32" ? "npx.cmd" : "npx";
+    const needsQuote = process.platform === "win32" && /\s/.test(outPng);
+    const outArg = needsQuote ? `"${outPng}"` : outPng;
+    const stillRun = await runProcess(
+      npxExe,
+      [
+        "remotion", "still", "src/index.ts", "ViralVideo",
+        outArg, `--frame=${frame}`, `--props=${propsName}`, "--scale=0.5",
+      ],
+      REMOTION_DIR,
+      undefined,
+      240_000
+    );
+    // limpiar props temporal (best-effort)
+    await fs.rm(path.join(REMOTION_DIR, propsName), { force: true }).catch(() => {});
+
+    const exists = await fs.access(outPng).then(() => true).catch(() => false);
+    if (!stillRun.ok || !exists) {
+      return NextResponse.json(
+        { error: `preview falló: ${stillRun.stderr.slice(-300)}` },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json({ ok: true, url, cached: false });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const file = req.nextUrl.searchParams.get("file") ?? "";
+  // Solo nombres saneados generados por este endpoint — sin separadores de path.
+  if (!/^[a-zA-Z0-9_-]+\.png$/.test(file)) {
+    return new Response("bad request", { status: 400 });
+  }
+  try {
+    const buf = await fs.readFile(path.join(PREVIEWS_DIR, file));
+    return new Response(new Uint8Array(buf), {
+      headers: { "Content-Type": "image/png", "Cache-Control": "no-store" },
+    });
+  } catch {
+    return new Response("not found", { status: 404 });
+  }
+}

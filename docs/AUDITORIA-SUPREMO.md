@@ -66,7 +66,22 @@
 >      Verificado con stills reales (confetti+sparks sobre video, whip a mitad
 >      de barrido con blur y sin bordes negros).
 > - ⏳ Pendiente F3: 3D perspectiva, LUT dinámico por frame, máscaras animadas.
-> - ⏳ Siguiente: FASE 4 (producto: scheduler daemon, live preview).
+> - ✅ **FASE 4 (núcleo) — PRODUCTO**:
+>   1. **Scheduler arreglado**: el worker de publicaciones programadas existía pero
+>      SOLO arrancaba si visitabas /api/tiktok/schedule — tras un reinicio los posts
+>      programados nunca salían. Nuevo `src/instrumentation.ts` (hook de Next.js):
+>      el scheduler + barrido de huérfanos arrancan SOLOS al boot del server.
+>   2. **Retry automático de publicaciones**: un fallo transitorio (red/API caída)
+>      se reintenta hasta 3 veces con 10 min de backoff, dentro de las 24h del
+>      horario programado.
+>   3. **VISTA PREVIA REAL por estilo** (`POST /api/editor/style-preview` + botón
+>      en el wizard paso 3): renderiza UN frame (35% de la duración, scale 0.5) de
+>      TU video con el estilo + color + fuente elegidos en ~15-40s, con caché por
+>      combinación (la 2da vez es instantánea). Fin del "elegir a ciegas y esperar
+>      8 min de render para ver cómo queda". Los previews >7 días se auto-limpian.
+>      Verificado en vivo end-to-end (Inta + hype + Bangers amarillo → PNG correcto).
+> - ⏳ Pendiente F4: @remotion/player embebido (preview en movimiento), timeline
+>   visual. Pendiente F5 completa (b-roll CLIP, multicam, clips v2).
 
 > Auditoría con 6 agentes en paralelo: motor Remotion/FX, pipeline Python/IA,
 > frontend/APIs/UX, pipeline de largos, robustez/rendimiento, y estado del arte

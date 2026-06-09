@@ -5,6 +5,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const VIDEO_ID = process.argv[2] || "D01_test_01";
 const PROJECT_OVERRIDE = process.argv[3];
+// 4to arg opcional: nombre del props file de salida (default "props.json").
+// Lo usan los previews/render paralelo para no pisar el props.json de otro render.
+const OUT_NAME = process.argv[4] || "props.json";
 import { existsSync as _existsSync } from "node:fs";
 function pickDataRoot() {
   const o = process.env.VIRAL_DATA_ROOT;
@@ -219,7 +222,7 @@ const props = {
   sourceAspect: project.sourceAspect ?? 16 / 9,
 };
 
-const outFile = path.join(__dirname, "props.json");
+const outFile = path.join(__dirname, path.basename(OUT_NAME));
 writeFileSync(outFile, JSON.stringify(props, null, 2), "utf-8");
 console.log(`props written: ${outFile}`);
 console.log(
