@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
       accentColor?: string;
       subtitleFont?: string;
       subtitleColor?: string;
+      /** true → clip de 3s EN MOVIMIENTO (mp4, ~60-120s) en vez de un still. */
+      motion?: boolean;
     };
     const { videoId, styleId } = body;
     if (!videoId || !styleId) {
@@ -56,15 +58,17 @@ export async function POST(req: NextRequest) {
     }
 
     await fs.mkdir(PREVIEWS_DIR, { recursive: true });
+    const motion = body.motion === true;
+    const ext = motion ? "mp4" : "png";
     const cacheKey = safe(
-      `${videoId}_${styleId}_${accentColor.replace("#", "")}_${body.subtitleFont ?? "auto"}_${(body.subtitleColor ?? "auto").replace("#", "")}`
+      `${videoId}_${styleId}_${accentColor.replace("#", "")}_${body.subtitleFont ?? "auto"}_${(body.subtitleColor ?? "auto").replace("#", "")}${motion ? "_motion" : ""}`
     );
-    const outPng = path.join(PREVIEWS_DIR, `${cacheKey}.png`);
-    const url = `/api/editor/style-preview?file=${encodeURIComponent(`${cacheKey}.png`)}`;
+    const outPng = path.join(PREVIEWS_DIR, `${cacheKey}.${ext}`);
+    const url = `/api/editor/style-preview?file=${encodeURIComponent(`${cacheKey}.${ext}`)}`;
 
     // Cache hit → instantáneo.
     if (await fs.access(outPng).then(() => true).catch(() => false)) {
-      return NextResponse.json({ ok: true, url, cached: true });
+      return NextResponse.json({ ok: true, url, motion, cached: true });
     }
 
     // Contexto mínimo (sin cinematic/b-roll: el still muestra subtítulos+FX+color).
@@ -123,15 +127,23 @@ export async function POST(req: NextRequest) {
     const npxExe = process.platform === "win32" ? "npx.cmd" : "npx";
     const needsQuote = process.platform === "win32" && /\s/.test(outPng);
     const outArg = needsQuote ? `"${outPng}"` : outPng;
+    // motion=true → 3 segundos (90 frames) EN MOVIMIENTO desde ese punto; si no, still.
+    const args = motion
+      ? [
+          "remotion", "render", "src/index.ts", "ViralVideo",
+          outArg, `--frames=${frame}-${frame + 89}`, `--props=${propsName}`,
+          "--scale=0.4", "--concurrency=4",
+        ]
+      : [
+          "remotion", "still", "src/index.ts", "ViralVideo",
+          outArg, `--frame=${frame}`, `--props=${propsName}`, "--scale=0.5",
+        ];
     const stillRun = await runProcess(
       npxExe,
-      [
-        "remotion", "still", "src/index.ts", "ViralVideo",
-        outArg, `--frame=${frame}`, `--props=${propsName}`, "--scale=0.5",
-      ],
+      args,
       REMOTION_DIR,
       undefined,
-      240_000
+      motion ? 280_000 : 240_000
     );
     // limpiar props temporal (best-effort)
     await fs.rm(path.join(REMOTION_DIR, propsName), { force: true }).catch(() => {});
@@ -143,7 +155,7 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
-    return NextResponse.json({ ok: true, url, cached: false });
+    return NextResponse.json({ ok: true, url, motion, cached: false });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
@@ -155,13 +167,16 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const file = req.nextUrl.searchParams.get("file") ?? "";
   // Solo nombres saneados generados por este endpoint — sin separadores de path.
-  if (!/^[a-zA-Z0-9_-]+\.png$/.test(file)) {
+  if (!/^[a-zA-Z0-9_-]+\.(png|mp4)$/.test(file)) {
     return new Response("bad request", { status: 400 });
   }
   try {
     const buf = await fs.readFile(path.join(PREVIEWS_DIR, file));
     return new Response(new Uint8Array(buf), {
-      headers: { "Content-Type": "image/png", "Cache-Control": "no-store" },
+      headers: {
+        "Content-Type": file.endsWith(".mp4") ? "video/mp4" : "image/png",
+        "Cache-Control": "no-store",
+      },
     });
   } catch {
     return new Response("not found", { status: 404 });

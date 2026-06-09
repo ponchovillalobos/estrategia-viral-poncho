@@ -396,6 +396,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   let trTx = 0;
   let trTy = 0;
   let trBlur = 0;
+  let trRotY = 0; // F3 — giro 3D (grados) con perspective
   for (const tr of proTransitions) {
     const durSec = Math.max(1, tr.durationFrames ?? 8) / fps;
     if (currentTime < tr.at || currentTime > tr.at + durSec) continue;
@@ -415,6 +416,12 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       trTy = (((frame * 7) % 5) - 2) * bell * 6;
     } else if (tr.kind === "iris" || tr.kind === "light_streak") {
       trScale = 1 + bell * 0.07;
+    } else if (tr.kind === "flip3d") {
+      // Giro 3D: el frame rota en Y (hasta 28°) con un empuje de escala para
+      // cubrir el borde que la perspectiva descubre. Blur leve por el movimiento.
+      trRotY = bell * 28;
+      trScale = 1 + bell * 0.22;
+      trBlur = bell * 6;
     }
     break; // una transición activa a la vez
   }
@@ -426,7 +433,8 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
     const sy = compHeight / 2 / Math.max(1, compHeight / 2 - Math.abs(trTy));
     trScale *= Math.min(1.6, Math.max(sx, sy));
   }
-  const transitionMotionActive = trScale !== 1 || trTx !== 0 || trTy !== 0 || trBlur > 0.5;
+  const transitionMotionActive =
+    trScale !== 1 || trTx !== 0 || trTy !== 0 || trBlur > 0.5 || trRotY !== 0;
 
   const baseScale = scale * cameraMove.scale * trScale;
   const baseTranslateX = shake + cameraMove.translateX + autoReframeTranslateX + trTx;
@@ -447,9 +455,24 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       : // FUJI ULTRA COOL — teal/cyan muy marcado
         "contrast(1.55) saturate(0.6) brightness(0.88) hue-rotate(18deg)"
     : undefined;
+  // F3 — PULSO DE COLOR emocional: durante un reaction zoom (que el director
+  // emocional pone en los picos), el color "respira" — saturación y contraste
+  // suben brevemente con la misma campana del zoom. Sutil pero se siente.
+  let colorPulse: string | null = null;
+  if (activeReactionZoom) {
+    const tz = Math.min(
+      1,
+      Math.max(0, (currentTime - activeReactionZoom.at) / activeReactionZoom.duration)
+    );
+    const pulseBell = Math.sin(Math.PI * tz);
+    if (pulseBell > 0.05) {
+      colorPulse = `saturate(${(1 + pulseBell * 0.22).toFixed(3)}) contrast(${(1 + pulseBell * 0.06).toFixed(3)})`;
+    }
+  }
+
   // F3 — blur de movimiento de las transiciones se suma al grade (si lo hay).
   const videoFilter =
-    [gradeFilter, trBlur > 0.5 ? `blur(${trBlur.toFixed(1)}px)` : null]
+    [gradeFilter, colorPulse, trBlur > 0.5 ? `blur(${trBlur.toFixed(1)}px)` : null]
       .filter(Boolean)
       .join(" ") || undefined;
 
@@ -469,7 +492,12 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
       <AbsoluteFill
         style={{
-          transform: `scale(${baseScale}) translate(${baseTranslateX}px, ${baseTranslateY}px)`,
+          // F3 — la perspectiva + rotateY solo aparecen durante un flip3d activo;
+          // el resto del tiempo el transform es idéntico al histórico.
+          transform:
+            trRotY !== 0
+              ? `perspective(1200px) rotateY(${trRotY.toFixed(2)}deg) scale(${baseScale}) translate(${baseTranslateX}px, ${baseTranslateY}px)`
+              : `scale(${baseScale}) translate(${baseTranslateX}px, ${baseTranslateY}px)`,
         }}
       >
         {rawVideoUrl && (

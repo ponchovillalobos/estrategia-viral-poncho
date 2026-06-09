@@ -276,6 +276,64 @@ def validate_clip(clip: dict[str, Any], total_duration: float) -> dict[str, Any]
     }
 
 
+def _norm_word(w: str) -> str:
+    w = w.lower().strip(".,;:!?¿¡\"'…()")
+    for k, v in {"á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ñ": "n", "ü": "u"}.items():
+        w = w.replace(k, v)
+    return w
+
+
+def anchor_clip_to_text(clip: dict[str, Any], words: list[dict[str, Any]], duration: float) -> dict[str, Any]:
+    """F5 — Patrón FunClip: los LLM chicos INVENTAN timestamps, pero citan bien el
+    TEXTO. Así que el hook (frase exacta que el LLM dice que abre el clip) se busca
+    en el transcript real y el clip se ancla a ESE timestamp. Además, el final se
+    ajusta al fin de frase más cercano (puntuación o pausa ≥0.5s) para no cortar
+    a nadie a mitad de palabra.
+    """
+    import difflib
+
+    hook = str(clip.get("hook") or "")
+    hook_tokens = [_norm_word(t) for t in hook.split() if _norm_word(t)][:6]
+    if len(hook_tokens) >= 3 and words:
+        target = " ".join(hook_tokens)
+        norm_words = [_norm_word(str(w.get("word", ""))) for w in words]
+        n = len(hook_tokens)
+        claimed = float(clip["start"])
+        best_i, best_score = -1, 0.0
+        for i in range(0, max(0, len(words) - n)):
+            ws = float(words[i].get("start", 0))
+            if abs(ws - claimed) > 45:  # buscar solo cerca de donde el LLM cree
+                continue
+            cand = " ".join(norm_words[i : i + n])
+            score = difflib.SequenceMatcher(None, cand, target).ratio()
+            if score > best_score:
+                best_score, best_i = score, i
+        if best_i >= 0 and best_score >= 0.72:
+            real_start = max(0.0, float(words[best_i].get("start", 0)) - 0.05)
+            delta = real_start - float(clip["start"])
+            if abs(delta) > 0.2:  # solo si realmente corrige algo
+                clip["start"] = round(real_start, 2)
+                clip["end"] = round(min(duration, float(clip["end"]) + delta), 2)
+                clip["anchorScore"] = round(best_score, 2)
+
+    # Snap del FINAL al fin de frase más cercano (±8s): puntuación o pausa ≥0.5s.
+    end_t = float(clip["end"])
+    best_end = None
+    for j, w in enumerate(words):
+        we = float(w.get("end", 0))
+        if we > end_t + 4:
+            break
+        if we < end_t - 8:
+            continue
+        raw = str(w.get("word", "")).strip()
+        gap_after = (float(words[j + 1].get("start", we)) - we) if j + 1 < len(words) else 9.0
+        if raw.endswith((".", "!", "?", "…")) or gap_after >= 0.5:
+            best_end = we
+    if best_end is not None and best_end - float(clip["start"]) >= 25:
+        clip["end"] = round(min(duration, best_end + 0.15), 2)
+    return clip
+
+
 def chunk_words(words: list[dict[str, Any]], chunk_sec: int = 720) -> list[list[dict[str, Any]]]:
     """Divide words array en chunks de N segundos."""
     if not words:
@@ -422,6 +480,12 @@ def main() -> int:
         v = validate_clip(c, duration)
         if not v:
             continue
+        # F5 — anclar el clip al TEXTO real del transcript (los LLM inventan números)
+        # y ajustar el final al fin de frase. Solo para clips del LLM.
+        if not args.use_heuristic:
+            v = anchor_clip_to_text(v, words, duration)
+            if v["end"] - v["start"] < 25:
+                continue
         overlap = False
         for s, e in seen_ranges:
             inter = max(0, min(v["end"], e) - max(v["start"], s))

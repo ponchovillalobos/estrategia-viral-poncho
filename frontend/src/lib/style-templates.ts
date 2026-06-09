@@ -189,14 +189,17 @@ export function generateProTransitions(ctx: BuildContext): Array<{
     | "reveal_ud"
     | "light_streak"
     | "swipe_blur"
-    | "iris";
+    | "iris"
+    | "flip3d";
   durationFrames: number;
   color: string;
 }> {
   // Pool ampliado (A5): suma light_streak / swipe_blur / iris a la rotación para más variedad.
+  // F3: flip3d = giro 3D del frame con perspectiva (movimiento real en ViralVideo).
   const kinds = [
     "whip",
     "zoom_punch",
+    "flip3d",
     "light_streak",
     "glitch",
     "swipe_blur",

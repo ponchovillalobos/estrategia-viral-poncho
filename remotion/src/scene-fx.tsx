@@ -52,6 +52,8 @@ export const proTransitionSchema = z.object({
       "light_streak",
       "swipe_blur",
       "iris",
+      // F3 — giro 3D del frame con perspectiva (el movimiento vive en ViralVideo).
+      "flip3d",
     ])
     .default("whip"),
   durationFrames: z.number().default(8),
@@ -290,6 +292,21 @@ export const ProTransitionLayer: React.FC<ProTransitionLayerProps> = ({
                 transform: `translateX(${slide}%)`,
                 background: `linear-gradient(90deg, transparent 0%, ${tr.color} 50%, transparent 100%)`,
                 filter: "blur(48px)",
+              }}
+            />
+          );
+        }
+
+        if (tr.kind === "flip3d") {
+          // El giro 3D real lo hace ViralVideo (rotateY con perspective); acá solo
+          // un oscurecimiento con forma de campana que da profundidad al giro.
+          return (
+            <AbsoluteFill
+              key={`tr-${i}`}
+              style={{
+                pointerEvents: "none",
+                background: "#000",
+                opacity: Math.sin(Math.PI * t) * 0.35,
               }}
             />
           );

@@ -155,9 +155,10 @@ export function WizardClient() {
   const [subtitleFont, setSubtitleFont] = useState<string>("auto");
   // Color del TEXTO de los subtítulos ("auto" = el del estilo, normalmente blanco).
   const [subtitleColor, setSubtitleColor] = useState<string>("auto");
-  // F4 — Vista previa REAL: un frame del video del user con el estilo aplicado.
+  // F4 — Vista previa REAL: un frame (o clip de 3s) del video del user con el estilo.
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewIsVideo, setPreviewIsVideo] = useState(false);
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["instagram", "linkedin"]);
   // Aspect ratio del output. 9:16 vertical (TikTok/Reels) default, 16:9 horizontal (LinkedIn/YouTube).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
@@ -303,8 +304,8 @@ export function WizardClient() {
     }
   }
 
-  // F4 — Genera un still real (35% del video, FX del estilo, color y fuente elegidos).
-  async function generateStylePreview() {
+  // F4 — Genera la vista previa real (still del 35% o clip de 3s EN MOVIMIENTO).
+  async function generateStylePreview(motion = false) {
     if (!firstSelected || selectedStyles.length === 0) return;
     setPreviewLoading(true);
     setPreviewUrl(null);
@@ -318,10 +319,12 @@ export function WizardClient() {
           accentColor: accent,
           subtitleFont,
           subtitleColor,
+          motion,
         }),
       });
       const d = await r.json();
       if (!r.ok || !d.url) throw new Error(d.error ?? "no se pudo generar la vista previa");
+      setPreviewIsVideo(Boolean(d.motion));
       setPreviewUrl(`${d.url}&ts=${Date.now()}`);
       if (d.cached) toast.success("Vista previa lista (caché)");
     } catch (e) {
@@ -905,20 +908,38 @@ export function WizardClient() {
 
           {/* F4 — Vista previa REAL: un frame de TU video con el estilo + color + fuente. */}
           <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3 text-center">
-            <button
-              type="button"
-              onClick={generateStylePreview}
-              disabled={previewLoading || selectedStyles.length === 0}
-              className="rounded-md bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-300 ring-1 ring-emerald-500/40 transition hover:bg-emerald-500/25 disabled:opacity-50"
-            >
-              {previewLoading
-                ? "Generando vista previa real (~30s)…"
-                : "🎬 Vista previa REAL con tu video"}
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => generateStylePreview(false)}
+                disabled={previewLoading || selectedStyles.length === 0}
+                className="rounded-md bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-300 ring-1 ring-emerald-500/40 transition hover:bg-emerald-500/25 disabled:opacity-50"
+              >
+                {previewLoading ? "Generando…" : "🎬 Vista previa REAL (foto, ~30s)"}
+              </button>
+              <button
+                type="button"
+                onClick={() => generateStylePreview(true)}
+                disabled={previewLoading || selectedStyles.length === 0}
+                className="rounded-md bg-violet-500/15 px-4 py-2 text-sm font-medium text-violet-300 ring-1 ring-violet-500/40 transition hover:bg-violet-500/25 disabled:opacity-50"
+              >
+                {previewLoading ? "Generando…" : "▶ En MOVIMIENTO (3s, ~1-2 min)"}
+              </button>
+            </div>
             <p className="mt-1 text-[10px] text-muted-foreground">
-              Renderiza un cuadro de tu video con el estilo &quot;{STYLES.find((s) => s.id === selectedStyles[0])?.name ?? "—"}&quot;, el color y la fuente elegidos.
+              Tu video con el estilo &quot;{STYLES.find((s) => s.id === selectedStyles[0])?.name ?? "—"}&quot;, el color y la fuente elegidos. La segunda vez es instantánea (caché).
             </p>
-            {previewUrl && (
+            {previewUrl && previewIsVideo && (
+              <video
+                src={previewUrl}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="mx-auto mt-3 max-h-[420px] rounded-lg border border-border shadow-lg"
+              />
+            )}
+            {previewUrl && !previewIsVideo && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={previewUrl}

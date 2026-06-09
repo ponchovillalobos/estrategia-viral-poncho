@@ -141,8 +141,9 @@ export function generateSceneFx(ctx) {
 
 /** Transiciones pro (whip/zoom/glitch/flash/reveal/streak/swipe/iris). */
 export function generateProTransitions(ctx) {
+  // F3 (paridad con .ts): flip3d = giro 3D del frame con perspectiva.
   const kinds = [
-    "whip", "zoom_punch", "light_streak", "glitch",
+    "whip", "zoom_punch", "flip3d", "light_streak", "glitch",
     "swipe_blur", "reveal_lr", "iris", "flash",
   ];
   const kws = ctx.keywords.filter((k) => k.start > 1 && k.start < ctx.duration - 1).slice(0, 6);
