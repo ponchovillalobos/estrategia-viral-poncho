@@ -135,3 +135,6 @@ logs/
 # Logs del autostart
 .dashboard.log
 .dashboard.log.npm.log
+
+# props temporales de renders (paralelo/preview) — se generan y borran solos
+remotion/props_*.json
