@@ -91,6 +91,8 @@ export interface ResolvedProject {
   musicVolumeCurve?: { t: number; v: number }[];
   mood?: string;
   sfxMarks?: unknown[];
+  // F3 — Partículas procedurales (chispas en el pico emocional, confeti, etc.).
+  particleBursts?: { at: number; duration: number; kind: string; count?: number }[];
   // Modo Gráficos & Motion (estilos graphics_*): applyGraphics genera dataViz +
   // kineticHeadlines desde el transcript del short y los deja acá.
   graphics?: boolean;

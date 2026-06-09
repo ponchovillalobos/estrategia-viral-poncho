@@ -51,7 +51,22 @@
 >      y largos. Verificado con still real.
 > - ⏳ Pendiente F2: hook reorder + loop perfecto (requiere re-corte de video,
 >   diseñarlo como opt-in), voz 1.05x, DeepFilterNet studio sound.
-> - ⏳ Siguiente: FASE 3 (motor visual: motion blur, partículas, 3D, LUT dinámico).
+> - ✅ **FASE 3 (núcleo) — MOTOR VISUAL**:
+>   1. **Movimiento REAL en transiciones** (la auditoría las llamó "congeladas"):
+>      el FRAME ahora se mueve — whip barre en X con blur 26px, zoom_punch empuja
+>      la escala, swipe_blur barre en Y, glitch tiembla determinista, iris/streak
+>      respiran — con compensación de bordes exacta (s ≥ (w/2)/((w/2)-|t|), tope
+>      1.6x) y CameraMotionBlur de Remotion activo durante la transición.
+>   2. **Sistema de PARTÍCULAS procedural** (`layers/particle-layer.tsx`, cero
+>      assets): confetti (gravedad + sway por noise2D + rotación), sparks
+>      (explosión radial con desaceleración y gravedad), embers (brasas subiendo
+>      con drift orgánico + twinkle) y emoji_rain. Schema `particleBursts`
+>      (opt-in, [] = render idéntico). El director emocional dispara `sparks` en
+>      el pico emocional MÁXIMO (score ≥ 0.6) en shorts y largos.
+>      Verificado con stills reales (confetti+sparks sobre video, whip a mitad
+>      de barrido con blur y sin bordes negros).
+> - ⏳ Pendiente F3: 3D perspectiva, LUT dinámico por frame, máscaras animadas.
+> - ⏳ Siguiente: FASE 4 (producto: scheduler daemon, live preview).
 
 > Auditoría con 6 agentes en paralelo: motor Remotion/FX, pipeline Python/IA,
 > frontend/APIs/UX, pipeline de largos, robustez/rendimiento, y estado del arte

@@ -149,6 +149,8 @@ const props = {
   // los `t` se remapean a la línea de tiempo cortada (los puntos que caen en un
   // silencio eliminado se descartan — el cambio de volumen siguiente los cubre).
   musicVolumeCurve: filterAndRemap(project.musicVolumeCurve || [], ["t"]),
+  // F3 — Partículas procedurales (confeti/chispas/brasas). Remapean igual.
+  particleBursts: filterAndRemap(project.particleBursts || [], ["at"]),
   subtitleStyle: project.subtitleStyle ?? "bebas",
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",

@@ -397,6 +397,12 @@ def _apply_emotion(clip_id: str, style_id: str) -> None:
             ]
             if micro:
                 data["zoomMarks"] = existing_zm + micro
+            # F3 — chispas en el pico emocional máximo (paridad con shorts).
+            top = max(peaks, key=lambda p: p.get("score", 0), default=None)
+            if top and top.get("score", 0) >= 0.6:
+                data["particleBursts"] = (data.get("particleBursts") or []) + [
+                    {"at": top["t"], "duration": 1.6, "kind": "sparks", "count": 60}
+                ]
         project_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         print(
             f"[emotion] {clip_id}: mood={e.get('mood')} · {len(e.get('peaks') or [])} picos",

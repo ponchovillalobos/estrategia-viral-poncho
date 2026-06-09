@@ -91,6 +91,8 @@ const props = {
   // F1 — Director emocional: curva de ducking de la música (pass-through; los clips
   // de largos no hacen jump cuts, no hay remap).
   musicVolumeCurve: project.musicVolumeCurve || [],
+  // F3 — Partículas procedurales (pass-through).
+  particleBursts: project.particleBursts || [],
   subtitleStyle: project.subtitleStyle ?? "anton",
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",

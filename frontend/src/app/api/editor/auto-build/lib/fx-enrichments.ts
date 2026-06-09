@@ -156,6 +156,15 @@ export async function applyEmotionDirector(
       if (micro.length > 0) {
         project.zoomMarks = [...existingZm, ...micro];
       }
+      // 2c) F3 — CHISPAS en el pico emocional MÁXIMO: el momento más intenso del
+      // video recibe una explosión de partículas (1 sola — el exceso lo abarata).
+      const top = [...e.peaks].sort((a, b) => b.score - a.score)[0];
+      if (top && top.score >= 0.6) {
+        project.particleBursts = [
+          ...((project.particleBursts ?? []) as unknown[]),
+          { at: top.t, duration: 1.6, kind: "sparks", count: 60 },
+        ] as typeof project.particleBursts;
+      }
     }
 
     // 3) Volumen de SFX según el arousal del momento (0.28 calmo → 0.58 intenso).

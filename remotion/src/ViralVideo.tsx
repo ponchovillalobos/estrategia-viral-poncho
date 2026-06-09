@@ -45,6 +45,7 @@ import { FloatingEmojiLayer } from "./layers/floating-emoji-layer";
 import { WordStickerLayer } from "./layers/word-sticker-layer";
 import { EmphasisCardLayer } from "./layers/emphasis-card-layer";
 import { SubtitleLayer } from "./layers/subtitle-layer";
+import { ParticleLayer, particleBurstSchema } from "./layers/particle-layer";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -186,6 +187,8 @@ export const viralVideoSchema = z.object({
   kineticHeadlines: z.array(kineticHeadlineSchema).default([]),
   // B4 — Stickers animados (Lottie). Opt-in. [] = render idéntico.
   lottieStickers: z.array(lottieStickerSchema).default([]),
+  // F3 — Partículas procedurales (confeti/chispas/brasas/lluvia de emojis). Opt-in.
+  particleBursts: z.array(particleBurstSchema).default([]),
 });
 
 type ViralVideoProps = z.infer<typeof viralVideoSchema>;
@@ -240,6 +243,7 @@ export const defaultProps: ViralVideoProps = {
   dataViz: [],
   kineticHeadlines: [],
   lottieStickers: [],
+  particleBursts: [],
 };
 
 export const ViralVideo: React.FC<ViralVideoProps> = ({
@@ -289,6 +293,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   dataViz,
   kineticHeadlines,
   lottieStickers,
+  particleBursts,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -381,16 +386,58 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   // CameraMoves sobre el video base — SOLO activo en modo cinematic.
   // useCameraMoveTransform respeta la regla de hooks: siempre llamar.
   const cameraMove = useCameraMoveTransform(isCinematicMode ? cameraMoves : []);
-  const baseScale = scale * cameraMove.scale;
-  const baseTranslateX = shake + cameraMove.translateX + autoReframeTranslateX;
-  const baseTranslateY = cameraMove.translateY;
+
+  // F3 — MOVIMIENTO REAL en transiciones (auditoría: "se ven congeladas").
+  // Además del overlay (ProTransitionLayer), el FRAME se mueve: whip barre en X,
+  // zoom_punch empuja la escala, swipe_blur barre en Y, glitch tiembla. La escala
+  // se compensa para que el barrido no descubra bordes negros, y el blur del
+  // movimiento se suma al filtro del video. Estilos sin transiciones: cero cambio.
+  let trScale = 1;
+  let trTx = 0;
+  let trTy = 0;
+  let trBlur = 0;
+  for (const tr of proTransitions) {
+    const durSec = Math.max(1, tr.durationFrames ?? 8) / fps;
+    if (currentTime < tr.at || currentTime > tr.at + durSec) continue;
+    const p = (currentTime - tr.at) / durSec; // 0→1
+    const bell = Math.sin(Math.PI * p); // 0→1→0 (entra y vuelve)
+    if (tr.kind === "whip") {
+      trTx = bell * compWidth * 0.12;
+      trBlur = bell * 26;
+    } else if (tr.kind === "zoom_punch") {
+      trScale = 1 + bell * 0.16;
+      trBlur = bell * 7;
+    } else if (tr.kind === "swipe_blur") {
+      trTy = bell * compHeight * 0.1;
+      trBlur = bell * 20;
+    } else if (tr.kind === "glitch") {
+      trTx = ((frame % 3) - 1) * bell * 14;
+      trTy = (((frame * 7) % 5) - 2) * bell * 6;
+    } else if (tr.kind === "iris" || tr.kind === "light_streak") {
+      trScale = 1 + bell * 0.07;
+    }
+    break; // una transición activa a la vez
+  }
+  // Compensación de bordes EXACTA: el transform es `scale(s) translate(t)` → el
+  // desplazamiento real es s·t px. Para cubrir: (s-1)·(w/2) ≥ s·|t| →
+  // s ≥ (w/2)/((w/2)-|t|). Se toma el peor eje (y un tope por seguridad).
+  if (trTx !== 0 || trTy !== 0) {
+    const sx = compWidth / 2 / Math.max(1, compWidth / 2 - Math.abs(trTx));
+    const sy = compHeight / 2 / Math.max(1, compHeight / 2 - Math.abs(trTy));
+    trScale *= Math.min(1.6, Math.max(sx, sy));
+  }
+  const transitionMotionActive = trScale !== 1 || trTx !== 0 || trTy !== 0 || trBlur > 0.5;
+
+  const baseScale = scale * cameraMove.scale * trScale;
+  const baseTranslateX = shake + cameraMove.translateX + autoReframeTranslateX + trTx;
+  const baseTranslateY = cameraMove.translateY + trTy;
 
   // F3 SUPREME — Color grading PROFESIONAL según densidad (mood-aware).
   // Antes: contrast(1.05) saturate(0.92) — imperceptible.
   // Ahora: 3 moods cinematográficos (KODAK warm / FUJI cool / BLEACH thriller)
   // según cinematicDensity, recibido del project. Diferencia visible entre A/B/C.
   // MAX OUT — color grading extremo para ver el techo. Calibrable después.
-  const videoFilter = isCinematicMode
+  const gradeFilter = isCinematicMode
     ? cinematicDensity === "low"
       ? // KODAK ULTRA WARM — naranja casi quemado
         "contrast(1.6) saturate(0.6) brightness(0.85) hue-rotate(-8deg) sepia(0.25)"
@@ -400,16 +447,23 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       : // FUJI ULTRA COOL — teal/cyan muy marcado
         "contrast(1.55) saturate(0.6) brightness(0.88) hue-rotate(18deg)"
     : undefined;
+  // F3 — blur de movimiento de las transiciones se suma al grade (si lo hay).
+  const videoFilter =
+    [gradeFilter, trBlur > 0.5 ? `blur(${trBlur.toFixed(1)}px)` : null]
+      .filter(Boolean)
+      .join(" ") || undefined;
 
   // F2 SUPREME — Motion blur OFICIAL de Remotion (regla 180° cine).
   // Solo activo cuando hay un camera move ACTIVO en ese frame (cameraMove.scale!=1
   // o translate!=0). Sin esto, CameraMotionBlur no agrega costo CPU porque no
   // detecta movimiento.
   const hasActiveCameraMotion =
-    isCinematicMode &&
-    (Math.abs(cameraMove.scale - 1) > 0.001 ||
-      Math.abs(cameraMove.translateX) > 0.5 ||
-      Math.abs(cameraMove.translateY) > 0.5);
+    (isCinematicMode &&
+      (Math.abs(cameraMove.scale - 1) > 0.001 ||
+        Math.abs(cameraMove.translateX) > 0.5 ||
+        Math.abs(cameraMove.translateY) > 0.5)) ||
+    // F3 — las transiciones con movimiento también reciben motion blur real.
+    transitionMotionActive;
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
@@ -658,6 +712,19 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         .filter((s) => currentTime >= s.at - 0.05 && currentTime <= s.at + s.duration)
         .map((s, i) => (
           <LottieStickerLayer key={`ls-${i}-${s.at}`} sticker={s} currentTime={currentTime} />
+        ))}
+
+      {/* F3 — Partículas procedurales (confeti/chispas/brasas/lluvia de emojis). */}
+      {particleBursts
+        .filter((b) => currentTime >= b.at && currentTime <= b.at + (b.duration ?? 2.2))
+        .map((b, i) => (
+          <ParticleLayer
+            key={`pb-${i}-${b.at}`}
+            burst={b}
+            currentTime={currentTime}
+            width={compWidth}
+            height={compHeight}
+          />
         ))}
 
       {activeEmphasis && (
