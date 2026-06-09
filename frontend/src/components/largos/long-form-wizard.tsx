@@ -2,6 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import {
+  Montserrat,
+  Poppins,
+  Oswald,
+  Bangers,
+  Luckiest_Guy,
+  Archivo_Black,
+  Teko,
+  Righteous,
+  Bebas_Neue,
+  Anton,
+} from "next/font/google";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -31,9 +43,65 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+// ─── Fuentes para el preview (mismas que el wizard de shorts; gratis, self-host) ──
+const _mont = Montserrat({ subsets: ["latin"], weight: "800", display: "swap" });
+const _pop = Poppins({ subsets: ["latin"], weight: "800", display: "swap" });
+const _osw = Oswald({ subsets: ["latin"], weight: "700", display: "swap" });
+const _ban = Bangers({ subsets: ["latin"], weight: "400", display: "swap" });
+const _luck = Luckiest_Guy({ subsets: ["latin"], weight: "400", display: "swap" });
+const _arch = Archivo_Black({ subsets: ["latin"], weight: "400", display: "swap" });
+const _teko = Teko({ subsets: ["latin"], weight: "600", display: "swap" });
+const _right = Righteous({ subsets: ["latin"], weight: "400", display: "swap" });
+const _bebas = Bebas_Neue({ subsets: ["latin"], weight: "400", display: "swap" });
+const _anton = Anton({ subsets: ["latin"], weight: "400", display: "swap" });
+
+const FONT_PREVIEW: Record<string, string> = {
+  auto: "",
+  bebas: _bebas.style.fontFamily,
+  anton: _anton.style.fontFamily,
+  montserrat: _mont.style.fontFamily,
+  poppins: _pop.style.fontFamily,
+  oswald: _osw.style.fontFamily,
+  bangers: _ban.style.fontFamily,
+  luckiest: _luck.style.fontFamily,
+  archivo: _arch.style.fontFamily,
+  teko: _teko.style.fontFamily,
+  righteous: _right.style.fontFamily,
+};
+
+const SUBTITLE_FONTS: { id: string; name: string }[] = [
+  { id: "auto", name: "Automática" },
+  { id: "bebas", name: "Bebas (clásica)" },
+  { id: "anton", name: "Anton (peso)" },
+  { id: "montserrat", name: "Montserrat (limpia)" },
+  { id: "poppins", name: "Poppins (redonda)" },
+  { id: "oswald", name: "Oswald (condensada)" },
+  { id: "bangers", name: "Bangers (cómic)" },
+  { id: "luckiest", name: "Luckiest Guy (divertida)" },
+  { id: "archivo", name: "Archivo Black (sólida)" },
+  { id: "teko", name: "Teko (fina alta)" },
+  { id: "righteous", name: "Righteous (retro)" },
+];
+
+// Color del TEXTO de los subtítulos ("auto" = el del estilo, normalmente blanco).
+const SUBTITLE_COLORS: { id: string; name: string; value: string }[] = [
+  { id: "auto", name: "Automático", value: "#ffffff" },
+  { id: "#ffffff", name: "Blanco", value: "#ffffff" },
+  { id: "#fde047", name: "Amarillo", value: "#fde047" },
+  { id: "#fbbf24", name: "Ámbar", value: "#fbbf24" },
+  { id: "#6ee7b7", name: "Menta", value: "#6ee7b7" },
+  { id: "#7dd3fc", name: "Celeste", value: "#7dd3fc" },
+  { id: "#f9a8d4", name: "Rosa", value: "#f9a8d4" },
+  { id: "#c4b5fd", name: "Lila", value: "#c4b5fd" },
+  { id: "#fdba74", name: "Naranja", value: "#fdba74" },
+  { id: "#a3e635", name: "Lima", value: "#a3e635" },
+];
+
 // ─── Tipos ────────────────────────────────────────────────────────────────
 
-type StyleId = "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme";
+type StyleId =
+  | "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme"
+  | "graphics_pro" | "graphics_max";
 type PlatformId = "tiktok" | "instagram" | "linkedin" | "facebook";
 
 interface RawVideoEntry {
@@ -115,6 +183,8 @@ const STYLES: { id: StyleId; name: string; tagline: string; emoji: string }[] = 
   { id: "hype", name: "Hype", tagline: "Estilo MrBeast viral", emoji: "🔥" },
   { id: "hype_max", name: "Hype Max", tagline: "+ jump cuts + reaction zooms", emoji: "⚡" },
   { id: "hype_max_sfx", name: "Hype Max SFX", tagline: "Premium con sonidos", emoji: "🎵" },
+  { id: "graphics_pro", name: "Gráficos & Motion", tagline: "Charts + íconos + karaoke", emoji: "📊" },
+  { id: "graphics_max", name: "Gráficos Max", tagline: "Gráficos + la edición más intensa", emoji: "📈" },
 ];
 
 const PALETTE = [
@@ -186,6 +256,9 @@ export function LongFormWizard() {
   const [skipTranscribe, setSkipTranscribe] = useState(false);
   const [selectedStyles, setSelectedStyles] = useState<StyleId[]>(["supreme"]);
   const [accent, setAccent] = useState<string>("#fb7185");
+  // Fuente + color del TEXTO de subtítulos (paridad con el wizard de shorts).
+  const [subtitleFont, setSubtitleFont] = useState<string>("auto");
+  const [subtitleColor, setSubtitleColor] = useState<string>("auto");
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["tiktok", "instagram"]);
   const [doRender, setDoRender] = useState(true);
   // Aspect ratio. Para largos default 9:16 también (extract_clips hace center-crop si el source es 16:9).
@@ -370,6 +443,8 @@ export function LongFormWizard() {
         graphicsMode,
         styles: selectedStyles,
         accentColor: accent,
+        subtitleFont,
+        subtitleColor,
         platforms: selectedPlatforms,
         aspectRatio,
         faceTracking,
@@ -588,12 +663,26 @@ export function LongFormWizard() {
                           : "border-border bg-muted/30 hover:bg-muted"
                       )}
                     >
-                      <FileVideo
-                        className={cn(
-                          "mt-0.5 h-4 w-4 shrink-0",
-                          sel ? "text-violet-300" : "text-muted-foreground"
-                        )}
-                      />
+                      {/* Miniatura real del video (frame al 35%, cacheada). Si falla,
+                          queda el ícono de respaldo. */}
+                      <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md border border-border bg-muted/40">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/api/videos/${encodeURIComponent(v.videoId)}/thumbnail?source=long_form`}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                        <FileVideo
+                          className={cn(
+                            "absolute left-1/2 top-1/2 -z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2",
+                            sel ? "text-violet-300" : "text-muted-foreground"
+                          )}
+                        />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="truncate font-mono-tab text-xs text-foreground">{v.filename}</p>
                         <p className="font-mono-tab text-[10px] text-muted-foreground">
@@ -936,7 +1025,7 @@ export function LongFormWizard() {
         </Card>
       )}
 
-      {/* STEP 4 — Color */}
+      {/* STEP 4 — Color + tipografía de subtítulos */}
       {step === 4 && (
         <Card className="border-border bg-card p-6">
           <h2 className="mb-2 text-lg font-medium">4. Color principal</h2>
@@ -965,6 +1054,86 @@ export function LongFormWizard() {
                   />
                   <span className="text-xs font-medium">{c.name}</span>
                   <span className="font-mono-tab text-[10px] text-muted-foreground">{c.mood}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Color del TEXTO de los subtítulos (paridad con el wizard de shorts) */}
+          <h3 className="mb-2 mt-6 text-sm font-medium">Color del texto de los subtítulos</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            El color de las palabras (el resaltado usa el color principal de arriba).
+            &quot;Automático&quot; usa el del estilo.
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {SUBTITLE_COLORS.map((c) => {
+              const sel = subtitleColor === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSubtitleColor(c.id)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 transition-all",
+                    sel
+                      ? "border-foreground bg-muted/40 ring-1 ring-foreground/30"
+                      : "border-border hover:border-foreground/30"
+                  )}
+                >
+                  <span
+                    className="flex h-8 w-10 items-center justify-center rounded bg-zinc-950 text-sm font-black uppercase"
+                    style={{ color: c.value, textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
+                  >
+                    {c.id === "auto" ? "Aa" : "Abc"}
+                  </span>
+                  <span className="text-xs font-medium">{c.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Preview en vivo: color + resaltado + fuente elegidos. */}
+          <div className="mt-4 flex items-center justify-center rounded-lg bg-zinc-950 px-4 py-5">
+            <span
+              className="text-3xl font-black uppercase tracking-wide"
+              style={{
+                color: subtitleColor === "auto" ? "#ffffff" : subtitleColor,
+                fontFamily: FONT_PREVIEW[subtitleFont] || undefined,
+                textShadow: "0 2px 8px rgba(0,0,0,0.9)",
+              }}
+            >
+              Así se ven{" "}
+              <span style={{ color: accent, textShadow: `0 0 18px ${accent}88` }}>tus</span>{" "}
+              clips
+            </span>
+          </div>
+
+          <h3 className="mb-2 mt-6 text-sm font-medium">Tipografía de los subtítulos</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            &quot;Automática&quot; usa la del estilo. La miniatura muestra cada fuente real.
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+            {SUBTITLE_FONTS.map((f) => {
+              const sel = subtitleFont === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setSubtitleFont(f.id)}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 rounded-lg border px-3 py-3 transition-all",
+                    sel
+                      ? "border-foreground bg-muted/40 ring-1 ring-foreground/30"
+                      : "border-border hover:border-foreground/30"
+                  )}
+                >
+                  <span
+                    className="text-2xl leading-none"
+                    style={{ fontFamily: FONT_PREVIEW[f.id] || undefined }}
+                  >
+                    {f.id === "auto" ? "Aa" : "Viral"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{f.name}</span>
                 </button>
               );
             })}
@@ -1038,6 +1207,19 @@ export function LongFormWizard() {
                   </li>
                   <li>· Color: <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: accent }} />{" "}
                     <span className="font-mono-tab text-foreground">{accent}</span>
+                  </li>
+                  <li>
+                    · Subtítulos:{" "}
+                    <span className="text-foreground">
+                      {SUBTITLE_FONTS.find((f) => f.id === subtitleFont)?.name ?? subtitleFont}
+                      {subtitleColor !== "auto" && (
+                        <>
+                          {" · texto "}
+                          <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: subtitleColor }} />{" "}
+                          <span className="font-mono-tab">{subtitleColor}</span>
+                        </>
+                      )}
+                    </span>
                   </li>
                 </>
               )}

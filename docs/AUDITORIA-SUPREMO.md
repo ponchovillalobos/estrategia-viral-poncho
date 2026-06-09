@@ -91,6 +91,21 @@
 >     el hook que cita el LLM se busca fuzzy en el transcript real (ratio ≥0.72,
 >     ±45s) y el clip se ancla a ese timestamp; el final se ajusta al fin de
 >     frase (puntuación o pausa ≥0.5s).
+> - ✅ **Revisión sección LARGOS (2026-06-09, pedido del user)**:
+>   - **Fuente + color de subtítulos en el wizard de largos** (paso 4, paridad con
+>     shorts): selector de 10 tipografías CON miniatura real (next/font), 9 colores
+>     de texto + automático, preview en vivo ("Así se ven tus clips"). Cableado
+>     completo: wizard → `/api/long_form/process` (subtitleFont/subtitleColor) →
+>     `long_form_pipeline.py --subtitle-font/--subtitle-color` →
+>     `build-clip-supreme.mjs` argv 7/8 (override post-estilo) → project JSON →
+>     build-clip-props → render. Verificado: project de clip real salió con
+>     font=bangers color=#fde047.
+>   - **Miniaturas de videos largos**: el endpoint de thumbnails no buscaba en
+>     LF_RAW (solo shorts/clips/renders) → los largos no tenían miniatura. Ahora sí,
+>     y la lista del wizard muestra el frame real al 35% (cacheado) con fallback a
+>     ícono. Verificado en vivo (JPEG 200).
+>   - **Estilos Gráficos & Motion ahora elegibles en largos** (graphics_pro/max ya
+>     estaban portados al pipeline en F0; faltaban en la lista del wizard).
 > - ⏳ Pendiente (futuro): @remotion/player embebido + timeline visual arrastrable,
 >   hook reorder + loop perfecto (requiere re-corte), b-roll CLIP local, multicam
 >   (sherpa-onnx), 3D en headlines/mirror, LUT real por frame, voz 1.05x +

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
-import { RAW_DIR, LF_CLIPS, LF_RENDERS, FFMPEG_EXE, FFPROBE_EXE, DATA_ROOT } from "@/lib/paths";
+import { RAW_DIR, LF_RAW, LF_CLIPS, LF_RENDERS, FFMPEG_EXE, FFPROBE_EXE, DATA_ROOT } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +62,11 @@ export async function GET(
   let videoPath: string | null = null;
   if (tryShort) {
     videoPath = await findVideoFile(RAW_DIR, id, "exact");
+  }
+  if (!videoPath && tryLongForm) {
+    // Video LARGO crudo (el id del wizard de largos es el stem en LF_RAW). Antes no
+    // se buscaba acá → la lista de largos no tenía miniaturas.
+    videoPath = await findVideoFile(LF_RAW, id, "exact");
   }
   if (!videoPath && tryLongForm) {
     videoPath = await findVideoFile(LF_CLIPS, id, "exact");

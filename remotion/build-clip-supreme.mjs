@@ -44,6 +44,15 @@ const styleId = process.argv[4] || "supreme";
 // accent puede llegar vacío "" desde pipeline.py si no se pasó — usar fallback
 const accentColorOverride = (process.argv[5] && process.argv[5].trim()) || null;
 const aspectRatio = process.argv[6] || "9:16";
+// Fuente + color de TEXTO de subtítulos del wizard de largos ("" o "auto" = del estilo).
+const subtitleFontOverride =
+  process.argv[7] && process.argv[7].trim() && process.argv[7].trim() !== "auto"
+    ? process.argv[7].trim()
+    : null;
+const subtitleColorOverride =
+  process.argv[8] && process.argv[8].trim() && process.argv[8].trim() !== "auto"
+    ? process.argv[8].trim()
+    : null;
 
 if (!videoId || !clipIndex) {
   console.error("Uso: node build-clip-supreme.mjs <video_id> <clip_index> [style_id] [accent_color] [aspect_ratio]");
@@ -152,6 +161,11 @@ const ctx = {
 };
 
 const project = buildProjectForStyle(ctx, styleId);
+
+// Overrides del wizard de largos: fuente y color del TEXTO de subtítulos.
+// Se aplican DESPUÉS de buildProjectForStyle para ganarle al default del estilo.
+if (subtitleFontOverride) project.subtitleFont = subtitleFontOverride;
+if (subtitleColorOverride) project.subtitleColor = subtitleColorOverride;
 
 writeFileSync(outPath, JSON.stringify(project, null, 2), "utf-8");
 console.log(

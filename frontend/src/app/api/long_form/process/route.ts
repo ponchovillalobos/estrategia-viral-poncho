@@ -36,6 +36,10 @@ interface ProcessBody {
   styles?: string[];
   /** Color accent en hex. Si se omite, paleta rotativa por clipIndex. */
   accentColor?: string;
+  /** Fuente de subtítulos ("auto" = la del estilo). Igual que el wizard de shorts. */
+  subtitleFont?: string;
+  /** Color del TEXTO de subtítulos ("auto" = el del estilo). */
+  subtitleColor?: string;
   /** Plataformas destino (informativo, se persiste en project JSON). */
   platforms?: string[];
   /** Aspecto del output. "9:16" vertical (default) o "16:9" horizontal. */
@@ -102,6 +106,12 @@ async function processJob(
     args.push("--styles", body.styles.join(","));
   }
   if (body.accentColor) args.push("--accent-color", body.accentColor);
+  if (body.subtitleFont && body.subtitleFont !== "auto") {
+    args.push("--subtitle-font", body.subtitleFont);
+  }
+  if (body.subtitleColor && body.subtitleColor !== "auto") {
+    args.push("--subtitle-color", body.subtitleColor);
+  }
   if (body.platforms && body.platforms.length > 0) {
     args.push("--platforms", body.platforms.join(","));
   }
