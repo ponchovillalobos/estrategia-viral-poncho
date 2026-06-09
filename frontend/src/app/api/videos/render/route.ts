@@ -8,6 +8,7 @@ import {
   releaseRenderLock,
   remotionConcurrency,
   renameWithRetry,
+  REMOTION_DELAY_TIMEOUT_MS,
 } from "@/lib/render-utils";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest) {
         outFile,
         "--concurrency",
         String(remotionConcurrency()),
+        `--timeout=${REMOTION_DELAY_TIMEOUT_MS}`,
         "--props",
         JSON.stringify(fullProps),
       ];

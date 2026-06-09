@@ -546,6 +546,9 @@ def step_render_clip(
             str(out),
             "--concurrency",
             str(remotion_concurrency),
+            # delayRender amplio: el dev server sirviendo el clip bajo carga puede
+            # tardar >28s (default) en responder un seek de OffthreadVideo.
+            "--timeout=120000",
             f"--props={props_name}",
         ], cwd=REMOTION_DIR)
     finally:

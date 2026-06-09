@@ -20,8 +20,15 @@ const STALE_LOCK_MS = 30 * 60 * 1000;
 export function remotionConcurrency(): number {
   const fromEnv = Number(process.env.VIRAL_REMOTION_CONCURRENCY);
   if (Number.isFinite(fromEnv) && fromEnv >= 1) return Math.floor(fromEnv);
-  return Math.max(1, os.cpus().length - 1);
+  // Tope en 8: con más workers, todos piden frames del stream HTTP del dev server
+  // a la vez y OffthreadVideo revienta el delayRender (timeout a los 28s). 8 da
+  // ~2x sobre el default de Remotion sin ahogar al server que sirve el video.
+  return Math.min(8, Math.max(1, os.cpus().length - 1));
 }
+
+/** Timeout de delayRender para `remotion render/still` (ms). El default de 28s se
+ *  queda corto cuando el dev server sirve el video fuente bajo carga. */
+export const REMOTION_DELAY_TIMEOUT_MS = 120_000;
 
 function lockPath(videoId: string): string {
   return path.join(RENDERS_DIR, `${videoId}.__lock`);

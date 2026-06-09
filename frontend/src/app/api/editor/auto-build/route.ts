@@ -20,7 +20,11 @@ import { autoMatchBroll, type BrollClip } from "@/lib/pexels";
 import { writeJsonFileAtomic } from "@/lib/atomic-write";
 import { readSettings } from "@/lib/user-settings";
 import { runProcess } from "@/lib/run-process";
-import { remotionConcurrency, renameWithRetry } from "@/lib/render-utils";
+import {
+  remotionConcurrency,
+  renameWithRetry,
+  REMOTION_DELAY_TIMEOUT_MS,
+} from "@/lib/render-utils";
 import {
   pickTopKeywords,
   sanitizeForFilename,
@@ -286,51 +290,66 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // en "Video.mp4" (truncado en el primer espacio). Solución: quote explícito.
       const needsQuote = process.platform === "win32" && /\s/.test(outPath);
       const outArg = needsQuote ? `"${outPath}"` : outPath;
-      const renderRun = await runProcess(
-        npxExe,
-        [
-          "remotion",
-          "render",
-          "src/index.ts",
-          "ViralVideo",
-          outArg,
-          "--concurrency",
-          String(remotionConcurrency()),
-          "--props=props.json",
-        ],
-        REMOTION_DIR,
-        (chunk) => {
-          // Remotion emite MUCHAS líneas "Rendered X/Y" muy seguidas y el stream las
-          // agrupa en un mismo chunk. Hay que tomar la ÚLTIMA (la más reciente), no la
-          // primera: si no, la barra reporta un frame viejo y queda muy por detrás del
-          // render real (peor cuanto más largo el video → más updates por chunk).
-          const matches = [...chunk.matchAll(/Rendered (\d+)\/(\d+)/g)];
-          if (matches.length > 0) {
-            const last = matches[matches.length - 1];
-            const current = parseInt(last[1], 10);
-            const total = parseInt(last[2], 10);
-            if (total > 0 && current <= total) {
-              const progress = Math.min(95, 10 + Math.floor((current / total) * 85));
-              updateStep(job.id, styleId, {
-                progress,
-                currentFrame: current,
-                totalFrames: total,
-              });
+      const doRender = () =>
+        runProcess(
+          npxExe,
+          [
+            "remotion",
+            "render",
+            "src/index.ts",
+            "ViralVideo",
+            outArg,
+            "--concurrency",
+            String(remotionConcurrency()),
+            `--timeout=${REMOTION_DELAY_TIMEOUT_MS}`,
+            "--props=props.json",
+          ],
+          REMOTION_DIR,
+          (chunk) => {
+            // Remotion emite MUCHAS líneas "Rendered X/Y" muy seguidas y el stream las
+            // agrupa en un mismo chunk. Hay que tomar la ÚLTIMA (la más reciente), no la
+            // primera: si no, la barra reporta un frame viejo y queda muy por detrás del
+            // render real (peor cuanto más largo el video → más updates por chunk).
+            const matches = [...chunk.matchAll(/Rendered (\d+)\/(\d+)/g)];
+            if (matches.length > 0) {
+              const last = matches[matches.length - 1];
+              const current = parseInt(last[1], 10);
+              const total = parseInt(last[2], 10);
+              if (total > 0 && current <= total) {
+                const progress = Math.min(95, 10 + Math.floor((current / total) * 85));
+                updateStep(job.id, styleId, {
+                  progress,
+                  currentFrame: current,
+                  totalFrames: total,
+                });
+              }
             }
-          }
-        },
-        // timeoutMs = undefined: un render largo es válido, no hay tope de tiempo total.
-        undefined,
-        // idleTimeoutMs = 15 min: si Remotion deja de emitir progreso por 15 min está colgado
-        // → se mata, el step falla y la cola sigue con el próximo. Nunca queda trabada.
-        15 * 60 * 1000
-      );
+          },
+          // timeoutMs = undefined: un render largo es válido, no hay tope de tiempo total.
+          undefined,
+          // idleTimeoutMs = 15 min: si Remotion deja de emitir progreso por 15 min está colgado
+          // → se mata, el step falla y la cola sigue con el próximo. Nunca queda trabada.
+          15 * 60 * 1000
+        );
+
+      let renderRun = await doRender();
+      if (!renderRun.ok) {
+        // F4 — RETRY del render: los fallos por carga (delayRender timeout del stream
+        // bajo presión sostenida, browser crash) suelen ser transitorios. Un reintento
+        // limpio recupera la mayoría sin intervención. ENOSPC (disco lleno) no se reintenta.
+        if (!/ENOSPC/i.test(renderRun.stderr)) {
+          console.warn(`[auto-build] render de ${projectId} falló — reintentando 1 vez…`);
+          updateStep(job.id, styleId, { progress: 10, currentFrame: 0 });
+          await fs.rm(outPath, { force: true }).catch(() => {});
+          renderRun = await doRender();
+        }
+      }
 
       if (!renderRun.ok) {
         await fs.rm(outPath, { force: true }).catch(() => {});
         updateStep(job.id, styleId, {
           status: "fail",
-          error: `render: ${renderRun.stderr.slice(-300)}`,
+          error: `render: ${renderRun.stderr.slice(-600)}`,
         });
         continue;
       }

@@ -80,8 +80,21 @@
 >      combinación (la 2da vez es instantánea). Fin del "elegir a ciegas y esperar
 >      8 min de render para ver cómo queda". Los previews >7 días se auto-limpian.
 >      Verificado en vivo end-to-end (Inta + hype + Bangers amarillo → PNG correcto).
-> - ⏳ Pendiente F4: @remotion/player embebido (preview en movimiento), timeline
->   visual. Pendiente F5 completa (b-roll CLIP, multicam, clips v2).
+> - ✅ **CIERRE DE PENDIENTES (2026-06-09, 2da tanda)**:
+>   - F3: transición **flip3d** (rotación Y 28° con perspective, en el pool de
+>     shorts y largos) + **pulso de color emocional** (saturación/contraste
+>     respiran durante los reaction zooms de los picos).
+>   - F4: **preview EN MOVIMIENTO** — `style-preview` con `motion:true` renderiza
+>     3s reales (90 frames, scale 0.4) con todos los FX; botón "▶ En MOVIMIENTO"
+>     en el wizard (video autoplay loop), con caché.
+>   - F5: **clips anclados al texto** (patrón FunClip) en `analyze_clips.py`:
+>     el hook que cita el LLM se busca fuzzy en el transcript real (ratio ≥0.72,
+>     ±45s) y el clip se ancla a ese timestamp; el final se ajusta al fin de
+>     frase (puntuación o pausa ≥0.5s).
+> - ⏳ Pendiente (futuro): @remotion/player embebido + timeline visual arrastrable,
+>   hook reorder + loop perfecto (requiere re-corte), b-roll CLIP local, multicam
+>   (sherpa-onnx), 3D en headlines/mirror, LUT real por frame, voz 1.05x +
+>   DeepFilterNet.
 
 > Auditoría con 6 agentes en paralelo: motor Remotion/FX, pipeline Python/IA,
 > frontend/APIs/UX, pipeline de largos, robustez/rendimiento, y estado del arte

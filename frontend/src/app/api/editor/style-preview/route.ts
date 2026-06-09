@@ -132,11 +132,12 @@ export async function POST(req: NextRequest) {
       ? [
           "remotion", "render", "src/index.ts", "ViralVideo",
           outArg, `--frames=${frame}-${frame + 89}`, `--props=${propsName}`,
-          "--scale=0.4", "--concurrency=4",
+          "--scale=0.4", "--concurrency=4", "--timeout=120000",
         ]
       : [
           "remotion", "still", "src/index.ts", "ViralVideo",
           outArg, `--frame=${frame}`, `--props=${propsName}`, "--scale=0.5",
+          "--timeout=120000",
         ];
     const stillRun = await runProcess(
       npxExe,
