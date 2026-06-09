@@ -15,6 +15,7 @@ import { MusicPicker } from "@/components/editor/music-picker";
 import { AnimationsPanel } from "@/components/editor/animations-panel";
 import { ExportPanel } from "@/components/editor/export-panel";
 import { RenameDialog } from "@/components/editor/rename-dialog";
+import { TimelineStrip, type TimelineData } from "@/components/editor/timeline-strip";
 
 export interface Word {
   word: string;
@@ -85,6 +86,31 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
   const [transcribing, setTranscribing] = useState(false);
   const [detectingCuts, setDetectingCuts] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  // Duración real del video (para el timeline visual).
+  const [videoDuration, setVideoDuration] = useState(0);
+  // F4 — Preview en movimiento: 3s renderizados con TODOS los FX desde el punto actual.
+  const [fxPreviewLoading, setFxPreviewLoading] = useState(false);
+  const [fxPreviewUrl, setFxPreviewUrl] = useState<string | null>(null);
+
+  async function generateFxPreview() {
+    setFxPreviewLoading(true);
+    setFxPreviewUrl(null);
+    try {
+      const r = await fetch(`/api/projects/${encodeURIComponent(projectId)}/preview-clip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ at: currentTime }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.url) throw new Error(d.error ?? "no se pudo generar el preview");
+      setFxPreviewUrl(`${d.url}&ts=${Date.now()}`);
+      if (d.cached) toast.success("Preview listo (caché)");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFxPreviewLoading(false);
+    }
+  }
   const [renameOpen, setRenameOpen] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -265,10 +291,51 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
               controls
               className="h-full w-full"
               onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+              onLoadedMetadata={(e) => setVideoDuration(e.currentTarget.duration || 0)}
             />
           </div>
           <div className="border-t border-border p-3">
             <ActiveCaption words={transcript ?? project.manualSubtitles} time={currentTime} />
+          </div>
+          {/* F4 — Timeline visual: palabras + efectos sobre la línea de tiempo. */}
+          <div className="border-t border-border p-3">
+            <TimelineStrip
+              duration={videoDuration}
+              currentTime={currentTime}
+              words={(project.manualSubtitles.length > 0 ? project.manualSubtitles : transcript ?? []).map(
+                (w) => ({ word: w.word, start: w.start, end: w.end })
+              )}
+              data={project as unknown as TimelineData}
+              onSeek={(t) => {
+                if (videoRef.current) {
+                  videoRef.current.currentTime = t;
+                  setCurrentTime(t);
+                }
+              }}
+            />
+            {/* Preview en movimiento: 3s reales con todos los FX desde el punto actual. */}
+            <div className="mt-2 text-center">
+              <button
+                type="button"
+                onClick={generateFxPreview}
+                disabled={fxPreviewLoading}
+                className="rounded-md bg-violet-500/15 px-3 py-1.5 text-xs font-medium text-violet-300 ring-1 ring-violet-500/40 transition hover:bg-violet-500/25 disabled:opacity-50"
+              >
+                {fxPreviewLoading
+                  ? "Renderizando 3s con efectos (~1 min)…"
+                  : `▶ Ver 3s CON EFECTOS desde ${currentTime.toFixed(1)}s`}
+              </button>
+              {fxPreviewUrl && (
+                <video
+                  src={fxPreviewUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="mx-auto mt-2 max-h-72 rounded-md border border-border shadow"
+                />
+              )}
+            </div>
           </div>
         </Card>
 

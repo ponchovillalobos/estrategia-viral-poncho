@@ -117,10 +117,25 @@
 >   apoyo, FX→Efectos, Export→Generar) + badge "edición manual" que explica cuándo
 >   usarlo, "Bridge manual"→texto claro en producción, y Pixabay marcado como
 >   OPCIONAL (ya hay 54 pistas + 67 SFX sin key). Las 10 páginas responden 200.
-> - ⏳ Pendiente (futuro): @remotion/player embebido + timeline visual arrastrable,
->   hook reorder + loop perfecto (requiere re-corte), b-roll CLIP local, multicam
->   (sherpa-onnx), 3D en headlines/mirror, LUT real por frame, voz 1.05x +
->   DeepFilterNet.
+> - ✅ **Timeline visual + preview embebido + copys por red (2026-06-09)**:
+>   1. **TimelineStrip** (`components/editor/timeline-strip.tsx`) en el editor
+>      manual: tira con carril de palabras + carriles de FX (zoom/reacción/
+>      transición/sonido/tarjeta/gráfico/ícono/partículas, solo los que existen),
+>      playhead en vivo y click-para-saltar. Fin de "editar listas de números a
+>      ciegas".
+>   2. **Preview en movimiento EMBEBIDO**: botón "▶ Ver 3s CON EFECTOS desde Xs"
+>      en el editor — `POST /api/projects/[id]/preview-clip {at}` renderiza 3s
+>      reales del proyecto (todos los FX, scale 0.4) con caché por mtime del
+>      proyecto. Verificado con proyecto real (mp4 generado OK).
+>   3. **Copys POR RED en /produccion** (el user ama los copys; publicar por API
+>      no le anda aún): botones "copiar para TikTok / Instagram / LinkedIn" que
+>      copian la versión adaptada (texto corto + hashtags propios de cada red;
+>      LinkedIn usa la versión larga) — flujo manual de publicación de 1ª clase.
+> - ⏳ Pendiente (futuro): @remotion/player embebido (preview instantáneo sin
+>   renderizar), timeline arrastrable (v2 con edición), hook reorder + loop
+>   perfecto, b-roll CLIP local, multicam (sherpa-onnx), 3D en headlines/mirror,
+>   LUT real por frame, voz 1.05x + DeepFilterNet. Revisar por qué la publicación
+>   por API no funciona en el equipo del user (OAuth/tokens).
 
 > Auditoría con 6 agentes en paralelo: motor Remotion/FX, pipeline Python/IA,
 > frontend/APIs/UX, pipeline de largos, robustez/rendimiento, y estado del arte

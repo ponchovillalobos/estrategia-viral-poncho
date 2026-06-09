@@ -150,6 +150,33 @@ export function ProductionList() {
   }
 
   const copyCaption = (p: ProjectExt) => publishActions.copyCaption(p, setCopiedId);
+
+  // Copys POR RED (flujo manual): compone la versión adaptada a cada red desde
+  // captionMeta (texto corto + hashtags propios; LinkedIn usa la versión larga).
+  // Si el proyecto no tiene captionMeta, cae al caption general.
+  const [copiedNetwork, setCopiedNetwork] = useState<string | null>(null);
+  function copyCaptionForNetwork(p: ProjectExt, net: "tiktok" | "instagram" | "linkedin") {
+    const meta = (p as unknown as {
+      captionMeta?: {
+        caption_short?: string;
+        caption_long?: string;
+        hashtags_tiktok?: string[];
+        hashtags_instagram?: string[];
+        hashtags_linkedin?: string[];
+      } | null;
+    }).captionMeta;
+    const tags = (arr?: string[]) => (arr && arr.length ? "\n\n" + arr.join(" ") : "");
+    let text = p.caption ?? "";
+    if (meta) {
+      if (net === "linkedin") text = (meta.caption_long || meta.caption_short || text) + tags(meta.hashtags_linkedin);
+      else if (net === "instagram") text = (meta.caption_short || text) + tags(meta.hashtags_instagram);
+      else text = (meta.caption_short || text) + tags(meta.hashtags_tiktok);
+    }
+    if (!text.trim()) return;
+    navigator.clipboard.writeText(text.trim());
+    setCopiedNetwork(`${p.id}:${net}`);
+    setTimeout(() => setCopiedNetwork(null), 1800);
+  }
   const publishToLinkedIn = (p: ProjectExt) =>
     publishActions.publishToLinkedIn(p, setPublishingToLinkedin);
   const publishToInstagram = (p: ProjectExt) =>
@@ -491,6 +518,27 @@ export function ProductionList() {
                     <p className="text-[11px] text-muted-foreground italic">
                       Todavía no tiene descripción. Tocá el botón ✨ Generar para crearla con IA.
                     </p>
+                  )}
+                  {/* Copys POR RED: cada botón copia la versión adaptada a esa red
+                      (texto corto + hashtags de TikTok/IG, versión larga para LinkedIn).
+                      Es el flujo manual: copiás y pegás en la app de la red. */}
+                  {p.caption && (
+                    <div className="flex flex-wrap items-center gap-1 border-t border-border/60 pt-1.5">
+                      <span className="font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground">
+                        copiar para:
+                      </span>
+                      {(["tiktok", "instagram", "linkedin"] as const).map((net) => (
+                        <button
+                          key={net}
+                          type="button"
+                          onClick={() => copyCaptionForNetwork(p, net)}
+                          title={`Copiar el texto adaptado a ${net === "tiktok" ? "TikTok" : net === "instagram" ? "Instagram" : "LinkedIn"} (con sus hashtags)`}
+                          className="rounded border border-border bg-card px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground transition hover:border-emerald-400/50 hover:text-emerald-300"
+                        >
+                          {copiedNetwork === `${p.id}:${net}` ? "✓ copiado" : net === "tiktok" ? "TikTok" : net === "instagram" ? "Instagram" : "LinkedIn"}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
 
