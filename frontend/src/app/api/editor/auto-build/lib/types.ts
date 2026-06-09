@@ -85,6 +85,10 @@ export interface ResolvedProject {
   subtitleFont?: string;
   // Color del TEXTO de los subtítulos elegido en el wizard ("auto" = el del estilo).
   subtitleColor?: string;
+  // F1 — Director emocional: ducking de música + mood + SFX modulados por arousal.
+  musicVolumeCurve?: { t: number; v: number }[];
+  mood?: string;
+  sfxMarks?: unknown[];
   // Modo Gráficos & Motion (estilos graphics_*): applyGraphics genera dataViz +
   // kineticHeadlines desde el transcript del short y los deja acá.
   graphics?: boolean;

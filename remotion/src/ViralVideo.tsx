@@ -117,6 +117,12 @@ export const viralVideoSchema = z.object({
   bRoll: z.array(bRollSchema).default([]),
   musicUrl: z.string().nullable().default(null),
   musicVolume: z.number().default(0.15),
+  // F1 — Director emocional: curva de DUCKING de la música. Puntos {t, v} donde v
+  // multiplica musicVolume (0.35 = voz hablando, 1.0 = pausa larga → la música
+  // respira). Vacía = volumen constante (render idéntico al de antes).
+  musicVolumeCurve: z
+    .array(z.object({ t: z.number(), v: z.number() }))
+    .default([]),
   subtitleStyle: z.enum(["bebas", "anton", "cinematic"]).default("bebas"),
   subtitleColor: z.string().default("#ffffff"),
   subtitleHighlight: z.string().default("#34d399"),
@@ -188,6 +194,7 @@ export const defaultProps: ViralVideoProps = {
   bRoll: [],
   musicUrl: null,
   musicVolume: 0.15,
+  musicVolumeCurve: [],
   subtitleStyle: "bebas",
   subtitleColor: "#ffffff",
   subtitleHighlight: "#34d399",
@@ -237,6 +244,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   bRoll,
   musicUrl,
   musicVolume,
+  musicVolumeCurve,
   subtitleStyle,
   subtitleColor,
   subtitleHighlight,
@@ -666,7 +674,30 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         );
       })}
 
-      {musicUrl && <Audio src={musicUrl} volume={musicVolume} />}
+      {musicUrl && (
+        <Audio
+          src={musicUrl}
+          // F1 — Auto-ducking: la música baja cuando hay voz y respira en pausas
+          // largas, con rampa de 0.45s en cada transición (sin saltos audibles).
+          // Curva vacía = volumen constante (comportamiento histórico).
+          volume={
+            musicVolumeCurve.length === 0
+              ? musicVolume
+              : (f) => {
+                  const t = f / fps;
+                  let idx = 0;
+                  for (let i = 0; i < musicVolumeCurve.length; i++) {
+                    if (musicVolumeCurve[i].t <= t) idx = i;
+                    else break;
+                  }
+                  const target = musicVolumeCurve[idx].v;
+                  const from = idx > 0 ? musicVolumeCurve[idx - 1].v : target;
+                  const ramp = Math.min(1, Math.max(0, (t - musicVolumeCurve[idx].t) / 0.45));
+                  return Math.max(0, musicVolume * (from + (target - from) * ramp));
+                }
+          }
+        />
+      )}
 
       {/* C1 — Voz IA (Piper): pista de audio extra. Arranca en voiceoverStartSec. */}
       {voiceoverUrl && (

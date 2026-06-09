@@ -88,6 +88,9 @@ const props = {
     ? `${HOST}/api/music/stream?file=${encodeURIComponent(project.musicTrack)}`
     : null,
   musicVolume: project.musicVolume ?? 0.15,
+  // F1 — Director emocional: curva de ducking de la música (pass-through; los clips
+  // de largos no hacen jump cuts, no hay remap).
+  musicVolumeCurve: project.musicVolumeCurve || [],
   subtitleStyle: project.subtitleStyle ?? "anton",
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",

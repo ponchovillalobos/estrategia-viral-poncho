@@ -326,6 +326,69 @@ def _apply_tracking(clip_id: str, style_id: str) -> None:
         print(f"[tracking] skipped: {e}", file=sys.stderr)
 
 
+def _apply_emotion(clip_id: str, style_id: str) -> None:
+    """F1 — Director emocional sobre el clip (paridad con applyEmotionDirector de
+    shorts): corre emotion_director.py y parchea el project JSON con:
+      - musicVolumeCurve (auto-ducking de la música cuando hay voz)
+      - reactionZooms extra en los picos emocionales (solo estilos dinámicos)
+      - volumen de cada SFX modulado por el arousal local
+      - mood global (para selección de música futura)
+    Best-effort: si falla, el clip renderiza igual que antes.
+    """
+    try:
+        project_path = LF_PROJECTS / f"{clip_id}_{style_id}.json"
+        if not project_path.exists():
+            return
+        clip_video = None
+        for ext in (".mp4", ".mov", ".mkv", ".webm"):
+            cand = LF_CLIPS / f"{clip_id}{ext}"
+            if cand.exists():
+                clip_video = cand
+                break
+        if clip_video is None:
+            return
+        transcript = LF_TRANSCRIPTS / f"{clip_id}.json"
+        proc = subprocess.run(
+            [
+                str(VENV_PYTHON), str(PYTHON_DIR / "emotion_director.py"),
+                str(clip_video), "--transcript", str(transcript),
+            ],
+            check=False, cwd=PYTHON_DIR, capture_output=True, text=True,
+            timeout=120, encoding="utf-8", errors="replace",
+        )
+        line = next(
+            (l for l in reversed(proc.stdout.splitlines()) if l.strip().startswith("{")),
+            None,
+        )
+        if not line:
+            return
+        e = json.loads(line)
+        if not e.get("ok"):
+            return
+        data = json.loads(project_path.read_text(encoding="utf-8"))
+        data["mood"] = e.get("mood")
+        if data.get("musicTrack") and len(e.get("ducking") or []) > 1:
+            data["musicVolumeCurve"] = e["ducking"]
+        existing_rz = data.get("reactionZooms") or []
+        is_dynamic = bool(data.get("zoomMarks")) or bool(existing_rz)
+        if is_dynamic:
+            added = [
+                {"at": p["t"], "intensity": 1.35, "duration": 0.25}
+                for p in (e.get("peaks") or [])
+                if p.get("score", 0) >= 0.55
+                and not any(abs(z.get("at", -99) - p["t"]) < 2.5 for z in existing_rz)
+            ][:3]
+            if added:
+                data["reactionZooms"] = existing_rz + added
+        project_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        print(
+            f"[emotion] {clip_id}: mood={e.get('mood')} · {len(e.get('peaks') or [])} picos",
+            file=sys.stderr,
+        )
+    except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
+        print(f"[emotion] skipped: {e}", file=sys.stderr)
+
+
 def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
     """Post-procesa el render con ffmpeg, en paridad con el pipeline de shorts:
 
@@ -439,6 +502,8 @@ def step_render_clip(
     # 1.5) motion tracking opt-in (estilos que lo declaran, ej. hype): parchea trackPath
     #      sobre el clip antes de armar los props. Best-effort.
     _apply_tracking(clip_id, style_id)
+    # 1.6) F1 — director emocional: ducking de música + zooms en picos. Best-effort.
+    _apply_emotion(clip_id, style_id)
     # 2) build props — archivo ÚNICO por clip+estilo: con render paralelo, dos workers
     #    escribiendo "props.json" se pisarían (un clip renderizaría los props del otro).
     props_name = f"props_{clip_id}_{style_id}.json"

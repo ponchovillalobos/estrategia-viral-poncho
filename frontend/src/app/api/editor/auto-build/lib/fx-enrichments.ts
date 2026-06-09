@@ -78,6 +78,100 @@ export async function applyGraphics(
   }
 }
 
+/**
+ * F1 — DIRECTOR EMOCIONAL: analiza CÓMO habla el speaker (no solo qué dice) con
+ * emotion_director.py (librosa, 100% local) y dirige la edición con el resultado:
+ *   1. musicVolumeCurve → auto-ducking: la música baja cuando hay voz y respira
+ *      en pausas largas (lo que Wisecut cobra, acá gratis).
+ *   2. reactionZooms en los PICOS emocionales (solo en estilos dinámicos — si el
+ *      estilo no trae zooms, no se inventa ninguno).
+ *   3. Volumen de cada SFX modulado por el arousal local (momento intenso → SFX
+ *      presente; momento calmo → SFX sutil). Nada de SFX a volumen fijo.
+ *   4. project.mood (hype/tension/inspirador/chill/epico) queda guardado para la
+ *      selección de música y futuras decisiones.
+ * Best-effort: si el análisis falla, el render sale exactamente como antes.
+ */
+export async function applyEmotionDirector(
+  project: ResolvedProject,
+  videoId: string
+): Promise<void> {
+  try {
+    const rawVideo = await findRawVideo(videoId);
+    if (!rawVideo) return;
+    const outDir = path.join(DATA_ROOT, "emotion");
+    await fs.mkdir(outDir, { recursive: true });
+    const outPath = path.join(outDir, `${videoId}.json`);
+    const transcriptPath = path.join(TRANSCRIPTS_DIR, `${videoId}.json`);
+
+    const run = await runProcess(
+      PYTHON_EXE,
+      [
+        path.join(PYTHON_DIR, "emotion_director.py"),
+        rawVideo,
+        "--transcript", transcriptPath,
+        "--out", outPath,
+      ],
+      PYTHON_DIR,
+      undefined,
+      180_000
+    );
+    if (!run.ok) return;
+    const raw = await fs.readFile(outPath, "utf-8").catch(() => null);
+    if (!raw) return;
+    const e = JSON.parse(raw) as {
+      ok?: boolean;
+      mood?: string;
+      peaks?: { t: number; score: number }[];
+      ducking?: { t: number; v: number }[];
+      arousal?: { t: number; a: number }[];
+    };
+    if (!e.ok) return;
+
+    project.mood = e.mood;
+
+    // 1) Auto-ducking — solo tiene sentido si el estilo trae música.
+    if (project.musicTrack && Array.isArray(e.ducking) && e.ducking.length > 1) {
+      project.musicVolumeCurve = e.ducking;
+    }
+
+    // 2) Zooms de reacción en picos emocionales — solo en estilos ya dinámicos.
+    const zoomCount = (project.zoomMarks as unknown[] | undefined)?.length ?? 0;
+    const existingRz = (project.reactionZooms ?? []) as { at: number }[];
+    const isDynamic = zoomCount > 0 || existingRz.length > 0;
+    if (isDynamic && Array.isArray(e.peaks)) {
+      const added = e.peaks
+        .filter((p) => p.score >= 0.55)
+        .filter((p) => !existingRz.some((z) => Math.abs(z.at - p.t) < 2.5))
+        .slice(0, 3)
+        .map((p) => ({ at: p.t, intensity: 1.35, duration: 0.25 }));
+      if (added.length > 0) {
+        project.reactionZooms = [...existingRz, ...added];
+      }
+    }
+
+    // 3) Volumen de SFX según el arousal del momento (0.28 calmo → 0.58 intenso).
+    const sfx = project.sfxMarks as { at: number; volume?: number }[] | undefined;
+    if (Array.isArray(sfx) && Array.isArray(e.arousal) && e.arousal.length > 0) {
+      const arousalAt = (t: number): number => {
+        let best = e.arousal![0];
+        for (const pt of e.arousal!) {
+          if (Math.abs(pt.t - t) < Math.abs(best.t - t)) best = pt;
+        }
+        return best.a;
+      };
+      for (const m of sfx) {
+        m.volume = Math.min(0.58, Math.max(0.25, +(0.28 + 0.3 * arousalAt(m.at)).toFixed(2)));
+      }
+    }
+
+    console.log(
+      `[auto-build] director emocional: mood=${e.mood} · ${e.peaks?.length ?? 0} picos · ducking=${e.ducking?.length ?? 0} pts`
+    );
+  } catch (err) {
+    console.warn("[auto-build] director emocional falló:", err);
+  }
+}
+
 /** Motion tracking: detecta cara en el raw, llena project.trackPath. */
 export async function applyTracking(
   project: ResolvedProject,

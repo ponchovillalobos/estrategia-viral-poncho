@@ -46,6 +46,7 @@ import {
   applyTextBehind,
   applyTranslate,
   applyGraphics,
+  applyEmotionDirector,
 } from "./lib/fx-enrichments";
 
 export const dynamic = "force-dynamic";
@@ -240,6 +241,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       await applyTextBehind(project, videoId);
       await applyTranslate(project);
       await applyGraphics(project, videoId);
+      // F1 — Director emocional: ducking de música + zooms en picos + SFX por arousal.
+      await applyEmotionDirector(project, videoId);
 
       const projectPath = path.join(PROJECTS_DIR, `${projectId}.json`);
       await writeJsonFileAtomic(projectPath, project);

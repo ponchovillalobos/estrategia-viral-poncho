@@ -16,7 +16,24 @@
 > - ✅ **Pedido del user**: selector de COLOR de subtítulos en el wizard (paso 3) con
 >   9 colores + automático, preview en vivo ("Así se ven TUS subtítulos" con fuente +
 >   color + resaltado), guardado en plantillas y cableado hasta el render.
-> - ⏳ Siguiente: FASE 1 (director emocional).
+> - ✅ **FASE 1 (núcleo) — DIRECTOR EMOCIONAL**: `python/emotion_director.py` analiza
+>   el audio de la voz con librosa (100% local): curva de AROUSAL 0-1 por 0.5s
+>   (RMS + onsets, suavizada), PICOS emocionales (top 5, mín 6s entre sí), detección
+>   de voz → curva de DUCKING con histéresis (la música baja a 0.35x cuando hay voz
+>   y respira SOLO en pausas ≥1.5s — sin "bombeo"), y MOOD global
+>   (hype/tension/inspirador/chill/epico) con léxico de valencia en español.
+>   Cableado completo: `applyEmotionDirector` en shorts (auto-build) + `_apply_emotion`
+>   en largos → el motor Remotion recibe `musicVolumeCurve` (Audio con volumen por
+>   frame y rampa de 0.45s), reactionZooms extra en picos (solo estilos dinámicos) y
+>   SFX con volumen modulado por el arousal del momento (0.28 calmo → 0.58 intenso).
+>   Con jump cuts, la curva se remapea a la línea de tiempo cortada.
+>   Verificado con video real de 5 min: mood correcto, 5 picos, ducking limpio
+>   (2 respiros reales), still render OK con la curva.
+> - ⏳ Pendiente F1 (mejoras): modelo de emoción de voz (SpeechBrain) y detección de
+>   risas (PANNs) como señales extra; música elegida por mood (requiere manifest de
+>   moods de los tracks CC0).
+> - ⏳ Siguiente: FASE 2 (ritmo real: muletillas ES, silence removal con aire,
+>   micro punch-ins, hook reorder + loop).
 
 > Auditoría con 6 agentes en paralelo: motor Remotion/FX, pipeline Python/IA,
 > frontend/APIs/UX, pipeline de largos, robustez/rendimiento, y estado del arte
