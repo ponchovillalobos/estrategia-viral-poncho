@@ -169,6 +169,25 @@ export function StyleMiniDemo({ styleId, accent }: { styleId: string; accent: st
                 <Caption color="#ffffff" />
               </Screen>
             );
+          case "editorial":
+            return (
+              <Screen bg="#0a0908">
+                {/* panel de video a la derecha */}
+                <div className="absolute right-1 top-2 h-16 w-4 overflow-hidden rounded-sm border border-white/15 bg-zinc-700/70">
+                  <div className="absolute left-1/2 top-2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-zinc-400" />
+                  <div className="absolute left-1/2 top-4 h-2 w-2.5 -translate-x-1/2 rounded-t-full bg-zinc-500" />
+                </div>
+                {/* titulares serif a la izquierda */}
+                <div className="absolute left-1 top-4 space-y-1">
+                  <div className="h-0.5 w-3 bg-zinc-500" />
+                  <div className="h-1.5 w-6 rounded-sm bg-white/90" style={{ animation: "smd-slide 2.6s ease-in-out infinite" }} />
+                  <div className="h-1.5 w-5 rounded-sm" style={{ background: "#f0b429", animation: "smd-slide 2.6s ease-in-out infinite", animationDelay: "0.15s" }} />
+                  <div className="h-0.5 w-4 bg-zinc-600" />
+                </div>
+                {/* line-art dorado abajo */}
+                <div className="absolute bottom-2 left-2 h-3 w-3 rounded-full border" style={{ borderColor: "#f0b429", animation: "smd-pop 2s ease-in-out infinite" }} />
+              </Screen>
+            );
           default:
             return <Screen><Caption color={accent} /></Screen>;
         }

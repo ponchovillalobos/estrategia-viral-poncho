@@ -103,7 +103,8 @@ const SUBTITLE_COLORS: { id: string; name: string; value: string }[] = [
 type StyleId =
   | "silent" | "punch" | "hype" | "hype_max" | "hype_max_sfx" | "supreme"
   | "graphics_pro" | "graphics_max"
-  | "motion_pro" | "motion_beat" | "motion_grid";
+  | "motion_pro" | "motion_beat" | "motion_grid"
+  | "editorial";
 type PlatformId = "tiktok" | "instagram" | "linkedin" | "facebook";
 
 interface RawVideoEntry {
@@ -190,6 +191,7 @@ const STYLES: { id: StyleId; name: string; tagline: string; emoji: string }[] = 
   { id: "motion_pro", name: "Motion Pro", tagline: "Animación pura y limpia, sin emojis", emoji: "✨" },
   { id: "motion_beat", name: "Motion Beat", tagline: "El fondo late con la música", emoji: "🎧" },
   { id: "motion_grid", name: "Motion Grid", tagline: "Retro-tech: cuadrícula + gráficas", emoji: "🌐" },
+  { id: "editorial", name: "Editorial", tagline: "Documental: panel + titulares serif + line-art dorado", emoji: "📰" },
 ];
 
 const PALETTE = [

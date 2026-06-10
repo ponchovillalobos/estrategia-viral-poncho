@@ -63,7 +63,15 @@ export async function applyGraphics(
       dataViz?: unknown[];
       kineticHeadlines?: unknown[];
       iconStickers?: unknown[];
+      editorialCards?: unknown[];
     };
+    // EDITORIAL: las tarjetas tipográficas REEMPLAZAN charts/íconos (el lado
+    // oscuro es de las tarjetas; mezclar saturaría). Solo si el estilo lo es.
+    if (project.editorialLayout) {
+      if (Array.isArray(g.editorialCards)) project.editorialCards = g.editorialCards;
+      console.log(`[auto-build] editorial: ${g.editorialCards?.length ?? 0} tarjetas`);
+      return;
+    }
     if (Array.isArray(g.dataViz)) project.dataViz = g.dataViz;
     if (Array.isArray(g.kineticHeadlines)) project.kineticHeadlines = g.kineticHeadlines;
     // Íconos de concepto (visuales) — se suman a los que ya trae el estilo.

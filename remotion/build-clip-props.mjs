@@ -101,6 +101,10 @@ const props = {
   particleBursts: project.particleBursts || [],
   // MOTION PRO — fondo animado (pass-through).
   animatedBackground: project.animatedBackground ?? null,
+  // EDITORIAL — layout split-screen + tarjetas (pass-through; el merge desde el
+  // graphics file pasa más abajo junto con dataViz/íconos).
+  editorialLayout: project.editorialLayout ?? null,
+  editorialCards: project.editorialCards || [],
   subtitleStyle: project.subtitleStyle ?? "anton",
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",
@@ -171,6 +175,13 @@ if (_existsSync(graphicsPath)) {
     // Íconos de concepto (visuales) generados desde el transcript — se suman a los del estilo.
     if (Array.isArray(g.iconStickers) && g.iconStickers.length) {
       props.iconStickers = [...(props.iconStickers || []), ...g.iconStickers];
+    }
+    // EDITORIAL: tarjetas tipográficas (solo se usan si el estilo es editorial; en
+    // ese caso reemplazan charts/íconos para no saturar el lado oscuro).
+    if (props.editorialLayout && Array.isArray(g.editorialCards)) {
+      props.editorialCards = g.editorialCards;
+      props.dataViz = [];
+      props.iconStickers = [];
     }
     console.error(
       `[graphics] mergeado ${props.dataViz.length} charts · ${(props.iconStickers || []).length} íconos`,

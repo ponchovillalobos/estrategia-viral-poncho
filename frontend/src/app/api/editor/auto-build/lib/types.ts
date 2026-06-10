@@ -99,4 +99,7 @@ export interface ResolvedProject {
   dataViz?: unknown[];
   kineticHeadlines?: unknown[];
   iconStickers?: unknown[];
+  // EDITORIAL — split-screen documental (tarjetas serif + line-art).
+  editorialLayout?: { panel: string; panelWidth: number } | null;
+  editorialCards?: unknown[];
 }

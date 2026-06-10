@@ -28,7 +28,10 @@ export type StyleId =
   // stickers; fondos animados (audio-reactivos), charts y subtítulos minimal.
   | "motion_pro"
   | "motion_beat"
-  | "motion_grid";
+  | "motion_grid"
+  // EDITORIAL — split-screen documental: video en panel lateral + tarjetas
+  // tipográficas serif gigantes + ilustraciones line-art doradas animadas.
+  | "editorial";
 
 export interface BuildContext {
   videoId: string;
@@ -942,6 +945,31 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
     );
   }
 
+  // ─── EDITORIAL: split-screen documental. El video vive en un panel lateral y
+  // el lado oscuro muestra tarjetas serif (kicker + titular + stat + capítulos) e
+  // ilustraciones line-art doradas. SIN captions (las tarjetas son el texto),
+  // SIN stickers/emojis/transiciones — la elegancia es el efecto. ───
+  if (styleId === "editorial") {
+    return applyCapcutFx(
+      {
+        ...base,
+        graphics: true, // genera editorialCards (+charts que editorial no usa)
+        subtitleStyle: "anton" as const,
+        vignette: false,
+        captionBounce: false,
+        musicTrack: pickRandomMusicTrack(ctx.videoId),
+        musicVolume: 0.09,
+        editorialLayout: {
+          panel: "right" as const,
+          // 16:9 → panel angosto tipo documental; 9:16 → casi media pantalla.
+          panelWidth: (ctx.width ?? 1080) > (ctx.height ?? 1920) ? 0.34 : 0.46,
+        },
+      },
+      ctx,
+      { lut: "kodak_warm.cube", kinetic: "none", sceneFx: false, transitions: false }
+    );
+  }
+
   // ─── MOTION PRO: animación pura, limpia, SIN emojis/stickers. El protagonismo
   // es del motion design: fondo animado audio-reactivo + charts + karaoke minimal.
   if (styleId === "motion_pro" || styleId === "motion_beat" || styleId === "motion_grid") {
@@ -1076,6 +1104,11 @@ export const STYLE_INFO: Record<StyleId, { name: string; tagline: string; emoji:
     name: "Motion Grid",
     tagline: "Look retro-tech: cuadrícula en perspectiva + gráficas, limpio y futurista",
     emoji: "🌐",
+  },
+  editorial: {
+    name: "Editorial",
+    tagline: "Estilo documental: tu video en panel + titulares serif gigantes + ilustraciones doradas",
+    emoji: "📰",
   },
   graphics_max: {
     name: "Gráficos Max",

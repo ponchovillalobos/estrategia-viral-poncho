@@ -50,6 +50,11 @@ import {
   AnimatedBackgroundLayer,
   animatedBackgroundSchema,
 } from "./layers/animated-background-layer";
+import {
+  EditorialCardLayer,
+  editorialCardSchema,
+  editorialLayoutSchema,
+} from "./layers/editorial-layer";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -196,6 +201,10 @@ export const viralVideoSchema = z.object({
   // MOTION PRO — Fondo animado (aurora/mesh/grid), opcionalmente audio-reactivo.
   // null = sin fondo (render idéntico al histórico).
   animatedBackground: animatedBackgroundSchema.nullable().default(null),
+  // EDITORIAL — el video vive en un panel lateral y el lado oscuro muestra
+  // tarjetas tipográficas serif + ilustraciones line-art. null = layout normal.
+  editorialLayout: editorialLayoutSchema.nullable().default(null),
+  editorialCards: z.array(editorialCardSchema).default([]),
 });
 
 type ViralVideoProps = z.infer<typeof viralVideoSchema>;
@@ -252,6 +261,8 @@ export const defaultProps: ViralVideoProps = {
   lottieStickers: [],
   particleBursts: [],
   animatedBackground: null,
+  editorialLayout: null,
+  editorialCards: [],
 };
 
 export const ViralVideo: React.FC<ViralVideoProps> = ({
@@ -303,6 +314,8 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   lottieStickers,
   particleBursts,
   animatedBackground,
+  editorialLayout,
+  editorialCards,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -497,8 +510,26 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
     // F3 — las transiciones con movimiento también reciben motion blur real.
     transitionMotionActive;
 
+  // EDITORIAL — el video se encoge a un panel lateral redondeado; el resto del
+  // frame queda negro para las tarjetas tipográficas. Sin editorial: inset 0
+  // (passthrough exacto al comportamiento histórico).
+  const panelSide = editorialLayout?.panel === "left" ? "left" : "right";
+  const videoContainerStyle: React.CSSProperties = editorialLayout
+    ? {
+        position: "absolute",
+        top: "6%",
+        height: "88%",
+        width: `${(editorialLayout.panelWidth ?? 0.4) * 100}%`,
+        ...(panelSide === "left" ? { left: 36 } : { right: 36 }),
+        borderRadius: 18,
+        overflow: "hidden",
+        boxShadow: "0 24px 90px rgba(0,0,0,0.65)",
+      }
+    : { position: "absolute", inset: 0 };
+
   return (
-    <AbsoluteFill style={{ backgroundColor: "#000" }}>
+    <AbsoluteFill style={{ backgroundColor: editorialLayout ? "#0a0908" : "#000" }}>
+      <div style={videoContainerStyle}>
       <AbsoluteFill
         style={{
           // F3 — la perspectiva + rotateY solo aparecen durante un flip3d activo;
@@ -536,6 +567,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           )
         )}
       </AbsoluteFill>
+      </div>
 
       {/* A4 — Speed ramps: ventanas donde se overlay-ea el source a rate < 1 (slow-mo)
           o > 1 (acelerado), tapando el base 1x debajo. Audio mute para no doblar. */}
@@ -662,8 +694,9 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       })()}
 
       {/* Subtítulo: con kineticPreset "none" se usa el SubtitleLayer de siempre.
-          Los estilos que eligen un preset cinético montan KineticSubtitleLayer en su lugar. */}
-      {kineticPreset === "none" ? (
+          Los estilos que eligen un preset cinético montan KineticSubtitleLayer en su lugar.
+          En modo EDITORIAL no hay captions: las tarjetas tipográficas SON el texto. */}
+      {!editorialLayout && (kineticPreset === "none" ? (
         <SubtitleLayer
           words={words}
           currentTime={currentTime}
@@ -687,7 +720,22 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           highlight={subtitleHighlight}
           position={subtitlePosition}
         />
-      )}
+      ))}
+
+      {/* EDITORIAL — tarjetas tipográficas (kicker + titular serif + stat + line-art). */}
+      {editorialLayout &&
+        editorialCards
+          .filter((c) => currentTime >= c.at && currentTime <= c.at + (c.duration ?? 5))
+          .map((c, i) => (
+            <EditorialCardLayer
+              key={`ed-${i}-${c.at}`}
+              card={c}
+              currentTime={currentTime}
+              layout={editorialLayout}
+              width={compWidth}
+              height={compHeight}
+            />
+          ))}
 
       {floatingEmojis
         .filter(

@@ -163,6 +163,9 @@ const props = {
   particleBursts: filterAndRemap(project.particleBursts || [], ["at"]),
   // MOTION PRO — fondo animado (objeto sin timestamps, pass-through).
   animatedBackground: project.animatedBackground ?? null,
+  // EDITORIAL — layout split-screen + tarjetas (remapean con jump cuts).
+  editorialLayout: project.editorialLayout ?? null,
+  editorialCards: filterAndRemap(project.editorialCards || [], ["at"]),
   subtitleStyle: project.subtitleStyle ?? "bebas",
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",

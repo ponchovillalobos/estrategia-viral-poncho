@@ -738,7 +738,7 @@ def main() -> int:
     # hype/hype_max/hype_max_sfx/supreme/graphics_* generan graphics: true).
     GRAPHICS_STYLES = {
         "hype", "hype_max", "hype_max_sfx", "supreme", "graphics_pro", "graphics_max",
-        "motion_pro", "motion_beat", "motion_grid",
+        "motion_pro", "motion_beat", "motion_grid", "editorial",
     }
     requested_styles = {s.strip() for s in args.styles.split(",") if s.strip()}
     wants_graphics = args.graphics or bool(requested_styles & GRAPHICS_STYLES)
@@ -754,7 +754,7 @@ def main() -> int:
         VALID_STYLES = {
             "silent", "punch", "hype", "hype_max", "hype_max_sfx", "supreme",
             "graphics_pro", "graphics_max",
-            "motion_pro", "motion_beat", "motion_grid",
+            "motion_pro", "motion_beat", "motion_grid", "editorial",
         }
         invalid = [s for s in styles if s not in VALID_STYLES]
         if invalid:

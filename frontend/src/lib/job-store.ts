@@ -29,7 +29,8 @@ export type StyleId =
   | "graphics_max"
   | "motion_pro"
   | "motion_beat"
-  | "motion_grid";
+  | "motion_grid"
+  | "editorial";
 
 export interface JobStep {
   styleId: StyleId;

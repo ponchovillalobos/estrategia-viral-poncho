@@ -26,6 +26,7 @@ export const STYLE_SHORT_LABEL: Record<StyleId, string> = {
   motion_pro: "MotionPro",
   motion_beat: "MotionBeat",
   motion_grid: "MotionGrid",
+  editorial: "Editorial",
 };
 
 /** Resuelve aspect ratio → dimensiones de output en píxeles. */

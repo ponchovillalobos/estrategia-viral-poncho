@@ -684,6 +684,27 @@ export function buildProjectForStyle(ctx, styleId) {
     );
   }
 
+  // ─── EDITORIAL (paridad con shorts): split-screen documental, sin captions. ───
+  if (styleId === "editorial") {
+    return applyCapcutFx(
+      {
+        ...base,
+        graphics: true,
+        subtitleStyle: "anton",
+        vignette: false,
+        captionBounce: false,
+        musicTrack: pickRandomMusicTrack(ctx.videoId),
+        musicVolume: 0.09,
+        editorialLayout: {
+          panel: "right",
+          panelWidth: ctx.width > ctx.height ? 0.34 : 0.46,
+        },
+      },
+      ctx,
+      { lut: "kodak_warm.cube", kinetic: "none", sceneFx: false, transitions: false }
+    );
+  }
+
   // ─── MOTION PRO (paridad con shorts): animación pura, limpia, SIN emojis. ───
   if (styleId === "motion_pro" || styleId === "motion_beat" || styleId === "motion_grid") {
     const bgKind =

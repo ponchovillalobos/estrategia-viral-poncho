@@ -424,6 +424,103 @@ def _sentences(words: list[dict]) -> list[dict]:
     return out
 
 
+# ─── EDITORIAL: escenas tipográficas estilo documental (split-screen) ─────────
+# Ícono line-art por concepto (los 6 dibujados en line-art-icons.tsx).
+_EDITORIAL_ICON_WORDS = {
+    "clock": {"hora", "horas", "minuto", "minutos", "tiempo", "rapido", "rápido", "tarde"},
+    "calendar": {"semana", "semanas", "dia", "días", "dias", "mes", "meses", "calendario", "agenda"},
+    "funnel": {"cliente", "clientes", "venta", "ventas", "convertir", "conversion", "conversión", "leads", "prospecto", "prospectos"},
+    "faucet": {"dinero", "gasto", "gaste", "gasté", "presupuesto", "invertir", "inversion", "inversión", "pesos", "dolares", "dólares", "pague", "pagué"},
+    "radar": {"anuncio", "anuncios", "campaña", "campañas", "alcance", "publicidad", "audiencia", "plataforma"},
+    "chart": {"crecer", "crecimiento", "resultado", "resultados", "subir", "aumentar", "duplicar", "metrica", "métricas", "numeros", "números"},
+}
+_KICKERS = ["LA VERDAD", "EL DATO", "CÓMO LE HAGO", "EL CONTEXTO", "LO QUE APRENDÍ", "EL RESULTADO"]
+_NUM_UNIT_RE = re.compile(r"^\$?\d[\d.,]*$")
+
+
+def _icon_for_text(text: str) -> str:
+    toks = {_clean_word(t).lower().strip(".,!?¿¡") for t in text.split()}
+    for icon, vocab in _EDITORIAL_ICON_WORDS.items():
+        if toks & vocab:
+            return icon
+    return ""
+
+
+def editorial_cards(words: list[dict], duration: float) -> list[dict]:
+    """Escenas editoriales (~1 cada 11-15s): la frase más fuerte de cada ventana se
+    vuelve tarjeta. Si tiene número → STAT ($300 / al día); si abre con ordinal →
+    CAPÍTULO numerado; si no → TITULAR serif con la última palabra como acento.
+    El ícono line-art sale del vocabulario de la frase. Cada tarjeta dura hasta
+    poco antes de la siguiente (el lado oscuro nunca queda vacío mucho tiempo)."""
+    sents = [s for s in _sentences(words) if len(s["text"].split()) >= 3]
+    if not sents or duration < 8:
+        return []
+    window = max(11.0, min(16.0, duration / max(2, round(duration / 13))))
+    picked: list[dict] = []
+    t0 = 0.0
+    while t0 < duration - 4:
+        cands = [s for s in sents if t0 <= s["start"] < t0 + window]
+        if cands:
+            # la más "fuerte": prioriza números y frases COMPLETAS (no fragmentos
+            # que arrancan con conector tipo "que estamos…").
+            _CONNECT = {"que", "de", "y", "pero", "o", "en", "a", "se", "lo", "porque", "como", "para"}
+            def score(s: dict) -> float:
+                toks = s["text"].split()
+                has_num = any(_NUM_UNIT_RE.match(_clean_word(t)) for t in toks)
+                starts_connector = _clean_word(toks[0]).lower() in _CONNECT
+                has_concept = 1.0 if _icon_for_text(s["text"]) else 0.0
+                return (
+                    (2.0 if has_num else 0.0)
+                    + (1.0 if 5 <= len(toks) <= 14 else 0.0)
+                    + has_concept
+                    - (1.5 if starts_connector else 0.0)
+                )
+            picked.append(max(cands, key=score))
+        t0 += window
+    cards: list[dict] = []
+    chapter = 0
+    total_chapters = sum(
+        1 for s in picked
+        if _clean_word(s["text"].split()[0]).lower() in {"primero", "segundo", "tercero", "cuarto", "primera", "segunda", "tercera"}
+    )
+    for i, s in enumerate(picked):
+        text = s["text"].strip()
+        toks = text.split()
+        at = round(max(0.2, s["start"] - 0.2), 2)
+        # duración: hasta 1s antes de la próxima tarjeta (o 6s si es la última)
+        next_at = picked[i + 1]["start"] - 0.4 if i + 1 < len(picked) else min(duration, s["start"] + 7)
+        dur = round(max(3.5, min(9.0, next_at - at)), 2)
+        icon = _icon_for_text(text)
+        card: dict = {"at": at, "duration": dur, "kicker": _KICKERS[i % len(_KICKERS)],
+                      "title": "", "accent": "", "subtitle": "", "number": "",
+                      "statValue": "", "statUnit": "", "icon": icon}
+        # ¿STAT? primer token numérico de la frase
+        num_idx = next((j for j, t in enumerate(toks) if _NUM_UNIT_RE.match(_clean_word(t))), None)
+        first = _clean_word(toks[0]).lower()
+        if first in {"primero", "segundo", "tercero", "cuarto", "primera", "segunda", "tercera"}:
+            chapter += 1
+            card["number"] = f"{chapter:02d}"
+            card["kicker"] = f"HOY TE ENSEÑO · {chapter:02d} / {max(total_chapters, chapter):02d}"
+            rest = " ".join(toks[1:9]).strip(" ,.")
+            card["title"] = (rest[:48] + ("." if not rest.endswith(".") else ""))
+            card["accent"] = _clean_word(toks[min(len(toks) - 1, 8)]).strip(".,")
+        elif num_idx is not None:
+            card["statValue"] = toks[num_idx].strip(".,")
+            card["statUnit"] = " ".join(toks[num_idx + 1 : num_idx + 3]).strip(" ,.")[:18]
+            card["subtitle"] = " ".join(toks[:num_idx])[-60:].strip(" ,.").capitalize()
+        else:
+            # TITULAR: máx 7 palabras, acento = última palabra significativa
+            head = toks[:7]
+            raw_title = " ".join(head).strip(" ,.")
+            card["title"] = (raw_title[:1].upper() + raw_title[1:] + ".")[:52]
+            sig = [t for t in head if len(_clean_word(t)) >= 4]
+            card["accent"] = _clean_word(sig[-1] if sig else head[-1]).strip(".,")
+            if len(toks) > 7:
+                card["subtitle"] = (" ".join(toks[7:16]).strip(" ,.") + ".")[:70].capitalize()
+        cards.append(card)
+    return cards
+
+
 def heuristic_headlines(words: list[dict], duration: float, max_h: int = 3) -> list[dict]:
     """Elige frases potentes DISTRIBUIDAS parejo en el tiempo (~1 por bucket), para
     densidad uniforme en vez de agrupar todas al principio. Hook de apertura + frases
@@ -575,7 +672,14 @@ def generate(transcript_path: Path, use_llm: bool = True) -> dict:
     )
     # kineticHeadlines vacío a propósito: las animaciones ahora son VISUALES (charts +
     # íconos), no copias del texto. La capa de titulares sigue disponible para uso manual.
-    return {"dataViz": charts, "kineticHeadlines": [], "iconStickers": icons}
+    # editorialCards: SIEMPRE se calculan (heurística barata); el render solo las usa
+    # si el project tiene editorialLayout (estilo "editorial").
+    return {
+        "dataViz": charts,
+        "kineticHeadlines": [],
+        "iconStickers": icons,
+        "editorialCards": editorial_cards(words, duration),
+    }
 
 
 def main() -> int:
