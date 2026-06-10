@@ -14,7 +14,7 @@ vez). Un usuario normal no puede con eso. **Falta exactamente esto:**
 | # | Falta | Esfuerzo | Bloqueante |
 |---|---|---|---|
 | 1 | **Empaquetado 1-clic** (ver §2) | 3-4 semanas | SÍ — es EL paso |
-| 2 | `next build` de producción verificado (hoy corre en dev) | 2-3 días | SÍ |
+| 2 | ~~`next build` de producción verificado~~ ✅ **HECHO 2026-06-09**: `output:"standalone"` configurado, build limpio al primer intento, server.js probado en vivo (puerto 3100, home 200, scheduler arranca; OJO: debe ejecutarse CON cwd = carpeta standalone y copiando `.next/static` + `public` adentro) | — | ✅ |
 | 3 | Onboarding 1ra vez: descarga de modelos WhisperX con barra de progreso | 3-4 días | SÍ |
 | 4 | Paths portables: eliminar defaults `C:\hermes-data` → carpeta de datos del usuario (`%LOCALAPPDATA%`) elegible en el primer arranque | 2-3 días | SÍ |
 | 5 | Hardware mínimo documentado + modo "lite" si hay <8 GB RAM | 2 días | NO |
