@@ -297,4 +297,6 @@ export function maybeSweepOrphans(): void {
   void sweepStaleArtifacts().catch((e) =>
     console.warn(`[artifact-sweep] falló: ${e instanceof Error ? e.message : e}`),
   );
+  // Locks de render huérfanos (PID muerto) de una sesión anterior.
+  void import("@/lib/render-utils").then((m) => m.sweepOrphanLocks()).catch(() => {});
 }

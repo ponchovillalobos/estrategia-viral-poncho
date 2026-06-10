@@ -33,7 +33,10 @@ from config import (
 LF_FACE_TRACKS = LF_ROOT / "face_tracks"
 
 PYTHON_DIR = Path(__file__).resolve().parent
-VENV_PYTHON = PYTHON_DIR / "venv" / "Scripts" / "python.exe"
+# El MISMO intérprete que está corriendo este script: venv en dev, Python
+# embeddable en el paquete distribuible (la ruta hardcodeada al venv rompía
+# los sub-spawns en máquinas de usuarios finales).
+VENV_PYTHON = Path(sys.executable)
 
 
 def detect_aspect(video_path: Path) -> tuple[int, int] | None:
@@ -344,6 +347,10 @@ def main() -> int:
         print("[extract] transcript ausente o a nivel frase — se transcribe cada clip (karaoke preciso)", file=sys.stderr)
 
     results = []
+    # Clips que necesitan transcripción: se acumulan y se transcriben en UN solo
+    # proceso al final (--batch) — antes se spawneaba un python NUEVO por clip,
+    # recargando torch + el modelo Whisper 15+ veces por video (minutos perdidos).
+    pending_transcriptions: list[tuple[Path, int]] = []  # (out_transcript, idx en results)
     for i, clip in enumerate(clips, start=1):
         slug = clip.get("slug") or f"clip-{i:02d}"
         clip_id = f"{args.video_id}_c{i:02d}_{slug}"
@@ -364,22 +371,9 @@ def main() -> int:
                 out_transcript.write_text(json.dumps(sub, ensure_ascii=False, indent=2), encoding="utf-8")
                 n_words = len(sub["words"])
             else:
-                # Transcribir el clip recién cortado (timestamps ya empiezan en 0).
-                print(f"[extract] transcribiendo clip {clip_id} ({out_mp4.name})...", file=sys.stderr)
-                tr = subprocess.run(
-                    [str(VENV_PYTHON), str(PYTHON_DIR / "transcribe.py"),
-                     str(out_mp4), "--out", str(out_transcript)],
-                    capture_output=True, text=True,
-                )
-                if tr.returncode != 0 or not out_transcript.exists():
-                    # No romper el clip por la transcripción: dejar uno vacío (sin subtítulos).
-                    print(f"[extract] transcripción del clip falló: {tr.stderr[-300:]}", file=sys.stderr)
-                    out_transcript.write_text(
-                        json.dumps({"duration": float(clip["end"]) - float(clip["start"]), "words": []},
-                                   ensure_ascii=False), encoding="utf-8")
-                    n_words = 0
-                else:
-                    n_words = len(json.loads(out_transcript.read_text(encoding="utf-8")).get("words", []))
+                # Se transcribe DESPUÉS, en un solo batch (una carga de modelo).
+                pending_transcriptions.append((out_transcript, len(results)))
+                n_words = 0
             results.append({
                 "clip_id": clip_id,
                 "index": i,
@@ -394,6 +388,41 @@ def main() -> int:
             results.append({"clip_id": clip_id, "index": i, "ok": False, "error": e.stderr.decode("utf-8", errors="ignore")[:300]})
         except Exception as e:
             results.append({"clip_id": clip_id, "index": i, "ok": False, "error": str(e)})
+
+    # ── BATCH de transcripción: TODOS los clips pendientes con UNA carga de modelo ──
+    if pending_transcriptions:
+        print(
+            f"[extract] transcribiendo {len(pending_transcriptions)} clips en batch "
+            "(modelo se carga una sola vez)...",
+            file=sys.stderr, flush=True,
+        )
+        jobs = [
+            {"video": str(LF_CLIPS / f"{results[idx]['clip_id']}.mp4"), "out": str(tpath)}
+            for tpath, idx in pending_transcriptions
+        ]
+        batch_file = LF_TRANSCRIPTS / f"_batch_{args.video_id}.json"
+        batch_file.write_text(json.dumps(jobs, ensure_ascii=False), encoding="utf-8")
+        try:
+            tr = subprocess.run(
+                [str(VENV_PYTHON), str(PYTHON_DIR / "transcribe.py"), "--batch", str(batch_file)],
+                capture_output=True, text=True,
+            )
+            if tr.returncode != 0:
+                print(f"[extract] batch de transcripción falló: {tr.stderr[-400:]}", file=sys.stderr)
+        finally:
+            batch_file.unlink(missing_ok=True)
+        # Completar words[] por clip; los que fallaron quedan con transcript vacío
+        # (clip sin subtítulos, pero el pipeline NUNCA se rompe por esto).
+        for tpath, idx in pending_transcriptions:
+            if not tpath.exists():
+                tpath.write_text(
+                    json.dumps({"duration": results[idx].get("duration", 50), "words": []}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+            try:
+                results[idx]["words"] = len(json.loads(tpath.read_text(encoding="utf-8")).get("words", []))
+            except Exception:
+                results[idx]["words"] = 0
 
     print(json.dumps({"ok": True, "clips": results}, ensure_ascii=False))
     return 0

@@ -75,11 +75,25 @@ Guía completa: [`docs/USAGE.md`](./docs/USAGE.md) · Efectos: [`docs/EFFECTS.md
 
 ```bash
 cd frontend && npx next build          # server de producción
-cd ../desktop && npm install && npx tauri build   # instalador .exe/.msi
+cd ../desktop && npm install && npx tauri build   # exe del launcher
+powershell -File desktop/bundle.ps1    # arma payload/ autocontenido + SHA256
 ```
 
-El instalador 100% autocontenido (con node/python/ffmpeg adentro) está en la
-recta final — ver [`docs/PLAN-LANZAMIENTO.md`](./docs/PLAN-LANZAMIENTO.md).
+El paquete final es la carpeta `release\` (exe + `payload\` con node, python,
+ffmpeg y todo adentro): se copia a cualquier Windows y funciona sin instalar
+nada. Al primer arranque la app descarga el modelo de voz (~1.5 GB, una sola
+vez, con barra de progreso) y queda lista.
+
+### ⚠️ Si Windows muestra "Windows protegió su PC" (SmartScreen)
+
+Es normal en apps nuevas sin firma digital paga — **no** significa virus:
+
+1. Tocá **"Más información"** en el cartel azul.
+2. Tocá **"Ejecutar de todas formas"**.
+
+Podés verificar la integridad de la descarga comparando el SHA256 publicado en
+cada release con `Get-FileHash desktop.exe` en PowerShell (el build genera
+`SHA256SUMS.txt` automáticamente).
 
 ---
 

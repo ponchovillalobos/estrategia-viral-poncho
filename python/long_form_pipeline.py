@@ -42,7 +42,9 @@ from hw_profile import ffmpeg_video_args
 PYTHON_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = PYTHON_DIR.parent
 REMOTION_DIR = PROJECT_ROOT / "remotion"
-VENV_PYTHON = PYTHON_DIR / "venv" / "Scripts" / "python.exe"
+# El MISMO intérprete que está corriendo: venv en dev, Python embeddable en el
+# paquete distribuible (la ruta hardcodeada al venv rompía en máquinas de usuarios).
+VENV_PYTHON = Path(sys.executable)
 
 # ── Render paralelo de clips (F0.2 auditoría) ───────────────────────────────
 # Cuántos renders de Remotion corren A LA VEZ — ADAPTATIVO según los cores del

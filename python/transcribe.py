@@ -262,11 +262,81 @@ def download_model(model_size: str) -> None:
     print("OK")
 
 
+def transcribe_batch(jobs: list[dict[str, str]], model_size: str = WHISPER_MODEL) -> int:
+    """Transcribe N videos CORTOS (clips de ~50s) con UNA sola carga de modelo.
+
+    Antes, extract_clips spawneaba un proceso Python NUEVO por clip → torch +
+    Whisper + alignment se cargaban 15+ veces por video largo (minutos de
+    overhead puro). Acá: 1 carga, N clips. Cada job: {"video": path, "out": path}.
+    Un clip que falla NO corta el batch (queda sin transcript; el caller pone
+    uno vacío).
+    """
+    import whisperx
+
+    from hw_profile import whisper_device
+
+    device, compute_type = whisper_device()
+    if os.environ.get("VIRAL_WHISPER_COMPUTE_TYPE"):
+        compute_type = WHISPER_COMPUTE_TYPE
+    batch_size = 16 if device == "cuda" else 8
+    print(
+        f"[batch] {len(jobs)} clips · device={device} · modelo se carga UNA sola vez",
+        file=sys.stderr, flush=True,
+    )
+    model = whisperx.load_model(model_size, device=device, compute_type=compute_type, language=WHISPER_LANGUAGE)
+    align_model, metadata = whisperx.load_align_model(language_code=WHISPER_LANGUAGE, device=device)
+
+    ok_count = 0
+    for i, job in enumerate(jobs, start=1):
+        video_path = Path(job["video"])
+        out_path = Path(job["out"])
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                wav = Path(tmp) / "audio.wav"
+                extract_audio(video_path, wav)
+                audio = whisperx.load_audio(str(wav))
+                result = model.transcribe(audio, batch_size=batch_size, language=WHISPER_LANGUAGE)
+                aligned = whisperx.align(
+                    result["segments"], align_model, metadata, audio, device,
+                    return_char_alignments=False,
+                )
+                words: list[dict[str, Any]] = []
+                for segment in aligned.get("segments", []):
+                    for w in segment.get("words", []):
+                        if "start" in w and "end" in w:
+                            words.append({
+                                "word": w.get("word", "").strip(),
+                                "start": round(float(w["start"]), 3),
+                                "end": round(float(w["end"]), 3),
+                                "score": round(float(w.get("score", 0.0)), 3),
+                            })
+                out = {
+                    "video": video_path.name,
+                    "language": WHISPER_LANGUAGE,
+                    "model": model_size,
+                    "duration": round(len(audio) / 16000.0, 3),
+                    "words": words,
+                }
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+                ok_count += 1
+                print(f"[batch] {i}/{len(jobs)} OK · {len(words)} palabras · {video_path.name}", file=sys.stderr, flush=True)
+        except Exception as e:  # noqa: BLE001 — un clip malo no corta el batch
+            print(f"[batch] {i}/{len(jobs)} FALLÓ {video_path.name}: {e}", file=sys.stderr, flush=True)
+
+    print(json.dumps({"ok": True, "batch": len(jobs), "transcribed": ok_count}))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("video", nargs="?", help="Path al video .mp4 (o solo nombre si está en raw/)")
     parser.add_argument("--download-model", metavar="SIZE", help="Descarga el modelo sin transcribir")
     parser.add_argument("--out", help="Path JSON de salida (default: transcripts/<video>.json)")
+    parser.add_argument(
+        "--batch", metavar="JOBS_JSON",
+        help='Transcribe N clips con UNA carga de modelo. JSON: [{"video": path, "out": path}, ...]',
+    )
     parser.add_argument(
         "--chunked",
         action="store_true",
@@ -284,8 +354,13 @@ def main() -> int:
         download_model(args.download_model)
         return 0
 
+    if args.batch:
+        # utf-8-sig: tolera BOM (PowerShell escribe JSON con BOM por default).
+        jobs = json.loads(Path(args.batch).read_text(encoding="utf-8-sig"))
+        return transcribe_batch(jobs)
+
     if not args.video:
-        parser.error("Especificá un video o --download-model")
+        parser.error("Especificá un video, --batch o --download-model")
 
     video_path = Path(args.video)
     if not video_path.is_absolute() and not video_path.exists():

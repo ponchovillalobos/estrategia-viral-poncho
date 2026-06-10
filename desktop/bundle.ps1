@@ -36,10 +36,18 @@ $nodeDir = Split-Path $nodeSrc
 foreach ($f in @("npx.cmd", "npm.cmd", "node_modules")) {
   if (Test-Path "$nodeDir\$f") { Copy-Item "$nodeDir\$f" "$out\node\$f" -Recurse -Force }
 }
+# VALIDACION DURA: sin npx, los renders del payload fallan en silencio en la
+# maquina del usuario. Mejor reventar ACA, en build time.
+if (-not (Test-Path "$out\node\npx.cmd")) {
+  throw "npx.cmd no se encontro junto a node ($nodeDir) - el payload no podria renderizar. Instala node con npm incluido."
+}
 
 # 3) Remotion (proyecto + node_modules; el render corre desde acá)
 Write-Host "[3/5] remotion (esto tarda)..."
 robocopy "$repo\remotion" "$out\remotion" /E /NFL /NDL /NJH /NJS /XD "vendor" | Out-Null
+if (-not (Test-Path "$out\remotion\node_modules\.bin")) {
+  throw "remotion\node_modules quedo incompleto en el payload - corre npm install en remotion\ y rearma."
+}
 
 # 4) Python PORTABLE: scripts + runtime embeddable (NO el venv de dev, que no es
 #    relocatable). Construir antes con make-python-runtime.ps1.
@@ -58,4 +66,13 @@ Copy-Item "$($ff.FullName)\bin\ffprobe.exe" "$out\tools\ffmpeg\bin\" -Force
 
 $size = (Get-ChildItem $out -Recurse -File | Measure-Object Length -Sum).Sum / 1GB
 Write-Host ("== Payload listo: {0:N1} GB" -f $size)
+
+# 6) Checksum del exe (para publicar junto a la descarga: el usuario puede
+#    verificar integridad y las instrucciones anti-SmartScreen lo referencian).
+$exe = "$PSScriptRoot\src-tauri\target\release\desktop.exe"
+if (Test-Path $exe) {
+  $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+  "$hash  desktop.exe" | Out-File "$PSScriptRoot\src-tauri\target\release\SHA256SUMS.txt" -Encoding ascii
+  Write-Host "== SHA256 de desktop.exe: $hash (guardado en SHA256SUMS.txt)"
+}
 Write-Host "== Probalo: ejecutá desktop\src-tauri\target\release\desktop.exe"
