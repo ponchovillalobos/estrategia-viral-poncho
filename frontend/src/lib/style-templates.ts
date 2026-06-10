@@ -963,6 +963,8 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
           panel: "right" as const,
           // 16:9 → panel angosto tipo documental; 9:16 → casi media pantalla.
           panelWidth: (ctx.width ?? 1080) > (ctx.height ?? 1920) ? 0.34 : 0.46,
+          // El color del wizard pinta TODO el tema: acentos, capítulos, line-art.
+          accent: ctx.accentColor,
         },
       },
       ctx,

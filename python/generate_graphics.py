@@ -428,11 +428,23 @@ def _sentences(words: list[dict]) -> list[dict]:
 # Ícono line-art por concepto (los 6 dibujados en line-art-icons.tsx).
 _EDITORIAL_ICON_WORDS = {
     "clock": {"hora", "horas", "minuto", "minutos", "tiempo", "rapido", "rápido", "tarde"},
+    "hourglass": {"esperar", "paciencia", "lento", "proceso", "mientras"},
     "calendar": {"semana", "semanas", "dia", "días", "dias", "mes", "meses", "calendario", "agenda"},
     "funnel": {"cliente", "clientes", "venta", "ventas", "convertir", "conversion", "conversión", "leads", "prospecto", "prospectos"},
     "faucet": {"dinero", "gasto", "gaste", "gasté", "presupuesto", "invertir", "inversion", "inversión", "pesos", "dolares", "dólares", "pague", "pagué"},
     "radar": {"anuncio", "anuncios", "campaña", "campañas", "alcance", "publicidad", "audiencia", "plataforma"},
     "chart": {"crecer", "crecimiento", "resultado", "resultados", "subir", "aumentar", "duplicar", "metrica", "métricas", "numeros", "números"},
+    "lightbulb": {"idea", "ideas", "solucion", "solución", "descubri", "descubrí", "truco", "tip", "consejo"},
+    "target": {"objetivo", "objetivos", "meta", "metas", "enfocar", "enfoque", "preciso", "exacto"},
+    "rocket": {"lanzar", "lanzamiento", "despegar", "empezar", "arrancar", "comenzar", "iniciar"},
+    "brain": {"mente", "cerebro", "pensar", "piensa", "aprender", "aprendi", "aprendí", "psicologia", "psicología", "mentalidad"},
+    "lock": {"secreto", "secretos", "privado", "exclusivo", "oculto", "clave"},
+    "megaphone": {"anunciar", "comunicar", "mensaje", "decir", "hablar", "grita", "promocionar"},
+    "scale": {"comparar", "comparacion", "comparación", "balance", "decidir", "decision", "decisión", "versus", "elegir"},
+    "gears": {"sistema", "sistemas", "proceso", "automatizar", "automatico", "automático", "herramienta", "herramientas", "funciona"},
+    "trophy": {"ganar", "gane", "gané", "exito", "éxito", "logro", "lograr", "premio", "mejor", "campeon", "campeón"},
+    "route": {"camino", "ruta", "paso", "pasos", "estrategia", "plan", "mapa", "guia", "guía"},
+    "fire": {"viral", "tendencia", "explotar", "exploto", "explotó", "boom", "caliente", "urgente"},
 }
 _KICKERS = ["LA VERDAD", "EL DATO", "CÓMO LE HAGO", "EL CONTEXTO", "LO QUE APRENDÍ", "EL RESULTADO"]
 _NUM_UNIT_RE = re.compile(r"^\$?\d[\d.,]*$")

@@ -33,8 +33,14 @@ export const editorialCardSchema = z.object({
   /** Stat: valor enorme ("$300") + unidad itálica ("al día"). */
   statValue: z.string().default(""),
   statUnit: z.string().default(""),
-  /** Ilustración line-art ("" = sin ícono). */
-  icon: z.enum(["", "clock", "calendar", "funnel", "faucet", "radar", "chart"]).default(""),
+  /** Ilustración line-art ("" = sin ícono). 18 disponibles. */
+  icon: z
+    .enum([
+      "", "clock", "calendar", "funnel", "faucet", "radar", "chart",
+      "lightbulb", "target", "rocket", "brain", "lock", "megaphone",
+      "scale", "gears", "trophy", "route", "fire", "hourglass",
+    ])
+    .default(""),
 });
 export type EditorialCard = z.infer<typeof editorialCardSchema>;
 
@@ -43,11 +49,13 @@ export const editorialLayoutSchema = z.object({
   panel: z.enum(["right", "left"]).default("right"),
   /** Ancho del panel de video como fracción del frame (0.3-0.5). */
   panelWidth: z.number().default(0.40),
+  /** Color de acento del tema (reemplaza al dorado clásico): palabra itálica,
+   *  números de capítulo y detalles de las ilustraciones line-art. */
+  accent: z.string().default("#f0b429"),
 });
 export type EditorialLayout = z.infer<typeof editorialLayoutSchema>;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-const GOLD = "#f0b429";
 const CREAM = "#f3ede1";
 const GRAY = "#9b958a";
 
@@ -75,6 +83,7 @@ export const EditorialCardLayer: React.FC<{
   width: number;
   height: number;
 }> = ({ card, currentTime, layout, width, height }) => {
+  const GOLD = layout.accent ?? "#f0b429";
   const t = currentTime - card.at;
   const remaining = card.at + (card.duration ?? 5) - currentTime;
   if (t < 0 || remaining < 0) return null;
@@ -225,6 +234,7 @@ export const EditorialCardLayer: React.FC<{
               kind={card.icon as LineArtKind}
               elapsed={Math.max(0, t - 0.4)}
               size={Math.min(zoneWidth * 0.52, height * 0.3)}
+              gold={GOLD}
             />
           </div>
         ) : null}
