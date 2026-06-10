@@ -52,6 +52,7 @@ import {
 } from "./layers/animated-background-layer";
 import {
   EditorialCardLayer,
+  EditorialAmbient,
   editorialCardSchema,
   editorialLayoutSchema,
   editorialPanelAt,
@@ -540,6 +541,16 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           : "#000",
       }}
     >
+      {/* EDITORIAL — decoración ambiental SIEMPRE visible detrás de todo:
+          el lienzo nunca queda vacío entre tarjetas ni en escenas big/full. */}
+      {editorialLayout && (
+        <EditorialAmbient
+          layout={editorialLayout}
+          currentTime={currentTime}
+          width={compWidth}
+          height={compHeight}
+        />
+      )}
       <div style={videoContainerStyle}>
       <AbsoluteFill
         style={{
@@ -739,8 +750,9 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         editorialPanel &&
         !editorialPanel.cardsHidden &&
         editorialCards
-          .filter((c) => currentTime >= c.at && currentTime <= c.at + (c.duration ?? 5))
-          .map((c, i) => (
+          .map((c, i) => ({ c, i }))
+          .filter(({ c }) => currentTime >= c.at && currentTime <= c.at + (c.duration ?? 5))
+          .map(({ c, i }) => (
             <EditorialCardLayer
               key={`ed-${i}-${c.at}`}
               card={c}
@@ -749,6 +761,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
               width={compWidth}
               height={compHeight}
               panel={editorialPanel}
+              index={i}
             />
           ))}
 

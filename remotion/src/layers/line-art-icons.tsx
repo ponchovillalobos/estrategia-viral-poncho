@@ -11,12 +11,16 @@ import * as Lucide from "lucide-react";
 export type LineArtKind =
   | "clock" | "calendar" | "funnel" | "faucet" | "radar" | "chart"
   | "lightbulb" | "target" | "rocket" | "brain" | "lock" | "megaphone"
-  | "scale" | "gears" | "trophy" | "route" | "fire" | "hourglass";
+  | "scale" | "gears" | "trophy" | "route" | "fire" | "hourglass"
+  | "money" | "diamond" | "eye" | "mountain" | "magnet" | "compass"
+  | "network" | "shield" | "coin" | "heart";
 
 export const LINE_ART_KINDS: LineArtKind[] = [
   "clock", "calendar", "funnel", "faucet", "radar", "chart",
   "lightbulb", "target", "rocket", "brain", "lock", "megaphone",
   "scale", "gears", "trophy", "route", "fire", "hourglass",
+  "money", "diamond", "eye", "mountain", "magnet", "compass",
+  "network", "shield", "coin", "heart",
 ];
 
 const STROKE = "#e9e2d4"; // crema
@@ -406,6 +410,183 @@ export const LineArtIcon: React.FC<{
           {/* montículo de abajo crece */}
           <path d={`M${90 - sandT * 6} 148 q${10 + sandT * 6} -${8 + sandT * 8} ${20 + sandT * 12} 0 z`} fill={GOLD} opacity={appear(1.0) * 0.85} />
           <path d="M88 64 q12 10 24 0" stroke={GOLD} strokeWidth={2} fill="none" opacity={appear(0.8) * 0.8} />
+        </svg>
+      );
+    }
+    case "money": {
+      // fajos de billetes + monedas que caen en loop.
+      const coinT = (i: number) => (elapsed * 0.9 + i * 0.34) % 1;
+      return (
+        <svg {...common}>
+          <rect x="46" y="120" width="108" height="28" rx="4" {...base} {...drawProps(280, elapsed)} />
+          <rect x="54" y="102" width="92" height="22" rx="4" {...base} {...drawProps(236, elapsed, 0.2)} />
+          <rect x="62" y="86" width="76" height="18" rx="4" {...base} {...drawProps(196, elapsed, 0.4)} />
+          <ellipse cx="100" cy="95" rx="11" ry="7" {...goldS} fill={`${GOLD}22`} opacity={appear(0.8)} />
+          <path d="M100 90 v10 M96 92 q4 -3 8 0 M96 98 q4 3 8 0" {...goldS} strokeWidth={1.6} opacity={appear(0.9)} />
+          {[0, 1, 2].map((i) => (
+            <g key={i} opacity={appear(1.1) * (1 - coinT(i)) * 0.95}>
+              <circle cx={60 + i * 40} cy={36 + coinT(i) * 44} r={7} {...goldS} fill={`${GOLD}18`} />
+              <path d={`M${60 + i * 40} ${31 + coinT(i) * 44} v10`} {...goldS} strokeWidth={1.4} />
+            </g>
+          ))}
+        </svg>
+      );
+    }
+    case "diamond": {
+      // gema facetada + destello que orbita.
+      const sa = elapsed * 1.4;
+      const sx = 100 + Math.cos(sa) * 46;
+      const sy = 96 + Math.sin(sa) * 34;
+      const tw = 0.5 + 0.5 * Math.sin(elapsed * 5);
+      return (
+        <svg {...common}>
+          <path d="M64 78 L100 50 L136 78 L100 152 Z" {...base} {...drawProps(330, elapsed)} />
+          <path d="M64 78 h72 M100 50 L82 78 L100 152 M100 50 L118 78 L100 152" {...base} strokeWidth={1.4} {...drawProps(300, elapsed, 0.35)} />
+          <path d="M88 70 L96 60" {...goldS} opacity={appear(0.9) * (0.5 + tw * 0.5)} />
+          <g opacity={appear(1.2) * tw}>
+            <path d={`M${sx} ${sy - 7} v14 M${sx - 7} ${sy} h14`} {...goldS} strokeWidth={1.8} />
+          </g>
+          <circle cx="100" cy="96" r="3" fill={GOLD} opacity={appear(1.0) * (0.4 + tw * 0.6)} />
+        </svg>
+      );
+    }
+    case "eye": {
+      // ojo que observa: pupila se dilata + destello que cruza.
+      const dilate = 1 + Math.sin(elapsed * 1.8) * 0.18;
+      const scanT = (elapsed * 0.45) % 1;
+      return (
+        <svg {...common}>
+          <path d="M34 100 Q100 44 166 100 Q100 156 34 100 Z" {...base} {...drawProps(400, elapsed)} />
+          <circle cx="100" cy="100" r={26 * dilate} {...base} strokeWidth={1.8} {...drawProps(165, elapsed, 0.4)} />
+          <circle cx="100" cy="100" r={11 * dilate} {...goldS} fill={`${GOLD}33`} opacity={appear(0.9)} />
+          <circle cx={94} cy={92} r="3.5" fill={STROKE} opacity={appear(1.0) * 0.9} />
+          {[0, 1, 2, 3, 4].map((i) => {
+            const a = (-0.9 + i * 0.45) + Math.sin(elapsed * 2) * 0.05;
+            return <line key={i} x1={100 + Math.cos(a) * 34} y1={100 + Math.sin(a) * 34} x2={100 + Math.cos(a) * 42} y2={100 + Math.sin(a) * 42} {...goldS} strokeWidth={1.5} opacity={appear(1.1 + i * 0.06) * 0.8} />;
+          })}
+          <line x1={40 + scanT * 120} y1="64" x2={56 + scanT * 120} y2="136" stroke={GOLD} strokeWidth={2.5} opacity={(1 - Math.abs(scanT - 0.5) * 2) * 0.35 * appear(1.3)} />
+        </svg>
+      );
+    }
+    case "mountain": {
+      // cima con bandera que flamea + sol que late.
+      const wave = Math.sin(elapsed * 5) * 4;
+      const sun = 0.5 + 0.5 * Math.sin(elapsed * 2.2);
+      return (
+        <svg {...common}>
+          <path d="M30 156 L86 70 L112 108 L134 78 L170 156 Z" {...base} {...drawProps(420, elapsed)} />
+          <path d="M78 84 l8 -14 l9 13 l-8 5 z" {...base} strokeWidth={1.4} {...drawProps(60, elapsed, 0.5)} />
+          <line x1="86" y1="70" x2="86" y2="44" {...goldS} opacity={appear(1.0)} />
+          <path d={`M86 44 q12 ${wave * 0.5} 22 2 l0 12 q-10 ${-wave * 0.5 - 2} -22 -2 z`} {...goldS} fill={`${GOLD}22`} opacity={appear(1.1)} />
+          <circle cx="152" cy="48" r={11 + sun * 2} {...goldS} fill={`${GOLD}18`} opacity={appear(0.8)} />
+          {[0, 1, 2, 3, 4, 5].map((i) => {
+            const a = (i / 6) * Math.PI * 2 + elapsed * 0.5;
+            return <line key={i} x1={152 + Math.cos(a) * 16} y1={48 + Math.sin(a) * 16} x2={152 + Math.cos(a) * (20 + sun * 3)} y2={48 + Math.sin(a) * (20 + sun * 3)} {...goldS} strokeWidth={1.5} opacity={appear(1.0) * sun} />;
+          })}
+        </svg>
+      );
+    }
+    case "magnet": {
+      // imán en U + partículas atraídas en loop.
+      return (
+        <svg {...common}>
+          <path d="M66 56 v52 a34 34 0 0 0 68 0 v-52 h-24 v52 a10 10 0 0 1 -20 0 v-52 z" {...base} {...drawProps(420, elapsed)} />
+          <rect x="66" y="56" width="24" height="16" {...goldS} fill={`${GOLD}22`} opacity={appear(0.7)} />
+          <rect x="110" y="56" width="24" height="16" {...goldS} fill={`${GOLD}22`} opacity={appear(0.7)} />
+          {[0, 1, 2, 3, 4].map((i) => {
+            const t = (elapsed * 0.8 + i * 0.2) % 1;
+            const x0 = 40 + (i % 3) * 56;
+            const y0 = 188 - (i % 2) * 10;
+            const x1 = 78 + (i % 2) * 44;
+            const y1 = 150;
+            return <circle key={i} cx={x0 + (x1 - x0) * t} cy={y0 + (y1 - y0) * t} r={2.6} fill={GOLD} opacity={appear(1.0) * t * 0.95} />;
+          })}
+          <path d="M84 158 q16 10 32 0" {...goldS} strokeWidth={1.4} fill="none" opacity={appear(1.2) * (0.4 + 0.4 * Math.sin(elapsed * 3))} />
+        </svg>
+      );
+    }
+    case "compass": {
+      // brújula con aguja que busca el norte (oscila y se asienta).
+      const wob = Math.sin(elapsed * 2.4) * 14 * Math.exp(-elapsed * 0.35) + Math.sin(elapsed * 1.2) * 4;
+      return (
+        <svg {...common}>
+          <circle cx="100" cy="100" r="60" {...base} {...drawProps(380, elapsed)} />
+          <circle cx="100" cy="100" r="50" {...base} strokeWidth={1.2} {...drawProps(316, elapsed, 0.25)} />
+          {Array.from({ length: 8 }).map((_, i) => {
+            const a = (i * 45 * Math.PI) / 180;
+            return <line key={i} x1={100 + Math.sin(a) * 44} y1={100 - Math.cos(a) * 44} x2={100 + Math.sin(a) * 50} y2={100 - Math.cos(a) * 50} {...base} strokeWidth={1.4} {...drawProps(8, elapsed, 0.6 + i * 0.05, 0.3)} />;
+          })}
+          <g opacity={appear(1.0)} transform={`rotate(${wob} 100 100)`}>
+            <path d="M100 100 L92 112 L100 64 L108 112 Z" {...goldS} fill={`${GOLD}33`} />
+            <path d="M100 100 L92 112 L100 138 L108 112 Z" {...base} strokeWidth={1.6} />
+          </g>
+          <circle cx="100" cy="100" r="4" fill={GOLD} opacity={appear(1.0)} />
+          <path d="M96 36 h8 M100 32 v8" {...goldS} strokeWidth={1.6} opacity={appear(1.2) * (0.5 + 0.5 * Math.sin(elapsed * 2.6))} />
+        </svg>
+      );
+    }
+    case "network": {
+      // red de nodos con pulsos que viajan por las aristas.
+      const nodes: [number, number][] = [[100, 56], [52, 104], [148, 96], [76, 152], [132, 150]];
+      const edges: [number, number][] = [[0, 1], [0, 2], [1, 3], [2, 4], [3, 4], [1, 2]];
+      return (
+        <svg {...common}>
+          {edges.map(([a, b], i) => (
+            <line key={i} x1={nodes[a][0]} y1={nodes[a][1]} x2={nodes[b][0]} y2={nodes[b][1]} {...base} strokeWidth={1.4} {...drawProps(120, elapsed, 0.15 + i * 0.12)} />
+          ))}
+          {nodes.map(([x, y], i) => (
+            <circle key={i} cx={x} cy={y} r={i === 0 ? 11 : 8} {...(i === 0 ? goldS : base)} fill={i === 0 ? `${GOLD}22` : "none"} opacity={appear(0.3 + i * 0.12)} />
+          ))}
+          {edges.map(([a, b], i) => {
+            const t = (elapsed * 0.7 + i * 0.17) % 1;
+            return <circle key={`p-${i}`} cx={nodes[a][0] + (nodes[b][0] - nodes[a][0]) * t} cy={nodes[a][1] + (nodes[b][1] - nodes[a][1]) * t} r={2.4} fill={GOLD} opacity={appear(1.1) * 0.9} />;
+          })}
+        </svg>
+      );
+    }
+    case "shield": {
+      // escudo + check que se dibuja + onda protectora.
+      const ringT = (elapsed * 0.6) % 1;
+      return (
+        <svg {...common}>
+          <path d="M100 40 L150 58 v44 q0 38 -50 58 q-50 -20 -50 -58 v-44 z" {...base} {...drawProps(360, elapsed)} />
+          <path d="M100 48 L142 63 v39 q0 32 -42 49 q-42 -17 -42 -49 v-39 z" {...base} strokeWidth={1.2} {...drawProps(310, elapsed, 0.3)} />
+          <path d="M78 102 L94 118 L126 84" {...goldS} strokeWidth={3} fill="none" {...drawProps(80, elapsed, 0.9, 0.6)} />
+          <path d="M100 40 L150 58 v44 q0 38 -50 58 q-50 -20 -50 -58 v-44 z" stroke={GOLD} strokeWidth={1.6} fill="none" opacity={(1 - ringT) * 0.5 * appear(1.4)} transform={`translate(${-(ringT * 10)} ${-(ringT * 12)}) scale(${1 + ringT * 0.12})`} transform-origin="100 100" />
+        </svg>
+      );
+    }
+    case "coin": {
+      // moneda que gira sobre su eje (scaleX oscilante) + sombra.
+      const spin = Math.cos(elapsed * 2.2);
+      const w = Math.abs(spin);
+      return (
+        <svg {...common}>
+          <ellipse cx="100" cy="166" rx={34 * (0.6 + w * 0.4)} ry="6" fill={STROKE} opacity={appear(0.8) * 0.18} />
+          <g transform={`translate(100 100) scale(${Math.max(0.12, w)} 1) translate(-100 -100)`}>
+            <circle cx="100" cy="100" r="52" {...base} {...drawProps(330, elapsed)} />
+            <circle cx="100" cy="100" r="43" {...base} strokeWidth={1.3} {...drawProps(270, elapsed, 0.25)} />
+            <path d="M100 76 v48 M88 84 q12 -8 24 0 q-24 16 0 24 q-12 8 -24 0" {...goldS} strokeWidth={2.6} fill="none" opacity={appear(0.8)} />
+          </g>
+          {[0, 1, 2].map((i) => {
+            const tw = 0.5 + 0.5 * Math.sin(elapsed * 4 + i * 2.1);
+            const px = 52 + i * 48;
+            const py = 48 - (i % 2) * 14;
+            return <path key={i} d={`M${px} ${py - 5} v10 M${px - 5} ${py} h10`} {...goldS} strokeWidth={1.6} opacity={appear(1.2) * tw * 0.8} />;
+          })}
+        </svg>
+      );
+    }
+    case "heart": {
+      // corazón que late + línea de pulso EKG que lo cruza.
+      const beat = 1 + Math.max(0, Math.sin(elapsed * 3.4)) ** 6 * 0.08;
+      return (
+        <svg {...common}>
+          <g transform={`translate(100 104) scale(${beat}) translate(-100 -104)`}>
+            <path d="M100 150 q-44 -30 -50 -58 a26 26 0 0 1 50 -12 a26 26 0 0 1 50 12 q-6 28 -50 58 z" {...base} {...drawProps(360, elapsed)} />
+          </g>
+          <path d="M40 104 h28 l8 -16 l12 30 l10 -22 l6 8 h56" {...goldS} strokeWidth={2.2} fill="none" {...drawProps(220, elapsed, 0.7, 1.2)} />
+          <circle cx="160" cy="104" r="3" fill={GOLD} opacity={appear(1.6) * (0.4 + 0.6 * Math.max(0, Math.sin(elapsed * 3.4)))} />
         </svg>
       );
     }

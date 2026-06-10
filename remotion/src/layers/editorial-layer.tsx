@@ -191,6 +191,156 @@ export function editorialPanelAt(
   };
 }
 
+// ─── FX DE ILUSTRACIÓN: 4 tratamientos distintos que rotan por tarjeta ───────
+// La MISMA ilustración se ve diferente según la tarjeta: anillo orbital, ráfaga
+// de líneas, marco de esquinas o limpio. Variedad sin tocar el schema.
+type IlloVariant = "clean" | "ring" | "burst" | "frame";
+const ILLO_VARIANTS: IlloVariant[] = ["ring", "burst", "frame", "clean"];
+
+export function illoVariantFor(card: EditorialCard, index: number): IlloVariant {
+  const h = (card.icon ?? "").length * 7 + Math.round((card.at ?? 0) * 10) + index * 3;
+  return ILLO_VARIANTS[Math.abs(h) % ILLO_VARIANTS.length];
+}
+
+/** Decora cualquier ilustración (a mano o Lucide) con un FX animado alrededor. */
+const IllustrationFX: React.FC<{
+  variant: IlloVariant;
+  elapsed: number;
+  size: number;
+  gold: string;
+  children: React.ReactNode;
+}> = ({ variant, elapsed, size, gold, children }) => {
+  const p = clamp01(elapsed / 0.8);
+  const ease = 1 - Math.pow(1 - p, 3);
+  const S = size * 1.34;
+  const deco: React.ReactNode = (() => {
+    if (variant === "ring") {
+      // anillo punteado que rota + satélite orbitando.
+      const a = elapsed * 0.9;
+      const r = S * 0.46;
+      return (
+        <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{ position: "absolute", inset: 0 }}>
+          <circle cx={S / 2} cy={S / 2} r={r * ease} fill="none" stroke={gold} strokeWidth={1.6}
+            strokeDasharray="3 9" strokeDashoffset={-elapsed * 16} opacity={0.55 * ease} />
+          <circle cx={S / 2 + Math.cos(a) * r * ease} cy={S / 2 + Math.sin(a) * r * ease}
+            r={S * 0.018} fill={gold} opacity={ease} />
+        </svg>
+      );
+    }
+    if (variant === "burst") {
+      // ráfaga de 8 rayos que respiran (estilo grabado).
+      const breathe = 0.6 + 0.4 * Math.sin(elapsed * 2.2);
+      return (
+        <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{ position: "absolute", inset: 0 }}>
+          {Array.from({ length: 8 }).map((_, i) => {
+            const a = (i / 8) * Math.PI * 2 + 0.39;
+            const r0 = S * 0.44;
+            const r1 = S * (0.44 + 0.05 * breathe);
+            return (
+              <line key={i} x1={S / 2 + Math.cos(a) * r0 * ease} y1={S / 2 + Math.sin(a) * r0 * ease}
+                x2={S / 2 + Math.cos(a) * r1 * ease} y2={S / 2 + Math.sin(a) * r1 * ease}
+                stroke={gold} strokeWidth={2} strokeLinecap="round" opacity={0.7 * ease} />
+            );
+          })}
+        </svg>
+      );
+    }
+    if (variant === "frame") {
+      // marco de esquinas editoriales que se dibuja.
+      const L = S * 0.16 * ease;
+      const m = S * 0.06;
+      const corner = (x: number, y: number, dx: number, dy: number) => (
+        <path d={`M${x + dx * L} ${y} L${x} ${y} L${x} ${y + dy * L}`} fill="none"
+          stroke={gold} strokeWidth={1.8} opacity={0.7 * ease} />
+      );
+      return (
+        <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{ position: "absolute", inset: 0 }}>
+          {corner(m, m, 1, 1)}
+          {corner(S - m, m, -1, 1)}
+          {corner(m, S - m, 1, -1)}
+          {corner(S - m, S - m, -1, -1)}
+        </svg>
+      );
+    }
+    return null;
+  })();
+  return (
+    <div style={{ position: "relative", width: S, height: S, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {deco}
+      {children}
+    </div>
+  );
+};
+
+// ─── CAPA AMBIENTAL: el lienzo NUNCA se ve vacío ──────────────────────────────
+// Decoración editorial sutil siempre presente detrás de todo: grilla de puntos,
+// reglas de página tipo revista, círculo punteado gigante que rota lento y
+// marcas "+" que derivan. Determinística (currentTime) — no distrae, acompaña.
+export const EditorialAmbient: React.FC<{
+  layout: EditorialLayout;
+  currentTime: number;
+  width: number;
+  height: number;
+}> = ({ layout, currentTime, width, height }) => {
+  const GOLD = layout.accent ?? "#f0b429";
+  const theme = EDITORIAL_BG[layout.background ?? "dark"] ?? EDITORIAL_BG.dark;
+  const t = currentTime;
+  const intro = clamp01(t / 1.2);
+  const W = width;
+  const H = height;
+  const marks = [
+    { x: 0.12, y: 0.16, s: 0.9, ph: 0 },
+    { x: 0.86, y: 0.12, s: 0.7, ph: 2.1 },
+    { x: 0.08, y: 0.82, s: 0.8, ph: 4.2 },
+    { x: 0.9, y: 0.86, s: 1.0, ph: 1.3 },
+    { x: 0.5, y: 0.07, s: 0.6, ph: 3.4 },
+  ];
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", opacity: intro }}>
+      {/* grilla de puntos sutil en todo el lienzo */}
+      <AbsoluteFill
+        style={{
+          backgroundImage: `radial-gradient(${theme.muted} 1px, transparent 1px)`,
+          backgroundSize: `${Math.round(W * 0.04)}px ${Math.round(W * 0.04)}px`,
+          opacity: 0.07,
+        }}
+      />
+      {/* reglas de página (arriba/abajo) con folio, como una revista */}
+      <div style={{ position: "absolute", top: H * 0.035, left: W * 0.045, right: W * 0.045, borderTop: `1px solid ${theme.muted}55`, display: "flex", justifyContent: "space-between", paddingTop: 6 }}>
+        <span style={{ fontFamily: "Arial, sans-serif", fontSize: H * 0.011, letterSpacing: "0.45em", color: theme.muted, opacity: 0.75, textTransform: "uppercase" }}>● Documental</span>
+        <span style={{ fontFamily: "Arial, sans-serif", fontSize: H * 0.011, letterSpacing: "0.45em", color: GOLD, opacity: 0.8 }}>{`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`}</span>
+      </div>
+      <div style={{ position: "absolute", bottom: H * 0.035, left: W * 0.045, right: W * 0.045, borderBottom: `1px solid ${theme.muted}55` }} />
+      {/* círculo punteado GIGANTE que rota lentísimo (textura de fondo) */}
+      <svg width={W} height={H} style={{ position: "absolute", inset: 0, opacity: 0.1 }}>
+        <g transform={`rotate(${t * 2.4} ${W * 0.18} ${H * 0.7})`}>
+          <circle cx={W * 0.18} cy={H * 0.7} r={Math.min(W, H) * 0.34} fill="none" stroke={GOLD} strokeWidth={1.4} strokeDasharray="2 14" />
+        </g>
+        <g transform={`rotate(${-t * 1.6} ${W * 0.84} ${H * 0.26})`}>
+          <circle cx={W * 0.84} cy={H * 0.26} r={Math.min(W, H) * 0.22} fill="none" stroke={theme.muted} strokeWidth={1.2} strokeDasharray="2 11" />
+        </g>
+      </svg>
+      {/* marcas "+" que derivan suave (vida ambiental) */}
+      <svg width={W} height={H} style={{ position: "absolute", inset: 0 }}>
+        {marks.map((m, i) => {
+          const dx = Math.sin(t * 0.5 + m.ph) * W * 0.006;
+          const dy = Math.cos(t * 0.4 + m.ph) * H * 0.008;
+          const tw = 0.35 + 0.3 * Math.sin(t * 1.4 + m.ph);
+          const s = H * 0.009 * m.s;
+          const x = m.x * W + dx;
+          const y = m.y * H + dy;
+          return (
+            <g key={i} opacity={tw}>
+              <line x1={x - s} y1={y} x2={x + s} y2={y} stroke={i % 2 ? GOLD : theme.muted} strokeWidth={1.6} />
+              <line x1={x} y1={y - s} x2={x} y2={y + s} stroke={i % 2 ? GOLD : theme.muted} strokeWidth={1.6} />
+            </g>
+          );
+        })}
+      </svg>
+    </AbsoluteFill>
+  );
+};
+
 /** Entrada por líneas: slide-up con máscara (el look "editorial" clásico). */
 const Reveal: React.FC<{ t: number; delay: number; children: React.ReactNode }> = ({
   t,
@@ -216,7 +366,9 @@ export const EditorialCardLayer: React.FC<{
   height: number;
   /** Rect actual del panel dinámico (define lado del texto y ancho disponible). */
   panel?: PanelRect;
-}> = ({ card, currentTime, layout, width, height, panel }) => {
+  /** Índice de la tarjeta (rota el tratamiento FX de la ilustración). */
+  index?: number;
+}> = ({ card, currentTime, layout, width, height, panel, index = 0 }) => {
   const GOLD = layout.accent ?? "#f0b429";
   const [FONT_N, FONT_I] = FONT_THEMES[layout.font ?? "playfair"] ?? FONT_THEMES.playfair;
   const theme = EDITORIAL_BG[layout.background ?? "dark"] ?? EDITORIAL_BG.dark;
@@ -234,12 +386,88 @@ export const EditorialCardLayer: React.FC<{
     : width * (1 - (layout.panelWidth ?? 0.4)) - 90;
   const isStat = Boolean(card.statValue);
   const hasIcon = Boolean(card.icon);
+  // Tarjeta VISUAL: sin titular/stat/capítulo → la ILUSTRACIÓN es la protagonista
+  // (se usa para rellenar huecos entre frases fuertes; el lienzo nunca queda vacío).
+  const isVisual = hasIcon && !card.title && !card.statValue && !card.number;
   // Escala tipográfica relativa al alto del frame (sirve igual en 9:16 y 16:9).
   const titleSize = Math.min(zoneWidth * 0.135, height * 0.075);
+  const variant = illoVariantFor(card, index);
+  const iconSize = isVisual
+    ? Math.min(zoneWidth * 0.62, height * 0.36)
+    : Math.min(zoneWidth * 0.46, height * 0.26);
+  const iconNode = hasIcon ? (
+    LINE_ART_KINDS.includes(card.icon as LineArtKind) ? (
+      <LineArtIcon kind={card.icon as LineArtKind} elapsed={Math.max(0, t - 0.4)} size={iconSize} gold={GOLD} />
+    ) : (
+      <LineArtLucide name={card.icon} elapsed={Math.max(0, t - 0.4)} size={iconSize * 0.88} gold={GOLD} />
+    )
+  ) : null;
 
   // Titular con la palabra acento en dorado-itálica (match por inclusión, sin caso).
   const accentLc = (card.accent ?? "").toLowerCase();
   const words = (card.title ?? "").split(/\s+/).filter(Boolean);
+
+  // ── TARJETA VISUAL: ilustración GRANDE centrada + kicker + frase corta. ──
+  if (isVisual) {
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none", opacity: fadeOut }}>
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            [textOnLeft ? "left" : "right"]: 56,
+            width: zoneWidth,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: height * 0.022,
+          }}
+        >
+          {card.kicker ? (
+            <Reveal t={t} delay={0.05}>
+              <div
+                style={{
+                  fontFamily: "Arial, sans-serif",
+                  fontSize: height * 0.0165,
+                  letterSpacing: "0.5em",
+                  textTransform: "uppercase",
+                  color: MUTED,
+                  textAlign: "center",
+                }}
+              >
+                {card.kicker}
+              </div>
+            </Reveal>
+          ) : null}
+          <div style={{ opacity: clamp01((t - 0.25) / 0.3) }}>
+            <IllustrationFX variant={variant} elapsed={Math.max(0, t - 0.25)} size={iconSize} gold={GOLD}>
+              {iconNode}
+            </IllustrationFX>
+          </div>
+          {card.subtitle ? (
+            <Reveal t={t} delay={0.55}>
+              <div
+                style={{
+                  fontFamily: FONT_I,
+                  fontStyle: "italic",
+                  fontWeight: 700,
+                  fontSize: titleSize * 0.5,
+                  color: TEXT,
+                  textAlign: "center",
+                  maxWidth: zoneWidth * 0.9,
+                  lineHeight: 1.3,
+                }}
+              >
+                {card.subtitle}
+              </div>
+            </Reveal>
+          ) : null}
+        </div>
+      </AbsoluteFill>
+    );
+  }
 
   return (
     <AbsoluteFill style={{ pointerEvents: "none", opacity: fadeOut }}>
@@ -370,23 +598,10 @@ export const EditorialCardLayer: React.FC<{
         ) : null}
 
         {hasIcon ? (
-          <div style={{ marginTop: height * 0.02, opacity: clamp01((t - 0.4) / 0.3) }}>
-            {LINE_ART_KINDS.includes(card.icon as LineArtKind) ? (
-              <LineArtIcon
-                kind={card.icon as LineArtKind}
-                elapsed={Math.max(0, t - 0.4)}
-                size={Math.min(zoneWidth * 0.52, height * 0.3)}
-                gold={GOLD}
-              />
-            ) : (
-              // Cualquier ícono Lucide (1,500+) animado genéricamente.
-              <LineArtLucide
-                name={card.icon}
-                elapsed={Math.max(0, t - 0.4)}
-                size={Math.min(zoneWidth * 0.44, height * 0.26)}
-                gold={GOLD}
-              />
-            )}
+          <div style={{ marginTop: height * 0.012, opacity: clamp01((t - 0.4) / 0.3), alignSelf: "flex-start" }}>
+            <IllustrationFX variant={variant} elapsed={Math.max(0, t - 0.4)} size={iconSize} gold={GOLD}>
+              {iconNode}
+            </IllustrationFX>
           </div>
         ) : null}
       </div>

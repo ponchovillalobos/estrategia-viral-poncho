@@ -445,6 +445,18 @@ _EDITORIAL_ICON_WORDS = {
     "trophy": {"ganar", "gane", "gané", "exito", "éxito", "logro", "lograr", "premio", "mejor", "campeon", "campeón"},
     "route": {"camino", "ruta", "paso", "pasos", "estrategia", "plan", "mapa", "guia", "guía"},
     "fire": {"viral", "tendencia", "explotar", "exploto", "explotó", "boom", "caliente", "urgente"},
+    # ── 10 ilustraciones a mano NUEVAS (money, diamond, eye, mountain, magnet,
+    #    compass, network, shield, coin, heart). ──
+    "money": {"plata", "billete", "billetes", "ganancia", "ganancias", "ingreso", "ingresos", "facturacion", "facturación", "millones", "rico"},
+    "diamond": {"valor", "valioso", "premium", "calidad", "joya", "lujo", "unico", "único"},
+    "eye": {"ver", "mira", "mirá", "atencion", "atención", "observa", "fijate", "fíjate", "ojo", "detalle"},
+    "mountain": {"reto", "desafio", "desafío", "dificil", "difícil", "cima", "esfuerzo", "superar"},
+    "magnet": {"atraer", "atrae", "atraen", "captar", "enganchar", "irresistible", "magnetico", "magnético"},
+    "compass": {"direccion", "dirección", "rumbo", "norte", "orientar", "perdido", "claridad"},
+    "network": {"red", "redes", "conectar", "conexion", "conexión", "contactos", "viralizar", "compartir"},
+    "shield": {"proteger", "proteccion", "protección", "riesgo", "riesgos", "defensa", "blindar"},
+    "coin": {"moneda", "centavo", "precio", "precios", "cuesta", "costo", "barato", "caro"},
+    "heart": {"amor", "pasion", "pasión", "emocion", "emoción", "corazon", "corazón", "sentir", "conectan"},
     # ── Conceptos extra → íconos LUCIDE (animación genérica; 1,500+ disponibles,
     #    cualquier nombre kebab-case de lucide.dev sirve como valor). ──
     "users": {"equipo", "equipos", "gente", "personas", "comunidad", "grupo", "socios"},
@@ -482,7 +494,53 @@ def _icon_for_text(text: str) -> str:
 
 # Fallback rotativo: NINGUNA tarjeta queda sin ilustración (la pantalla nunca se
 # ve vacía). Rota entre las dibujadas a mano que funcionan como "genéricas".
-_FALLBACK_ICONS = ["lightbulb", "chart", "target", "route", "megaphone", "brain", "gears", "trophy"]
+_FALLBACK_ICONS = [
+    "lightbulb", "chart", "target", "route", "megaphone", "brain", "gears", "trophy",
+    "eye", "compass", "network", "diamond", "rocket", "magnet", "shield", "coin",
+]
+
+# Tarjetas VISUALES de relleno: ilustración protagonista + kicker (sin titular).
+# Se usan para que el lienzo NUNCA quede vacío más de ~1s entre frases fuertes.
+_VISUAL_KICKERS = ["MIRÁ ESTO", "EL DETALLE", "MIENTRAS TANTO", "OJO ACÁ", "EL PUNTO CLAVE", "NO ES CASUALIDAD"]
+_VISUAL_ICONS = ["eye", "compass", "network", "diamond", "money", "mountain", "magnet", "coin", "heart", "radar", "hourglass", "fire"]
+
+
+def _fill_card_gaps(cards: list[dict], duration: float) -> list[dict]:
+    """Rellena cualquier hueco >1s (antes de la primera tarjeta o entre tarjetas)
+    con tarjetas VISUALES. Huecos largos se parten en bloques de ~7s para que la
+    ilustración y el kicker vayan rotando (variedad constante en pantalla)."""
+    vi = 0
+
+    def _visual(at: float, dur: float) -> dict:
+        nonlocal vi
+        c = {
+            "at": round(at, 2), "duration": round(max(2.0, dur), 2),
+            "kicker": _VISUAL_KICKERS[vi % len(_VISUAL_KICKERS)],
+            "title": "", "accent": "", "subtitle": "",
+            "number": "", "statValue": "", "statUnit": "",
+            "icon": _VISUAL_ICONS[vi % len(_VISUAL_ICONS)],
+        }
+        vi += 1
+        return c
+
+    out: list[dict] = []
+    cursor = 0.3
+    for c in sorted(cards, key=lambda x: x["at"]):
+        gap = c["at"] - cursor
+        while gap > 1.0:
+            chunk = gap if gap <= 9.0 else min(7.0, gap - 1.0)
+            out.append(_visual(cursor + 0.15, chunk - 0.5))
+            cursor += chunk
+            gap = c["at"] - cursor
+        out.append(c)
+        cursor = max(cursor, c["at"] + float(c.get("duration", 5)))
+    gap = duration - cursor
+    while gap > 1.5:
+        chunk = gap if gap <= 9.0 else min(7.0, gap - 1.0)
+        out.append(_visual(cursor + 0.15, chunk - 0.6))
+        cursor += chunk
+        gap = duration - cursor
+    return out
 
 
 def editorial_panel_scenes(duration: float) -> list[dict]:
@@ -513,9 +571,13 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
     El ícono line-art sale del vocabulario de la frase. Cada tarjeta dura hasta
     poco antes de la siguiente (el lado oscuro nunca queda vacío mucho tiempo)."""
     sents = [s for s in _sentences(words) if len(s["text"].split()) >= 3]
-    if not sents or duration < 8:
+    if duration < 8:
         return []
-    window = max(11.0, min(16.0, duration / max(2, round(duration / 13))))
+    if not sents:
+        # Sin frases utilizables: el lienzo igual se llena con tarjetas visuales.
+        return _fill_card_gaps([], duration)
+    # Ventanas más densas (~1 tarjeta cada 8-12s) — menos aire muerto entre frases.
+    window = max(8.0, min(12.0, duration / max(2, round(duration / 10))))
     picked: list[dict] = []
     t0 = 0.0
     while t0 < duration - 4:
@@ -547,9 +609,9 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
         text = s["text"].strip()
         toks = text.split()
         at = round(max(0.2, s["start"] - 0.2), 2)
-        # duración: hasta 1s antes de la próxima tarjeta (o 6s si es la última)
-        next_at = picked[i + 1]["start"] - 0.4 if i + 1 < len(picked) else min(duration, s["start"] + 7)
-        dur = round(max(3.5, min(9.0, next_at - at)), 2)
+        # duración: CONTIGUA hasta justo antes de la próxima tarjeta (sin huecos)
+        next_at = picked[i + 1]["start"] - 0.4 if i + 1 < len(picked) else min(duration, s["start"] + 8)
+        dur = round(max(3.5, min(20.0, next_at - at)), 2)
         icon = _icon_for_text(text)
         card: dict = {"at": at, "duration": dur, "kicker": _KICKERS[i % len(_KICKERS)],
                       "title": "", "accent": "", "subtitle": "", "number": "",
@@ -586,7 +648,9 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
     if cards:
         last = cards[-1]
         last["duration"] = round(max(last["duration"], duration - last["at"] - 0.2), 2)
-    return cards
+    # Y cualquier hueco restante (>1s) se rellena con tarjetas VISUALES:
+    # la pantalla NUNCA se queda con el video solo y el lienzo desnudo.
+    return _fill_card_gaps(cards, duration)
 
 
 _EDITORIAL_LLM_PROMPT = """Sos el director de arte de un documental viral en español.
@@ -601,6 +665,8 @@ Reglas por tarjeta:
   consecuencia relacionada al tema (no parafrasees el título).
 - "kicker": 2-4 palabras en mayúsculas tipo sección de revista (EL DATO, LA TRAMPA,
   LO QUE NADIE DICE...). Variá entre tarjetas.
+- Tarjetas con "title" VACÍO son visuales (solo ilustración): dejá "title" vacío y
+  poné en "subtitle" un dato corto e interesante del tema (máx 8 palabras).
 - NO toques: at, duration, icon, number, statValue, statUnit (devolvelos igual).
 - Mantené el MISMO orden y la MISMA cantidad de tarjetas.
 
@@ -639,10 +705,16 @@ def _enrich_cards_llm(cards: list[dict], words: list[dict]) -> list[dict]:
         enriched: list[dict] = []
         for orig, new in zip(cards, out):
             c = dict(orig)  # at/duration/icon/number/stat* SIEMPRE de la heurística
+            is_visual = not orig.get("title") and not orig.get("statValue") and not orig.get("number")
             for k in ("kicker", "title", "accent", "subtitle"):
                 v = str(new.get(k, "") or "").strip()
                 if v:
                     c[k] = v[:80] if k != "title" else v[:60]
+            if is_visual:
+                # Las tarjetas VISUALES siguen siendo visuales: ilustración protagonista
+                # (el LLM solo puede aportarles kicker + subtítulo con dato).
+                c["title"] = ""
+                c["accent"] = ""
             enriched.append(c)
         print(f"[editorial] {len(enriched)} tarjetas enriquecidas con LLM", file=sys.stderr)
         return enriched
