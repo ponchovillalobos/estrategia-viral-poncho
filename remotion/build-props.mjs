@@ -144,9 +144,16 @@ const props = {
   videoDurationSec: +totalDuration.toFixed(3),
   words: subtitles,
   bRoll: bRollRemapped.map((c) => ({ start: c.start, end: c.end, url: c.url })),
-  musicUrl: project.musicTrack
-    ? `${HOST}/api/music/stream?file=${encodeURIComponent(project.musicTrack)}`
-    : null,
+  // musicTrack puede venir como NOMBRE de archivo ("tema.mp3") o ya como URL
+  // ("/api/music/stream?file=..." — lo que devuelve pickRandomMusicTrack). Antes
+  // se re-envolvía siempre → URL doble-encodeada → el <Audio> tiraba el render.
+  musicUrl: (() => {
+    const t = project.musicTrack;
+    if (!t) return null;
+    if (/^https?:\/\//.test(t)) return t;
+    if (t.startsWith("/api/")) return `${HOST}${t}`;
+    return `${HOST}/api/music/stream?file=${encodeURIComponent(t)}`;
+  })(),
   musicVolume: project.musicVolume ?? 0.15,
   // F1 — Director emocional: curva de ducking de la música ({t, v}). Con jump cuts
   // los `t` se remapean a la línea de tiempo cortada (los puntos que caen en un
