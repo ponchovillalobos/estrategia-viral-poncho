@@ -13,33 +13,32 @@ use tauri::Manager;
 
 struct ServerProc(Mutex<Option<Child>>);
 
-/// Ruta del frontend en desarrollo: desktop/src-tauri → raíz del repo → frontend.
-fn frontend_dir() -> std::path::PathBuf {
-    let here = std::env::current_dir().unwrap_or_default();
-    // Sube hasta encontrar la carpeta `frontend` (funciona desde desktop/ o desde la raíz).
-    let mut dir = here.as_path();
+/// Ruta del frontend: sube desde la ubicación del EJECUTABLE (no del cwd — la app
+/// puede lanzarse desde cualquier carpeta) hasta encontrar frontend/.next/standalone.
+/// El .exe vive en desktop/src-tauri/target/release → 4 niveles arriba está la raíz.
+fn frontend_dir() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let mut dir = exe.parent()?;
     loop {
         let candidate = dir.join("frontend");
-        if candidate.join(".next").join("standalone").join("server.js").exists() {
-            return candidate;
+        if candidate
+            .join(".next")
+            .join("standalone")
+            .join("server.js")
+            .exists()
+        {
+            return Some(candidate);
         }
-        match dir.parent() {
-            Some(p) => dir = p,
-            None => return here.join("frontend"),
-        }
+        dir = dir.parent()?;
     }
 }
 
 fn spawn_server() -> Option<Child> {
-    let fe = frontend_dir();
-    let standalone = fe.join(".next").join("standalone");
-    if !standalone.join("server.js").exists() {
-        eprintln!(
-            "[studio] no existe {}/server.js — corré `npx next build` en frontend/",
-            standalone.display()
-        );
+    let Some(fe) = frontend_dir() else {
+        eprintln!("[studio] no encontré frontend/.next/standalone — corré `npx next build`");
         return None;
-    }
+    };
+    let standalone = fe.join(".next").join("standalone");
     Command::new("node")
         .arg("server.js")
         .current_dir(&standalone)
