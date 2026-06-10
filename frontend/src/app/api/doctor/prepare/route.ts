@@ -37,7 +37,7 @@ export async function POST() {
     running: true,
     done: false,
     ok: false,
-    lastLine: "Conectando…",
+    lastLine: "Descargando el modelo de voz (~1.5 GB)… puede tardar varios minutos según tu conexión.",
     startedAt: Date.now(),
   };
   g.__doctorPrepare = state;

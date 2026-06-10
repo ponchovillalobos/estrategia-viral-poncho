@@ -39,7 +39,9 @@ export function runProcess(
     const proc = spawn(cmd, args, {
       cwd,
       shell: isWindowsScript,
-      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+      // PYTHONUNBUFFERED: sin esto, el progreso de descargas/transcripciones
+      // llega en ráfagas tardías y la UI parece colgada ("Conectando…" 4 min).
+      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", PYTHONUNBUFFERED: "1" },
     });
     let stdout = "";
     let stderr = "";

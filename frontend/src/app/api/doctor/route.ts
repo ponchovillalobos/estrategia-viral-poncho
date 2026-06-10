@@ -37,12 +37,12 @@ interface Check {
 const g = globalThis as unknown as { __doctorImports?: { at: number; ok: boolean; detail: string } };
 const IMPORTS_TTL = 30 * 60 * 1000;
 
-/** ¿El modelo Whisper ya está descargado? (cache de HuggingFace en el perfil). */
+/** ¿El modelo Whisper ya está descargado? (cache de HuggingFace en el perfil).
+ *  Si HF_HOME está seteado, manda ÉL (es donde whisperx va a buscar/descargar). */
 function whisperModelReady(): boolean {
-  const roots = [
-    process.env.HF_HOME ? path.join(process.env.HF_HOME, "hub") : "",
-    path.join(os.homedir(), ".cache", "huggingface", "hub"),
-  ].filter(Boolean);
+  const roots = process.env.HF_HOME
+    ? [path.join(process.env.HF_HOME, "hub")]
+    : [path.join(os.homedir(), ".cache", "huggingface", "hub")];
   for (const root of roots) {
     try {
       if (!existsSync(root)) continue;

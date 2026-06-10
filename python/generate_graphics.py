@@ -17,8 +17,10 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -596,17 +598,93 @@ _FALLBACK_ICONS = [
     "eye", "compass", "network", "diamond", "rocket", "magnet", "shield", "coin",
 ]
 
+# ─── POOL GRANDE de ilustraciones (28 a mano + ~230 Lucide curados) ───────────
+# Cada nombre Lucide se anima genéricamente (draw-on + flotación + nodo dorado)
+# por LineArtLucide, y los 4 tratamientos FX (anillo/ráfaga/marco/limpio) los
+# multiplican visualmente. VALIDADO contra lucide-react real con
+# `node remotion/check-lucide-names.mjs` (un typo = tarjeta sin ilustración).
+_LUCIDE_POOL = [
+    # dinero / negocio
+    "badge-dollar-sign", "banknote", "piggy-bank", "credit-card", "coins",
+    "hand-coins", "receipt", "shopping-cart", "shopping-bag", "store",
+    "briefcase", "building", "building-2", "landmark", "wallet", "gem",
+    "percent", "calculator", "badge-percent", "circle-dollar-sign",
+    # crecimiento / métricas / logro
+    "trending-up", "trending-down", "bar-chart-3", "line-chart", "pie-chart",
+    "activity", "gauge", "goal", "crosshair", "milestone", "flag", "award",
+    "medal", "crown", "gift", "sparkles", "star", "zap", "flame",
+    # personas / comunicación
+    "users", "user-plus", "user-check", "contact", "handshake",
+    "heart-handshake", "smile", "laugh", "speech", "message-circle",
+    "messages-square", "mail", "send", "phone", "phone-call", "mic",
+    "podcast", "radio", "rss", "thumbs-up", "hand-heart",
+    # tiempo
+    "timer", "alarm-clock", "calendar-days", "calendar-check", "history",
+    "watch", "sunrise", "sunset", "sun", "moon",
+    # tecnología
+    "smartphone", "laptop", "monitor", "tv", "camera", "video", "clapperboard",
+    "film", "image", "images", "music", "headphones", "speaker", "volume-2",
+    "wifi", "signal", "bluetooth", "battery-charging", "plug", "cpu",
+    "hard-drive", "server", "database", "cloud", "cloud-download",
+    "cloud-upload", "code", "terminal", "bug", "bot", "brain-circuit",
+    "qr-code", "scan", "fingerprint", "key-round", "shield-check",
+    # mapa / viaje / aventura
+    "map", "map-pin", "navigation", "globe", "plane", "car", "bus",
+    "train-front", "ship", "bike", "footprints", "mountain-snow", "tent",
+    "trees", "anchor", "sailboat", "satellite", "satellite-dish", "orbit",
+    # educación / ciencia
+    "graduation-cap", "book-open", "book", "library", "notebook-pen", "pencil",
+    "pen-tool", "ruler", "school", "backpack", "microscope", "flask-conical",
+    "atom", "dna", "telescope", "binoculars",
+    # vida / objetos
+    "coffee", "pizza", "utensils", "apple", "carrot", "cake", "wine", "salad",
+    "soup", "dumbbell", "bed", "home", "bath", "shirt", "scissors", "wand-2",
+    "paintbrush", "palette", "drama", "party-popper", "ticket", "umbrella",
+    # trabajo / herramientas / logística
+    "hammer", "wrench", "paperclip", "pin", "bookmark", "folder",
+    "folder-open", "file-text", "files", "clipboard-list", "clipboard-check",
+    "archive", "package", "package-open", "box", "boxes", "truck", "factory",
+    "warehouse", "recycle", "leaf", "sprout", "flower-2",
+    # naturaleza / animales
+    "bird", "cat", "dog", "fish", "rabbit", "squirrel", "turtle",
+    "cloud-lightning", "cloud-rain", "snowflake", "droplets", "waves", "wind",
+    "rainbow", "thermometer",
+    # conceptos / símbolos
+    "puzzle", "blocks", "layers", "layout-grid", "component", "shapes",
+    "infinity", "hash", "at-sign", "link", "bell", "bell-ring", "search",
+    "search-check", "filter", "list-checks", "badge-check", "alert-triangle",
+    "ban", "ghost", "lock-open", "unlock", "key", "door-open", "door-closed",
+    "lightbulb-off", "eye-off", "swords", "presentation", "projector",
+    "newspaper", "quote", "type", "languages", "earth", "hourglass",
+]
+
+
+def _icon_pool(seed: int) -> list[str]:
+    """Pool de ~260 ilustraciones BARAJADO determinísticamente POR VIDEO:
+    dos videos distintos usan ilustraciones DISTINTAS (el mismo video re-rendea
+    igual). Antes el fallback rotaba siempre los mismos 16 → todos los videos
+    se veían iguales."""
+    pool = list(dict.fromkeys([*_FALLBACK_ICONS, *_LUCIDE_POOL]))
+    rnd = random.Random(seed)
+    rnd.shuffle(pool)
+    return pool
+
 # Tarjetas VISUALES de relleno: ilustración protagonista + kicker (sin titular).
 # Se usan para que el lienzo NUNCA quede vacío más de ~1s entre frases fuertes.
 _VISUAL_KICKERS = ["MIRÁ ESTO", "EL DETALLE", "MIENTRAS TANTO", "OJO ACÁ", "EL PUNTO CLAVE", "NO ES CASUALIDAD"]
 _VISUAL_ICONS = ["eye", "compass", "network", "diamond", "money", "mountain", "magnet", "coin", "heart", "radar", "hourglass", "fire"]
 
 
-def _fill_card_gaps(cards: list[dict], duration: float) -> list[dict]:
+def _fill_card_gaps(cards: list[dict], duration: float, seed: int = 0) -> list[dict]:
     """Rellena cualquier hueco >1s (antes de la primera tarjeta o entre tarjetas)
     con tarjetas VISUALES. Huecos largos se parten en bloques de ~7s para que la
     ilustración y el kicker vayan rotando (variedad constante en pantalla)."""
     vi = 0
+    # Pool de visuales barajado POR VIDEO, con arranque rotado por la semilla:
+    # dos videos no repiten ni la secuencia ni la PRIMERA ilustración.
+    vis_pool = list(dict.fromkeys([*_VISUAL_ICONS, *_icon_pool(seed + 7)]))
+    _off = seed % max(1, len(vis_pool))
+    vis_pool = vis_pool[_off:] + vis_pool[:_off]
 
     def _visual(at: float, dur: float) -> dict:
         nonlocal vi
@@ -615,7 +693,7 @@ def _fill_card_gaps(cards: list[dict], duration: float) -> list[dict]:
             "kicker": _VISUAL_KICKERS[vi % len(_VISUAL_KICKERS)],
             "title": "", "accent": "", "subtitle": "",
             "number": "", "statValue": "", "statUnit": "",
-            "icon": _VISUAL_ICONS[vi % len(_VISUAL_ICONS)],
+            "icon": vis_pool[vi % len(vis_pool)],
         }
         vi += 1
         return c
@@ -662,7 +740,7 @@ def editorial_panel_scenes(duration: float) -> list[dict]:
     ]
 
 
-def editorial_cards(words: list[dict], duration: float) -> list[dict]:
+def editorial_cards(words: list[dict], duration: float, seed: int = 0) -> list[dict]:
     """Escenas editoriales (~1 cada 11-15s): la frase más fuerte de cada ventana se
     vuelve tarjeta. Si tiene número → STAT ($300 / al día); si abre con ordinal →
     CAPÍTULO numerado; si no → TITULAR serif con la última palabra como acento.
@@ -673,7 +751,7 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
         return []
     if not sents:
         # Sin frases utilizables: el lienzo igual se llena con tarjetas visuales.
-        return _fill_card_gaps([], duration)
+        return _fill_card_gaps([], duration, seed)
     # Ventanas CORTAS (~1 tarjeta cada 6-8s): el texto cambia al ritmo de la voz,
     # nunca se queda la misma tarjeta clavada en pantalla.
     window = max(5.5, min(8.0, duration / max(3, round(duration / 6.5))))
@@ -704,6 +782,7 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
                 picked.append(max(cands, key=score))
         t0 += window
     cards: list[dict] = []
+    pool = _icon_pool(seed)
     chapter = 0
     total_chapters = sum(
         1 for s in picked
@@ -765,9 +844,13 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
             if len(toks) > 7:
                 sub = clean_screen_text(" ".join(toks[7:16]), max_chars=70)
                 card["subtitle"] = (sub + ".") if sub else ""
-        # NUNCA sin ilustración: fallback rotativo si el vocabulario no matcheó.
+        # NUNCA sin ilustración: fallback del pool grande barajado por video.
         if not card["icon"]:
-            card["icon"] = _FALLBACK_ICONS[i % len(_FALLBACK_ICONS)]
+            card["icon"] = pool[i % len(pool)]
+        # Nunca la MISMA ilustración en dos tarjetas seguidas (el vocabulario
+        # puede matchear "users" dos veces al hilo y se veía repetido).
+        if cards and card["icon"] == cards[-1]["icon"]:
+            card["icon"] = pool[(i * 13 + 5) % len(pool)]
         cards.append(card)
     # La ÚLTIMA tarjeta se extiende hacia el cierre (máx 9s — si falta más, los
     # bloques visuales rellenan y el cierre queda con frase o animación igual).
@@ -776,7 +859,7 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
         last["duration"] = round(min(9.0, max(last["duration"], duration - last["at"] - 0.2)), 2)
     # Y cualquier hueco restante (>1s) se rellena con tarjetas VISUALES:
     # la pantalla NUNCA se queda con el video solo y el lienzo desnudo.
-    return _fill_card_gaps(cards, duration)
+    return _fill_card_gaps(cards, duration, seed)
 
 
 _EDITORIAL_LLM_PROMPT = """Sos el director de arte de un documental viral en español.
@@ -1021,7 +1104,9 @@ def generate(transcript_path: Path, use_llm: bool = True) -> dict:
     # editorialCards: SIEMPRE se calculan (heurística barata); con Ollama vivo se
     # REESCRIBEN para ser impactantes y aportar datos (no repetir el video).
     # editorialScenes: coreografía del panel (derecha→izquierda→cuadrado→full).
-    ed_cards = editorial_cards(words, duration)
+    # seed POR VIDEO: cada video usa un orden distinto del pool de ilustraciones.
+    seed = int(hashlib.md5(transcript_path.stem.encode("utf-8")).hexdigest()[:8], 16)
+    ed_cards = editorial_cards(words, duration, seed=seed)
     if use_llm and ed_cards:
         ed_cards = _enrich_cards_llm(ed_cards, words)
     return {
