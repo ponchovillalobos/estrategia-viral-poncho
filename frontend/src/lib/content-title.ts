@@ -29,10 +29,29 @@ const TITLE_STOPWORDS = new Set([
 const PICK_TOP_STOPWORDS_RE =
   /^(porque|cuando|donde|nuestro|nuestra|nuestros|nuestras|también|tambien|hacia|sobre|entre|durante|hasta|desde)$/i;
 
+// Palabras del HABLA que pasan el filtro de largo pero son pésimos stickers
+// gigantes en pantalla ("ENTONCES", "TENEMOS"): verbos/conectores genéricos sin
+// contenido. El sticker debe ser una palabra con significado propio.
+const GENERIC_SPEECH_WORDS = new Set([
+  "entonces", "digamos", "verdad", "ustedes", "nosotros", "vosotros", "ellos",
+  "tenemos", "estamos", "podemos", "vamos", "hacemos", "sabemos", "queremos",
+  "quiero", "quieres", "quieren", "puedo", "puedes", "pueden", "hacer", "tener",
+  "estar", "haber", "decir", "diciendo", "haciendo", "teniendo", "mucho",
+  "mucha", "muchos", "muchas", "ahorita", "luego", "claro", "bueno", "buenas",
+  "buenos", "demás", "demas", "manera", "forma", "parte", "partes", "ejemplo",
+  "realmente", "simplemente", "solamente", "justamente", "obviamente",
+]);
+
 export function pickTopKeywords(words: TranscriptWord[], count = 7): TranscriptWord[] {
   const filtered = words.filter((w) => {
     const clean = w.word.replace(/[^\wáéíóúñÁÉÍÓÚÑ]/g, "");
-    return clean.length >= 5 && !PICK_TOP_STOPWORDS_RE.test(clean);
+    const norm = normForFreq(clean);
+    return (
+      clean.length >= 5 &&
+      !PICK_TOP_STOPWORDS_RE.test(clean) &&
+      !TITLE_STOPWORDS.has(norm) &&
+      !GENERIC_SPEECH_WORDS.has(norm)
+    );
   });
   if (filtered.length <= count) return filtered;
   const slice = filtered.length / count;

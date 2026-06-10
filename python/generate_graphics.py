@@ -424,6 +424,103 @@ def _sentences(words: list[dict]) -> list[dict]:
     return out
 
 
+# ─── LIMPIEZA DE TEXTO EN PANTALLA ───────────────────────────────────────────
+# El transcript viene del HABLA: trae muletillas, conectores colgando y
+# duplicados de dictado. Los SUBTÍTULOS deben ser fieles a lo dicho, pero los
+# TITULARES/TARJETAS son texto de diseño: tienen que salir limpios y bien
+# redactados. Este limpiador se aplica a TODO texto del transcript que se
+# muestra como gráfica (editorial, headlines kinéticos, stats) en TODAS las
+# modalidades (shorts y largos comparten este generador).
+
+# Muletillas/conectores que NUNCA deben ABRIR un titular (se recortan).
+_LEAD_FILLERS = {
+    "eh", "em", "ehh", "mmm", "ajá", "aja", "ok", "okey", "vale",
+    "pues", "bueno", "entonces", "osea", "digamos", "este,", "esto,",
+    "y", "e", "o", "pero", "que", "porque", "como", "así", "asi",
+    "verdad", "no?", "¿no?", "miren", "mira", "mirá", "oye", "fíjate", "fijate",
+}
+# Palabras que NUNCA deben CERRAR un titular (quedan colgando: "...de la").
+_TRAIL_DANGLERS = {
+    "que", "de", "del", "y", "e", "o", "u", "con", "para", "por", "en", "a", "al",
+    "la", "el", "los", "las", "un", "una", "unos", "unas", "lo", "le", "les",
+    "mi", "tu", "su", "sus", "mis", "tus", "se", "me", "te", "nos", "es", "son",
+    "está", "esta", "están", "estan", "muy", "más", "mas", "pero", "porque",
+    "como", "cuando", "donde", "si", "ya", "tan", "cada", "este", "esa", "ese",
+    "hacia", "entre", "sobre", "sin", "ni", "qué", "cual", "cuál",
+    # adverbios de relleno que quedan colgando tras un corte ("…que es prácticamente")
+    "prácticamente", "practicamente", "básicamente", "basicamente", "literalmente",
+    "realmente", "simplemente", "solamente", "obviamente", "justamente", "aproximadamente",
+}
+
+# Palabras genéricas que no sirven como PALABRA ACENTO (la resaltada en color).
+_GENERIC_ACCENT = {
+    "tenemos", "estamos", "podemos", "tiene", "tienen", "puede", "pueden",
+    "hacer", "tener", "decir", "cosas", "cosa", "manera", "forma", "parte",
+}
+# Muletillas en CUALQUIER posición (se eliminan donde aparezcan).
+_INLINE_FILLERS = {"eh", "em", "ehh", "mmm", "ehm", "ajá,", "osea,"}
+
+
+def clean_screen_text(text: str, max_chars: int | None = None, min_words: int = 2) -> str:
+    """Limpia un fragmento del transcript para mostrarlo COMO TITULAR.
+
+    - recorta muletillas/conectores al inicio y palabras colgantes al final,
+    - colapsa duplicados de dictado ("que que" → "que") y espacios,
+    - arregla espacios antes de puntuación y signos ¿¡ sin pareja,
+    - capitaliza la primera letra.
+    Devuelve "" si después de limpiar no queda una frase digna (el caller
+    salta el candidato y usa el siguiente — nunca muestra basura).
+    """
+    t = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not t:
+        return ""
+    toks = t.split()
+    # duplicados de dictado consecutivos (case-insensitive)
+    dedup: list[str] = []
+    for tok in toks:
+        if dedup and _clean_word(tok).lower() == _clean_word(dedup[-1]).lower() and len(_clean_word(tok)) > 0:
+            continue
+        dedup.append(tok)
+    toks = [tok for tok in dedup if _clean_word(tok).lower() not in _INLINE_FILLERS]
+    # recortar muletillas al inicio (repetidamente: "bueno pues entonces…")
+    while toks and _clean_word(toks[0]).lower().strip(",") in _LEAD_FILLERS:
+        toks = toks[1:]
+    # recortar colgantes al final (repetidamente: "…que es de la")
+    while toks and _clean_word(toks[-1]).lower() in _TRAIL_DANGLERS:
+        toks = toks[:-1]
+    if len(toks) < min_words:
+        return ""
+    out = " ".join(toks).strip(" ,.;:")
+    # puntuación: sin espacio antes de .,!?; signos de apertura sin pareja fuera
+    out = re.sub(r"\s+([.,;:!?])", r"\1", out)
+    if "¿" in out and "?" not in out:
+        out = out.replace("¿", "")
+    if "¡" in out and "!" not in out:
+        out = out.replace("¡", "")
+    out = out.strip()
+    if max_chars and len(out) > max_chars:
+        # cortar en límite de PALABRA (nunca a mitad de palabra)
+        cut = out[:max_chars]
+        cut = cut[: cut.rfind(" ")] if " " in cut else cut
+        out = cut.strip(" ,.;:")
+        # re-chequear colgantes tras el corte
+        toks2 = out.split()
+        while toks2 and _clean_word(toks2[-1]).lower() in _TRAIL_DANGLERS:
+            toks2 = toks2[:-1]
+        out = " ".join(toks2)
+    if len(out.split()) < min_words:
+        return ""
+    return out[:1].upper() + out[1:]
+
+
+def _disfluency_penalty(text: str) -> float:
+    """Cuántas muletillas trae la frase (para que el scoring prefiera frases limpias)."""
+    toks = [_clean_word(t).lower() for t in str(text).split()]
+    fillers = sum(1 for t in toks if t in {"eh", "em", "mmm", "osea", "este", "pues", "bueno", "verdad"})
+    dups = sum(1 for a, b in zip(toks, toks[1:]) if a and a == b)
+    return fillers * 0.6 + dups * 0.8
+
+
 # ─── EDITORIAL: escenas tipográficas estilo documental (split-screen) ─────────
 # Ícono line-art por concepto (los 6 dibujados en line-art-icons.tsx).
 _EDITORIAL_ICON_WORDS = {
@@ -598,8 +695,13 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
                     + (1.0 if 5 <= len(toks) <= 14 else 0.0)
                     + has_concept
                     - (1.5 if starts_connector else 0.0)
+                    # las frases con muletillas/duplicados pierden contra las limpias
+                    - _disfluency_penalty(s["text"])
                 )
-            picked.append(max(cands, key=score))
+            # solo frases que SOBREVIVEN la limpieza (nunca mostrar basura)
+            cands = [s for s in cands if clean_screen_text(s["text"], min_words=3)]
+            if cands:
+                picked.append(max(cands, key=score))
         t0 += window
     cards: list[dict] = []
     chapter = 0
@@ -608,7 +710,12 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
         if _clean_word(s["text"].split()[0]).lower() in {"primero", "segundo", "tercero", "cuarto", "primera", "segunda", "tercera"}
     )
     for i, s in enumerate(picked):
-        text = s["text"].strip()
+        # Limpieza ANTES de armar la tarjeta: sin muletillas, sin conectores
+        # colgando, sin duplicados de dictado. Si la frase no sobrevive, se
+        # salta (el hueco lo cubre una tarjeta visual).
+        text = clean_screen_text(s["text"], min_words=3)
+        if not text:
+            continue
         toks = text.split()
         at = round(max(0.2, s["start"] - 0.2), 2)
         # duración: hasta la próxima tarjeta PERO máx ~7.5s — si la siguiente frase
@@ -627,22 +734,37 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
             chapter += 1
             card["number"] = f"{chapter:02d}"
             card["kicker"] = f"HOY TE ENSEÑO · {chapter:02d} / {max(total_chapters, chapter):02d}"
-            rest = " ".join(toks[1:9]).strip(" ,.")
-            card["title"] = (rest[:48] + ("." if not rest.endswith(".") else ""))
-            card["accent"] = _clean_word(toks[min(len(toks) - 1, 8)]).strip(".,")
+            # re-limpiar el fragmento: cortar en 8 palabras puede dejar colgantes
+            rest = clean_screen_text(" ".join(toks[1:9]), max_chars=48) or " ".join(toks[1:6]).strip(" ,.")
+            card["title"] = rest + ("." if rest[-1] not in ".?!…" else "")
+            sig = [
+                t for t in rest.split()
+                if len(_clean_word(t)) >= 4 and _clean_word(t).lower() not in _GENERIC_ACCENT
+            ]
+            card["accent"] = _clean_word(sig[-1] if sig else rest.split()[-1]).strip(".,!?¿¡")
         elif num_idx is not None:
             card["statValue"] = toks[num_idx].strip(".,")
             card["statUnit"] = " ".join(toks[num_idx + 1 : num_idx + 3]).strip(" ,.")[:18]
-            card["subtitle"] = " ".join(toks[:num_idx])[-60:].strip(" ,.").capitalize()
+            card["subtitle"] = clean_screen_text(" ".join(toks[:num_idx]), max_chars=60)
         else:
-            # TITULAR: máx 7 palabras, acento = última palabra significativa
-            head = toks[:7]
-            raw_title = " ".join(head).strip(" ,.")
-            card["title"] = (raw_title[:1].upper() + raw_title[1:] + ".")[:52]
-            sig = [t for t in head if len(_clean_word(t)) >= 4]
-            card["accent"] = _clean_word(sig[-1] if sig else head[-1]).strip(".,")
+            # TITULAR: máx 7 palabras, re-limpiado tras el corte (el corte en N
+            # palabras puede dejar un conector colgando: "…vale más que tu").
+            title_txt = (
+                clean_screen_text(" ".join(toks[:7]), max_chars=52)
+                or clean_screen_text(" ".join(toks[:9]), max_chars=52)
+                or " ".join(toks[:5]).strip(" ,.")
+            )
+            card["title"] = title_txt + ("." if title_txt[-1] not in ".?!…" else "")
+            sig = [
+                t for t in title_txt.split()
+                if len(_clean_word(t)) >= 4
+                and _clean_word(t).lower() not in _TRAIL_DANGLERS
+                and _clean_word(t).lower() not in _GENERIC_ACCENT
+            ]
+            card["accent"] = _clean_word(sig[-1] if sig else title_txt.split()[-1]).strip(".,!?¿¡")
             if len(toks) > 7:
-                card["subtitle"] = (" ".join(toks[7:16]).strip(" ,.") + ".")[:70].capitalize()
+                sub = clean_screen_text(" ".join(toks[7:16]), max_chars=70)
+                card["subtitle"] = (sub + ".") if sub else ""
         # NUNCA sin ilustración: fallback rotativo si el vocabulario no matcheó.
         if not card["icon"]:
             card["icon"] = _FALLBACK_ICONS[i % len(_FALLBACK_ICONS)]
@@ -664,6 +786,11 @@ impactantes y APORTEN — no repitas literal lo que se dice en el video.
 Las tarjetas van EN VIVO con la voz: cada una refuerza lo que se está diciendo
 EN ESE MOMENTO (su "at" en segundos) o suma un dato que capte la atención justo
 ahí. No hagas resúmenes globales — acompañá el momento.
+OJO: el texto viene de una TRANSCRIPCIÓN AUTOMÁTICA del habla. Puede traer
+palabras mal reconocidas, muletillas (este, eh, o sea, bueno) y frases cortadas.
+Corregí los errores evidentes según el contexto, eliminá toda muletilla y
+entregá frases COMPLETAS y bien redactadas en español neutro — nunca copies
+un fragmento roto tal cual.
 
 Reglas por tarjeta:
 - "title": máx 7 palabras, potente, estilo titular de revista. Termina en punto.
@@ -743,11 +870,16 @@ def heuristic_headlines(words: list[dict], duration: float, max_h: int = 3) -> l
         wcount = len(text.split())
         if wcount < 2 or wcount > 8:
             continue  # titulares: 2-8 palabras
+        # Solo frases que sobreviven la limpieza: nada de muletillas ni
+        # fragmentos colgantes como titular gigante en pantalla.
+        if not clean_screen_text(text, min_words=2):
+            continue
         low = text.lower()
         score = sum(2 for e in EMPHASIS if e in low)
         if s["start"] < 2.0:
             score += 3  # el hook de apertura siempre es buen titular
         score += min(2, wcount / 3)
+        score -= _disfluency_penalty(text)
         scored.append((score, s))
     if not scored:
         return []
@@ -777,7 +909,9 @@ def heuristic_headlines(words: list[dict], duration: float, max_h: int = 3) -> l
     chosen.sort(key=lambda s: s["start"])
     headlines: list[dict] = []
     for i, s in enumerate(chosen):
-        text = re.sub(r"\s+", " ", s["text"]).strip(" .,").upper()[:40]
+        text = clean_screen_text(s["text"], max_chars=40, min_words=2).upper()
+        if not text:
+            continue
         headlines.append({
             "at": round(min(duration - 1.8, max(0.3, s["start"])), 2),
             "duration": 2.2,
@@ -818,7 +952,10 @@ def llm_headlines(words: list[dict], duration: float, max_h: int = 3) -> list[di
         return None
     out: list[dict] = []
     for i, it in enumerate(items[:max_h]):
-        text = str(it.get("text", "")).strip(" .,\"'").upper()[:40]
+        raw = str(it.get("text", "")).strip(" .,\"'")
+        # El LLM escribe bien, pero a veces copia muletillas del transcript:
+        # mismo limpiador (si la limpieza lo destruye, queda el original corto).
+        text = (clean_screen_text(raw, max_chars=40, min_words=2) or raw[:40]).upper()
         if not text or len(text.split()) > 8:
             continue
         try:

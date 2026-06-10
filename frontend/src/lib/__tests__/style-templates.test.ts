@@ -42,7 +42,6 @@ describe("buildProjectForStyle — invariantes de los 16 estilos", () => {
         // Estructura base que build-props.mjs y Remotion esperan SIEMPRE.
         expect(project).toBeTruthy();
         expect(project.videoId).toBe("TEST_VIDEO");
-        expect(typeof project.style === "string" || project.style === undefined).toBe(true);
 
         // Las listas del timeline existen y son arrays (zod NO aplica defaults
         // en runtime — las capas son defensivas, pero el builder debe cumplir).

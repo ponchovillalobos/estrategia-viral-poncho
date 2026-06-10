@@ -130,7 +130,16 @@ for (const kw of rawKeywords.slice(0, 8)) {
 // Si Ollama dio pocas keywords reconocibles, completar con las primeras palabras "interesantes"
 // del transcript (>4 chars, no stopwords) para que el estilo tenga contenido suficiente.
 if (resolvedKeywords.length < 4) {
-  const STOPWORDS = new Set(["porque", "cuando", "donde", "nuestro", "nuestra", "también", "tambien", "hacia", "sobre", "entre", "durante", "hasta", "desde", "para", "este", "esta", "estos", "estas"]);
+  // Paridad con pickTopKeywords de shorts: también se excluyen verbos/conectores
+  // genéricos del habla que quedan horribles como sticker gigante ("ENTONCES").
+  const STOPWORDS = new Set([
+    "porque", "cuando", "donde", "nuestro", "nuestra", "también", "tambien", "hacia", "sobre",
+    "entre", "durante", "hasta", "desde", "para", "este", "esta", "estos", "estas",
+    "entonces", "digamos", "verdad", "ustedes", "nosotros", "tenemos", "estamos", "podemos",
+    "vamos", "hacemos", "sabemos", "queremos", "quiero", "quieren", "puedo", "pueden",
+    "hacer", "tener", "decir", "mucho", "muchos", "ahorita", "luego", "claro", "bueno",
+    "manera", "forma", "parte", "ejemplo", "realmente", "simplemente", "solamente",
+  ]);
   for (const w of words) {
     if (resolvedKeywords.length >= 6) break;
     const clean = w.word.toLowerCase().replace(/[^\wáéíóúñ]/g, "");
