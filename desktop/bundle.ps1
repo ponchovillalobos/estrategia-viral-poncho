@@ -1,0 +1,57 @@
+# bundle.ps1 — Arma la carpeta `payload/` distribuible junto al exe de Tauri.
+# El launcher la detecta sola: con payload, la app corre en CUALQUIER máquina
+# sin instalar node/python/ffmpeg.
+#
+# Uso (desde desktop/):  powershell -ExecutionPolicy Bypass -File bundle.ps1
+# Resultado: desktop\src-tauri\target\release\payload\  (+5-7 GB por torch/whisperx)
+#
+# Después de correrlo: zip de la carpeta release\ completa (exe + payload) o
+# instalador NSIS apuntando ahí. Los modelos de WhisperX (~2 GB) se descargan
+# solos en la primera transcripción del usuario (no van en el payload).
+
+$ErrorActionPreference = "Stop"
+$repo = Resolve-Path "$PSScriptRoot\.."
+$out = "$PSScriptRoot\src-tauri\target\release\payload"
+
+Write-Host "== Payload -> $out"
+New-Item -ItemType Directory -Force $out | Out-Null
+
+# 1) Server Next standalone (+static +public)
+Write-Host "[1/5] frontend standalone..."
+$fe = "$out\frontend\.next"
+New-Item -ItemType Directory -Force $fe | Out-Null
+Copy-Item "$repo\frontend\.next\standalone" "$fe\standalone" -Recurse -Force
+Copy-Item "$repo\frontend\.next\static" "$fe\standalone\.next\static" -Recurse -Force
+if (Test-Path "$repo\frontend\public") {
+  Copy-Item "$repo\frontend\public" "$fe\standalone\public" -Recurse -Force
+}
+
+# 2) Node portable (el mismo node.exe del sistema; ~80 MB)
+Write-Host "[2/5] node..."
+New-Item -ItemType Directory -Force "$out\node" | Out-Null
+$nodeSrc = (Get-Command node).Source
+Copy-Item $nodeSrc "$out\node\node.exe" -Force
+# npx/npm para `npx remotion render` (vienen junto a node)
+$nodeDir = Split-Path $nodeSrc
+foreach ($f in @("npx.cmd", "npm.cmd", "node_modules")) {
+  if (Test-Path "$nodeDir\$f") { Copy-Item "$nodeDir\$f" "$out\node\$f" -Recurse -Force }
+}
+
+# 3) Remotion (proyecto + node_modules; el render corre desde acá)
+Write-Host "[3/5] remotion (esto tarda)..."
+robocopy "$repo\remotion" "$out\remotion" /E /NFL /NDL /NJH /NJS /XD "vendor" | Out-Null
+
+# 4) Python venv completo (torch + whisperx; LO MÁS PESADO)
+Write-Host "[4/5] python venv (esto tarda MUCHO)..."
+robocopy "$repo\python" "$out\python" /E /NFL /NDL /NJH /NJS /XD "__pycache__" | Out-Null
+
+# 5) ffmpeg
+Write-Host "[5/5] ffmpeg..."
+$ff = Get-ChildItem "C:\hermes-data\tools" -Directory -Filter "ffmpeg-*" | Select-Object -First 1
+New-Item -ItemType Directory -Force "$out\tools\ffmpeg\bin" | Out-Null
+Copy-Item "$($ff.FullName)\bin\ffmpeg.exe" "$out\tools\ffmpeg\bin\" -Force
+Copy-Item "$($ff.FullName)\bin\ffprobe.exe" "$out\tools\ffmpeg\bin\" -Force
+
+$size = (Get-ChildItem $out -Recurse -File | Measure-Object Length -Sum).Sum / 1GB
+Write-Host ("== Payload listo: {0:N1} GB" -f $size)
+Write-Host "== Probalo: ejecutá desktop\src-tauri\target\release\desktop.exe"

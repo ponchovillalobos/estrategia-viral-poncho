@@ -16,7 +16,7 @@ vez). Un usuario normal no puede con eso. **Falta exactamente esto:**
 | 1 | **Empaquetado 1-clic** (ver §2) | 3-4 semanas | SÍ — es EL paso |
 | 2 | ~~`next build` de producción verificado~~ ✅ **HECHO 2026-06-09**: `output:"standalone"` configurado, build limpio al primer intento, server.js probado en vivo (puerto 3100, home 200, scheduler arranca; OJO: debe ejecutarse CON cwd = carpeta standalone y copiando `.next/static` + `public` adentro) | — | ✅ |
 | 3 | Onboarding 1ra vez: descarga de modelos WhisperX con barra de progreso | 3-4 días | SÍ |
-| 4 | Paths portables: eliminar defaults `C:\hermes-data` → carpeta de datos del usuario (`%LOCALAPPDATA%`) elegible en el primer arranque | 2-3 días | SÍ |
+| 4 | ~~Paths portables~~ ✅ **HECHO 2026-06-09**: el launcher detecta `payload/` junto al exe (modo distribuible: node+remotion+python+ffmpeg adentro, env VIRAL_* completos) con fallback al repo (dev); en máquinas nuevas crea `%USERPROFILE%\ViralStudio\videos` solo, CERO preguntas. `desktop/bundle.ps1` arma el payload. ⚠️ PENDIENTE del payload: el venv de Python NO es relocatable (pyvenv.cfg apunta al Python base) — hay que migrar a **Python embeddable + pip install -t** antes del primer instalador público. Los modelos WhisperX se descargan solos en la 1ra transcripción. | — | ✅ (dev verificado) |
 | 5 | Hardware mínimo documentado + modo "lite" si hay <8 GB RAM | 2 días | NO |
 | 6 | Tests del flujo crítico (cola/render) para no romper en máquinas ajenas | 1 semana | Recomendado |
 | 7 | Icono, nombre final, pantalla "Acerca de" con licencias de terceros | 1-2 días | NO |
