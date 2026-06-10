@@ -8,8 +8,8 @@
 > `visualizeAudio` + `useWindowedAudioData` de @remotion/media-utils → el fondo
 > PULSA con los graves de la música; sin música respira suave). Los 3 estilos:
 > música CC0 automática + ducking del director emocional + charts + karaoke,
-> CERO stickers/emojis. Vendor de referencia: `remotion/vendor/remotion-scenes`
-> (201+ escenas MIT clonadas al repo para las fases C/D).
+> CERO stickers/emojis. Referencia: github.com/lifeprompt-team/remotion-scenes (MIT;
+> se vendoreó temporalmente y luego se eliminó del repo — los fondos se reescribieron).
 
 > Pedido del user: estilo de videos con PURAS animaciones, muy limpio, sin emojis
 > ni tanto texto — gráficas, zooms, personajes, fondos que cambian al ritmo.

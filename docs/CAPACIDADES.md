@@ -26,6 +26,10 @@ Cada estilo es una "receta" que arma el video automáticamente. Se eligen en el 
 | **Texto detrás de vos** (🧍 text_behind) | Efecto CapCut clásico | palabra detrás del sujeto |
 | **Gráficos & Motion** (📊 graphics_pro) | Datos animados | charts + titulares + edición dinámica |
 | **Gráficos Max** (📈 graphics_max) | Lo anterior al máximo | + jump cuts + reaction zooms |
+| **Motion Pro** (✨ motion_pro) | Animación pura y limpia | fondo aurora audio-reactivo, sin emojis |
+| **Motion Beat** (🎧 motion_beat) | El fondo late con la música | gradiente mesh + zooms al beat |
+| **Motion Grid** (🌐 motion_grid) | Look retro-tech | cuadrícula en perspectiva + gráficas |
+| **Editorial** (📰 editorial) | Documental premium | video en panel + titulares serif + 265 ilustraciones line-art animadas con variedad por video, 4 temas (Clásico/Tinta/Crema/Bold) |
 
 También: **modo cinematográfico** (opt-in) con imágenes fullscreen, film grain, camera
 moves y color grading por densidad (KODAK/FUJI/BLEACH).

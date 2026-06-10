@@ -18,6 +18,9 @@ Guía rápida para trabajar en el código. Para instalar de cero, ver
 cd frontend; npx tsc --noEmit
 cd ..\remotion; npx tsc --noEmit
 
+# Tests + paridad de estilos shorts↔largos (obligatorio — CI lo corre en cada PR)
+cd frontend; npm test
+
 # Smoke render de una capa de Remotion (sin server), ~1s:
 #   armás un props.json mínimo y:  npx remotion render src/index.ts ViralVideo out.mp4 --props=props.json --frames=0-25
 ```

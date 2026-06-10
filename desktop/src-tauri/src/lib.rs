@@ -173,6 +173,20 @@ fn spawn_server(port: u16) -> Option<Child> {
     Some(child)
 }
 
+/// Pantalla de carga (data: URL): nada de ventana en blanco mientras arranca
+/// el motor — logo pulsando + texto, estilo de la app.
+fn splash_url() -> tauri::Url {
+    let html = r#"<!doctype html><html><body style="margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0908;color:#f3ede1;font-family:Segoe UI,Arial,sans-serif"><div style="width:46px;height:46px;border-radius:50%;background:#34d399;box-shadow:0 0 40px #34d39988;animation:p 1.2s ease-in-out infinite"></div><h2 style="margin:22px 0 6px;font-weight:600">Estrategia Viral Studio</h2><p style="margin:0;color:#9b958a;font-size:14px">Arrancando el motor de video...</p><style>@keyframes p{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.82);opacity:.65}}</style></body></html>"#;
+    let mut enc = String::from("data:text/html;charset=utf-8,");
+    for b in html.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => enc.push(b as char),
+            _ => enc.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    enc.parse().expect("splash data url")
+}
+
 /// Espera a que el server acepte conexiones TCP (hasta 40s). Si el proceso
 /// murió, devuelve el motivo en español leyendo el log.
 fn wait_for_server(port: u16, state: &ServerProc) -> Result<(), String> {
@@ -242,6 +256,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(ServerProc(Mutex::new(child)))
         .setup(move |app| {
+            // Splash inmediato: la ventana nunca queda en blanco.
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.navigate(splash_url());
+            }
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let state = handle.state::<ServerProc>();

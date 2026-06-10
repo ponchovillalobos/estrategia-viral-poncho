@@ -177,12 +177,12 @@ interface ProposalsResponse {
 // ─── Constantes (replica de wizard-client.tsx) ────────────────────────────
 
 const STYLES: { id: StyleId; name: string; tagline: string; emoji: string }[] = [
-  { id: "supreme", name: "Supreme", tagline: "Premium full-stack (default largos)", emoji: "👑" },
-  { id: "silent", name: "Silent", tagline: "Limpio, sin distracciones", emoji: "🤍" },
-  { id: "punch", name: "Punch", tagline: "Impacto en momentos clave", emoji: "🥊" },
-  { id: "hype", name: "Hype", tagline: "Estilo MrBeast viral", emoji: "🔥" },
-  { id: "hype_max", name: "Hype Max", tagline: "+ jump cuts + reaction zooms", emoji: "⚡" },
-  { id: "hype_max_sfx", name: "Hype Max SFX", tagline: "Premium con sonidos", emoji: "🎵" },
+  { id: "supreme", name: "Premium", tagline: "Todo activado, la máxima calidad. El mejor para largos.", emoji: "👑" },
+  { id: "silent", name: "Limpio", tagline: "Solo subtítulos, sin efectos. Sobrio y profesional.", emoji: "🤍" },
+  { id: "punch", name: "Impacto", tagline: "Resalta las frases clave en los momentos importantes.", emoji: "🥊" },
+  { id: "hype", name: "Viral", tagline: "Subtítulos grandes y dinámicos, estilo videos de YouTube.", emoji: "🔥" },
+  { id: "hype_max", name: "Viral intenso", tagline: "Suma cortes rápidos y zooms de reacción. Más energía.", emoji: "⚡" },
+  { id: "hype_max_sfx", name: "Viral con sonidos", tagline: "Lo más llamativo: efectos de sonido en los momentos clave.", emoji: "🎵" },
   { id: "graphics_pro", name: "Gráficos & Motion", tagline: "Charts + íconos + karaoke", emoji: "📊" },
   { id: "graphics_max", name: "Gráficos Max", tagline: "Gráficos + la edición más intensa", emoji: "📈" },
   { id: "motion_pro", name: "Motion Pro", tagline: "Animación pura y limpia, sin emojis", emoji: "✨" },
@@ -476,7 +476,7 @@ export function LongFormWizard() {
       if (jobIds.length > 1) {
         toast.success(`${jobIds.length} videos encolados — la cola los procesa de a uno`);
       } else {
-        toast.success(`Pipeline arrancado · job ${jobIds[0].slice(-8)}`);
+        toast.success("Procesamiento iniciado — podés seguir el avance acá abajo");
       }
       // Mostrar el primer job en el JobView; los demás se ven en QueuePanel global.
       const jobRes = await fetch(`/api/long_form/progress?jobId=${jobIds[0]}`);
@@ -1302,7 +1302,7 @@ export function LongFormWizard() {
             ) : (
               <Sparkles className="mr-2 h-4 w-4" />
             )}
-            {submitting ? "Arrancando…" : "Arrancar pipeline"}
+            {submitting ? "Arrancando…" : "Generar clips"}
           </Button>
         </Card>
       )}
@@ -1507,7 +1507,7 @@ function JobView({
       {job.log.length > 0 && (
         <details className="mt-5 rounded-md border border-border bg-muted/20 p-3">
           <summary className="cursor-pointer font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
-            Log del pipeline ({job.log.length} líneas)
+            Detalle del proceso ({job.log.length} líneas)
           </summary>
           <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono-tab text-[10px] text-foreground/70">
             {job.log.slice(-30).join("\n")}
@@ -1599,7 +1599,7 @@ function JobView({
         <div className="mt-5 rounded-md border border-red-500/30 bg-red-500/5 p-3">
           <p className="flex items-center gap-2 text-sm font-medium text-red-200">
             <XCircle className="h-4 w-4" />
-            El pipeline falló
+            El procesamiento falló
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             Revisá el log arriba. Causas comunes: Ollama no corriendo (<code>ollama serve</code>),

@@ -55,7 +55,7 @@ Ver `docs/AUTOSTART.md` para configuración del autostart.
 
 Solo caracteres `[a-zA-Z0-9_-]`. NO espacios, NO acentos.
 
-### 5 estilos visuales disponibles
+### 16 estilos visuales disponibles (silent, punch, hype, hype_max, hype_max_sfx, supreme, cinematic_pro, broll_full, broll_pip, text_behind, graphics_pro, graphics_max, motion_pro, motion_beat, motion_grid, editorial)
 
 `silent`, `punch`, `hype`, `hype_max`, `hype_max_sfx` (+ `supreme` para clips de long_form). Ver `docs/STYLES.md`.
 
@@ -153,7 +153,7 @@ npx remotion render src/index.ts ViralVideo "C:\viral-data\videos\renders\<id>.m
 Documentado en `README.md`. Resumen:
 
 - ✅ Dashboard funcional con 8 rutas
-- ✅ 5 estilos visuales implementados + Supreme automático
+- ✅ 16 estilos visuales implementados (15 en el selector + cinematic_pro opt-in)
 - ✅ Pipeline shorts: transcribe + cuts + render
 - ✅ Pipeline long form: transcribe + cuts + analyze + extract + render
 - ✅ 14 SFX CC0 curados
@@ -177,5 +177,5 @@ Es el archivo más delicado del proyecto. Reglas:
 - `docs/SETUP.md` — instalación
 - `docs/USAGE.md` — tutorial
 - `docs/ARCHITECTURE.md` — técnica
-- `docs/STYLES.md` — los 5 estilos
+- `docs/STYLES.md` — los estilos (16 en total)
 - `docs/TROUBLESHOOTING.md` — errores comunes

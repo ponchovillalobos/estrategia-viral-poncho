@@ -1,0 +1,28 @@
+# CI mínimo: tipos + tests + paridad de estilos en cada push/PR.
+# La paridad shorts↔largos ya divergió una vez en producción — esto lo impide.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Instalar dependencias
+        run: npm ci
+        working-directory: frontend
+      - name: Tipos (tsc)
+        run: npx tsc --noEmit
+        working-directory: frontend
+      - name: Tests + paridad de estilos
+        run: npm test
+        working-directory: frontend

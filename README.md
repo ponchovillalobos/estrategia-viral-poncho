@@ -121,4 +121,4 @@ cada release con `Get-FileHash desktop.exe` en PowerShell (el build genera
 ## 📄 Licencia
 
 [MIT](./LICENSE) © 2026 Poncho Robles — usalo, modificalo, vendé tus videos con él.
-Las 201+ escenas de referencia en `remotion/vendor/` conservan su licencia MIT original.
+Los fondos animados están inspirados en [remotion-scenes](https://github.com/lifeprompt-team/remotion-scenes) (MIT), reescritos para este proyecto.

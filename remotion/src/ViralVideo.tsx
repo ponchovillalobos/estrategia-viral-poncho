@@ -270,6 +270,7 @@ export const defaultProps: ViralVideoProps = {
 
 export const ViralVideo: React.FC<ViralVideoProps> = ({
   rawVideoUrl,
+  videoDurationSec,
   words,
   bRoll,
   musicUrl,
@@ -871,23 +872,22 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           src={musicUrl}
           // F1 — Auto-ducking: la música baja cuando hay voz y respira en pausas
           // largas, con rampa de 0.45s en cada transición (sin saltos audibles).
-          // Curva vacía = volumen constante (comportamiento histórico).
-          volume={
-            musicVolumeCurve.length === 0
-              ? musicVolume
-              : (f) => {
-                  const t = f / fps;
-                  let idx = 0;
-                  for (let i = 0; i < musicVolumeCurve.length; i++) {
-                    if (musicVolumeCurve[i].t <= t) idx = i;
-                    else break;
-                  }
-                  const target = musicVolumeCurve[idx].v;
-                  const from = idx > 0 ? musicVolumeCurve[idx - 1].v : target;
-                  const ramp = Math.min(1, Math.max(0, (t - musicVolumeCurve[idx].t) / 0.45));
-                  return Math.max(0, musicVolume * (from + (target - from) * ramp));
-                }
-          }
+          // Curva vacía = volumen constante. SIEMPRE: fade-out en los últimos
+          // 1.6s — sin esto la música cortaba en seco al terminar (anti-premium).
+          volume={(f) => {
+            const t = f / fps;
+            const fadeOut = Math.min(1, Math.max(0, (videoDurationSec - t) / 1.6));
+            if (musicVolumeCurve.length === 0) return musicVolume * fadeOut;
+            let idx = 0;
+            for (let i = 0; i < musicVolumeCurve.length; i++) {
+              if (musicVolumeCurve[i].t <= t) idx = i;
+              else break;
+            }
+            const target = musicVolumeCurve[idx].v;
+            const from = idx > 0 ? musicVolumeCurve[idx - 1].v : target;
+            const ramp = Math.min(1, Math.max(0, (t - musicVolumeCurve[idx].t) / 0.45));
+            return Math.max(0, musicVolume * (from + (target - from) * ramp) * fadeOut);
+          }}
         />
       )}
 
