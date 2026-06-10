@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, FileVideo, Mic, Sparkles, Music2, Camera, Briefcase, Send } from "lucide-react";
+import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, FileVideo, Mic, Sparkles, Send } from "lucide-react";
 import { toast } from "sonner";
 import { StyleMiniDemo } from "@/components/editor/wizard/style-mini-demo";
 import { CinematicStep } from "@/components/editor/wizard/cinematic-step";
@@ -70,11 +70,6 @@ interface CaptionMeta {
   _provider?: string;
   _model?: string;
 }
-
-const PLATFORMS_META: { id: PlatformId; label: string; icon: typeof Music2; color: string }[] = [
-  { id: "instagram", label: "Instagram", icon: Camera, color: "#f59e0b" },
-  { id: "linkedin", label: "LinkedIn", icon: Briefcase, color: "#38bdf8" },
-];
 
 const TOTAL_STEPS = 4;
 
@@ -172,7 +167,9 @@ export function WizardClient() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewIsVideo, setPreviewIsVideo] = useState(false);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["instagram", "linkedin"]);
+  // Redes fijas: la descripción se genera SOLA para todas (en /produccion están los
+  // copys por red). Ya no hay botones de redes en el wizard — un paso menos de fricción.
+  const selectedPlatforms: PlatformId[] = ["instagram", "linkedin"];
   // Aspect ratio del output. 9:16 vertical (TikTok/Reels) default, 16:9 horizontal (LinkedIn/YouTube).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
   // Plantillas guardables: combos favoritos (estilo+color+fuente+plataformas).
@@ -277,12 +274,20 @@ export function WizardClient() {
     loadTemplates();
   }, []);
 
+  // La descripción se genera SOLA al llegar al paso final (sin tocar botones).
+  // El botón "Regenerar" queda para pedir otra versión.
+  useEffect(() => {
+    if (step === 4 && !caption && !generatingCaption && firstSelected) {
+      generateCaptionAI();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   function applyTemplate(t: Template) {
     setSelectedStyles(t.styles as StyleId[]);
     setAccent(t.accentColor);
     setSubtitleFont(t.subtitleFont || "auto");
     setSubtitleColor(t.subtitleColor || "auto");
-    setSelectedPlatforms(t.platforms as PlatformId[]);
     setAspectRatio(t.aspectRatio === "16:9" ? "16:9" : "9:16");
     toast.success(`Plantilla "${t.name}" aplicada`);
   }
@@ -355,12 +360,6 @@ export function WizardClient() {
   function toggleStyle(s: StyleId) {
     setSelectedStyles((prev) =>
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-    );
-  }
-
-  function togglePlatform(p: PlatformId) {
-    setSelectedPlatforms((prev) =>
-      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
     );
   }
 
@@ -1067,43 +1066,13 @@ export function WizardClient() {
           <h2 className="mb-4 text-lg font-medium">4. Revisá y generá tu video</h2>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5">
-                ¿Para qué redes es?
-                <HelpHint label="Para qué sirven las redes">
-                  Solo ajusta el TONO de la descripción: para LinkedIn se genera una versión
-                  más larga y profesional, para Instagram una más corta con hashtags.
-                </HelpHint>
-              </Label>
-              <div className="grid grid-cols-2 gap-2">
-                {PLATFORMS_META.map((p) => {
-                  const selected = selectedPlatforms.includes(p.id);
-                  const Icon = p.icon;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => togglePlatform(p.id)}
-                      className={`flex items-center justify-center gap-2 rounded-lg border p-3 transition-all ${
-                        selected
-                          ? "border-emerald-400 ring-1 ring-emerald-400 bg-emerald-500/5"
-                          : "border-border hover:border-foreground/30"
-                      }`}
-                    >
-                      <Icon className="h-5 w-5" style={{ color: selected ? p.color : undefined }} />
-                      <span className="text-sm font-medium">{p.label}</span>
-                      {selected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-1.5">
                   Descripción para tus redes
                   <HelpHint label="Qué es la descripción">
                     Es el texto que acompaña al video cuando lo publicás (lo que la gente lee
-                    arriba del video, con hashtags). Podés escribirlo o que la IA lo genere por vos.
+                    arriba del video, con hashtags). Se genera sola con IA a partir de lo que
+                    decís — podés editarla o pedir otra versión.
                   </HelpHint>
                 </Label>
                 <Button
@@ -1112,14 +1081,14 @@ export function WizardClient() {
                   type="button"
                   onClick={generateCaptionAI}
                   disabled={generatingCaption || selectedVideos.size === 0}
-                  title="Genera una descripción con hashtags a partir de lo que dice tu video, usando IA."
+                  title="Genera otra versión de la descripción con IA."
                 >
                   {generatingCaption ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  {generatingCaption ? "Generando…" : "✨ Generar con IA"}
+                  {generatingCaption ? "Generando sola…" : "↻ Otra versión"}
                 </Button>
               </div>
               <textarea
@@ -1127,7 +1096,7 @@ export function WizardClient() {
                 onChange={(e) => setCaption(e.target.value)}
                 rows={6}
                 className="w-full rounded-md border border-border bg-muted/30 p-2 text-sm"
-                placeholder="Tocá ✨ Generar con IA para crear la descripción a partir de tu video, o escribila a mano. Si la dejás vacía, se genera sola al crear el video."
+                placeholder="Generando la descripción con IA a partir de tu video… También podés escribirla a mano."
               />
               {captionMeta?._provider && (
                 <p className="font-mono-tab text-[10px] text-muted-foreground">
@@ -1184,10 +1153,6 @@ export function WizardClient() {
               <li>
                 · Color: <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: accent }} />{" "}
                 <span className="font-mono-tab text-foreground">{accent}</span>
-              </li>
-              <li>
-                · Plataformas:{" "}
-                <span className="text-foreground">{selectedPlatforms.join(", ") || "—"}</span>
               </li>
               <li>
                 · Vas a generar{" "}
@@ -1368,7 +1333,6 @@ export function WizardClient() {
                 setSelectedVideos(new Set());
                 setCaption("");
                 setCaptionMeta(null);
-                setSelectedPlatforms(["instagram", "linkedin"]);
                 setJobProgress(null);
               }}
             >

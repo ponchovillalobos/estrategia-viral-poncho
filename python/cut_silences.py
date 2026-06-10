@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 from config import CUTS_DIR, FFMPEG_PATH, RAW_DIR
+from hw_profile import ffmpeg_video_args
 
 
 def build_filter(segments: list[dict]) -> str:
@@ -59,9 +60,8 @@ def _cut_with_filter_complex(video_path: Path, segments: list, out_path: Path, o
         "-filter_complex", filter_complex,
         "-map", "[outv]",
         "-map", "[outa]",
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "20",
+        # Encoder adaptativo: NVENC si hay GPU NVIDIA funcional, libx264 si no.
+        *ffmpeg_video_args("final"),
         "-c:a", "aac",
         "-b:a", "128k",
         str(out_path),
@@ -98,9 +98,7 @@ def _cut_with_concat_demuxer(video_path: Path, segments: list, out_path: Path, o
                 "-ss", f"{start:.3f}",
                 "-i", str(video_path),
                 "-t", f"{duration:.3f}",
-                "-c:v", "libx264",
-                "-preset", "ultrafast",
-                "-crf", "22",
+                *ffmpeg_video_args("fast"),
                 "-c:a", "aac",
                 "-b:a", "128k",
                 "-avoid_negative_ts", "make_zero",

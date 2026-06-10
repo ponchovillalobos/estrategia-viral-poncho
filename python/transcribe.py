@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -66,8 +67,15 @@ def transcribe(video_path: Path, model_size: str = WHISPER_MODEL) -> dict[str, A
     """Transcribe + alinea palabras. Retorna dict con words[]."""
     import whisperx
 
-    device = "cpu"
-    batch_size = 8
+    from hw_profile import whisper_device
+
+    # GPU NVIDIA con torch CUDA → cuda+float16 (5-10x más rápido); si no, cpu+int8.
+    # El env VIRAL_WHISPER_COMPUTE_TYPE sigue ganando si el user lo setea.
+    device, compute_type = whisper_device()
+    if os.environ.get("VIRAL_WHISPER_COMPUTE_TYPE"):
+        compute_type = WHISPER_COMPUTE_TYPE
+    batch_size = 16 if device == "cuda" else 8
+    print(f"[transcribe] device={device} compute={compute_type}", file=sys.stderr)
 
     with tempfile.TemporaryDirectory() as tmp:
         wav_path = Path(tmp) / "audio.wav"
@@ -77,7 +85,7 @@ def transcribe(video_path: Path, model_size: str = WHISPER_MODEL) -> dict[str, A
         model = whisperx.load_model(
             model_size,
             device=device,
-            compute_type=WHISPER_COMPUTE_TYPE,
+            compute_type=compute_type,
             language=WHISPER_LANGUAGE,
         )
 
@@ -173,8 +181,13 @@ def transcribe_chunked(
 
     import whisperx
 
-    device = "cpu"
-    batch_size = 8
+    from hw_profile import whisper_device
+
+    device, compute_type = whisper_device()
+    if os.environ.get("VIRAL_WHISPER_COMPUTE_TYPE"):
+        compute_type = WHISPER_COMPUTE_TYPE
+    batch_size = 16 if device == "cuda" else 8
+    print(f"[chunked] device={device} compute={compute_type}", file=sys.stderr)
 
     with tempfile.TemporaryDirectory() as tmp:
         wav_path = Path(tmp) / "audio.wav"
@@ -184,7 +197,7 @@ def transcribe_chunked(
         model = whisperx.load_model(
             model_size,
             device=device,
-            compute_type=WHISPER_COMPUTE_TYPE,
+            compute_type=compute_type,
             language=WHISPER_LANGUAGE,
         )
 

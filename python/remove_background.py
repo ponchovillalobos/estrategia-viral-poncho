@@ -24,6 +24,12 @@ try:
 except Exception:
     FFMPEG_PATH = Path("ffmpeg.exe")
 
+try:
+    from hw_profile import ffmpeg_video_args
+except Exception:  # noqa: BLE001 — fallback x264 si el perfil no carga
+    def ffmpeg_video_args(quality: str = "final") -> list[str]:
+        return ["-c:v", "libx264", "-crf", "18", "-preset", "fast"]
+
 MODEL = Path(__file__).resolve().parent / "models" / "selfie_segmenter.tflite"
 
 
@@ -75,7 +81,7 @@ def main() -> None:
             "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", f"{fps}", "-i", "-",
             "-i", inp,
             "-map", "0:v", "-map", "1:a?",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "veryfast",
+            *ffmpeg_video_args("final"), "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k",
             "-shortest", out,
         ]

@@ -35,9 +35,6 @@ import {
   Scissors,
   Sparkles,
   XCircle,
-  Music2,
-  Camera,
-  Briefcase,
   Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -207,11 +204,6 @@ const PALETTE = [
   { name: "violeta claro", value: "#c084fc", mood: "elegancia" },
 ];
 
-const PLATFORMS_META: { id: PlatformId; label: string; icon: typeof Music2; color: string }[] = [
-  { id: "instagram", label: "Instagram", icon: Camera, color: "#f59e0b" },
-  { id: "linkedin", label: "LinkedIn", icon: Briefcase, color: "#38bdf8" },
-];
-
 const TOTAL_STEPS = 5;
 
 // Temas del estilo Editorial (paridad con el wizard de shorts): fuente serif + fondo.
@@ -276,9 +268,9 @@ export function LongFormWizard() {
   const [subtitleColor, setSubtitleColor] = useState<string>("auto");
   // Tema del estilo Editorial (fuente serif + fondo). Solo aplica si elegís 📰.
   const [editorialTheme, setEditorialTheme] = useState<string>("clasico");
-  // Solo las redes visibles en los botones (antes arrancaba con "tiktok" preseleccionado
-  // pero invisible — quedó de cuando existía auto-publicación).
-  const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["instagram", "linkedin"]);
+  // Redes fijas: los captions por red se generan SOLOS (visibles en /produccion).
+  // Ya no hay botones de redes en el wizard.
+  const selectedPlatforms: PlatformId[] = ["instagram", "linkedin"];
   const [doRender, setDoRender] = useState(true);
   // Aspect ratio. Para largos default 9:16 también (extract_clips hace center-crop si el source es 16:9).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
@@ -436,9 +428,6 @@ export function LongFormWizard() {
 
   function toggleStyle(s: StyleId) {
     setSelectedStyles((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
-  }
-  function togglePlatform(p: PlatformId) {
-    setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
   }
 
   async function startPipeline() {
@@ -1237,35 +1226,6 @@ export function LongFormWizard() {
         <Card className="border-border bg-card p-6">
           <h2 className="mb-4 text-lg font-medium">5. Confirmar y arrancar</h2>
 
-          <div className="mb-4">
-            <p className="mb-2 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
-              ¿Para qué redes son los clips? (ajusta el tono de los captions)
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {PLATFORMS_META.map((p) => {
-                const sel = selectedPlatforms.includes(p.id);
-                const Icon = p.icon;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => togglePlatform(p.id)}
-                    className={cn(
-                      "flex items-center justify-center gap-2 rounded-lg border p-3 transition-all",
-                      sel
-                        ? "border-violet-400 ring-1 ring-violet-400 bg-violet-500/5"
-                        : "border-border hover:border-foreground/30"
-                    )}
-                  >
-                    <Icon className="h-5 w-5" style={{ color: sel ? p.color : undefined }} />
-                    <span className="text-sm font-medium">{p.label}</span>
-                    {sel && <CheckCircle2 className="h-3.5 w-3.5 text-violet-400" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           <div className="rounded-md border border-border bg-muted/30 p-4 text-sm">
             <p className="mb-2 font-medium">Resumen</p>
             <ul className="space-y-1 text-xs text-muted-foreground">
@@ -1317,7 +1277,6 @@ export function LongFormWizard() {
                   )}
                 </>
               )}
-              <li>· Plataformas: <span className="text-foreground">{selectedPlatforms.join(", ") || "—"}</span></li>
               {maxClips && <li>· Max clips: <span className="text-foreground">{maxClips}</span></li>}
               {doRender && (
                 <li className="text-amber-400">

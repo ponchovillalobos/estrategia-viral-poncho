@@ -36,6 +36,7 @@ from config import (
     LF_TRANSCRIPTS,
     ensure_long_form_dirs,
 )
+from hw_profile import ffmpeg_video_args
 
 
 PYTHON_DIR = Path(__file__).resolve().parent
@@ -44,16 +45,12 @@ REMOTION_DIR = PROJECT_ROOT / "remotion"
 VENV_PYTHON = PYTHON_DIR / "venv" / "Scripts" / "python.exe"
 
 # ── Render paralelo de clips (F0.2 auditoría) ───────────────────────────────
-# Cuántos renders de Remotion corren A LA VEZ. 2 por default: el render no
-# satura el CPU al 100% (arranque de browser, encoding, I/O), así que 2 workers
-# dan ~2x throughput real. Override con env LF_RENDER_WORKERS=1 para el modo
-# secuencial clásico (o 3 en máquinas con muchos cores).
+# Cuántos renders de Remotion corren A LA VEZ — ADAPTATIVO según los cores del
+# equipo (4 cores → 1, 8 → 2, 16+ → 3). Override con env LF_RENDER_WORKERS.
 def _render_workers() -> int:
-    try:
-        n = int(os.environ.get("LF_RENDER_WORKERS", "2"))
-        return max(1, min(4, n))
-    except ValueError:
-        return 2
+    from hw_profile import render_workers
+
+    return render_workers()
 
 
 def _remotion_concurrency(workers: int) -> int:
@@ -452,7 +449,8 @@ def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
                         "-i", str(rendered),
                         "-vf", f"lut3d=public/luts/{lut_name}",
                         "-c:a", "copy",
-                        "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                        # Encoder adaptativo: NVENC en GPU NVIDIA (3-8x), libx264 si no.
+                        *ffmpeg_video_args("final"),
                         "-pix_fmt", "yuv420p",
                         str(graded),
                     ],

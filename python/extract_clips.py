@@ -17,6 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from hw_profile import ffmpeg_video_args
 from config import (
     FFMPEG_PATH,
     LF_CLEAN,
@@ -184,9 +185,8 @@ def extract_clip(
             cmd.extend(["-vf", build_crop_filter(target_aspect, None)])
             metadata["center_crop"] = True
         cmd.extend([
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "20",
+            # Encoder adaptativo: h264_nvenc si hay GPU NVIDIA funcional, libx264 si no.
+            *ffmpeg_video_args("final"),
             "-c:a", "aac",
             "-b:a", "128k",
             str(out_path),
@@ -203,9 +203,8 @@ def extract_clip(
         "-ss", f"{start:.3f}",
         "-i", str(clean_path),
         "-to", f"{end - start:.3f}",
-        "-c:v", "libx264",
-        "-preset", "ultrafast",  # rápido — vamos a re-encodear en pase 2
-        "-crf", "18",  # alta calidad intermedia
+        # intermedio (se re-encodea en pase 2): velocidad sobre tamaño
+        *ffmpeg_video_args("fast"),
         "-c:a", "aac",
         "-b:a", "128k",
         str(tmp_path),
@@ -226,9 +225,7 @@ def extract_clip(
         "-y",
         "-i", str(tmp_path),
         "-vf", crop_filter,
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "20",
+        *ffmpeg_video_args("final"),
         "-c:a", "copy",
         str(out_path),
     ], check=True, capture_output=True)

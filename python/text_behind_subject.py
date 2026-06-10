@@ -25,6 +25,12 @@ import mediapipe as mp
 from mediapipe.tasks.python import vision
 from mediapipe.tasks.python.core.base_options import BaseOptions
 
+try:
+    from hw_profile import ffmpeg_video_args
+except Exception:  # noqa: BLE001 — fallback x264 si el perfil no carga
+    def ffmpeg_video_args(quality: str = "final") -> list[str]:
+        return ["-c:v", "libx264", "-crf", "18", "-preset", "fast"]
+
 
 MODEL = Path(__file__).parent / "models" / "selfie_segmenter.tflite"
 
@@ -89,7 +95,7 @@ def main() -> int:
             "-f", "rawvideo", "-pix_fmt", "bgr24",
             "-s", f"{w}x{h}", "-r", str(fps),
             "-i", "-",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "fast",
+            *ffmpeg_video_args("final"), "-pix_fmt", "yuv420p",
             args.video_out,
         ],
         stdin=subprocess.PIPE,
