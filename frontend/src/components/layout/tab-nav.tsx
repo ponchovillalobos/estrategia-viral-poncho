@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { SECTION_COLORS } from "@/lib/section-colors";
-import { LayoutDashboard, LineChart, Scissors, FolderKanban, Settings, Film, Telescope, Menu, X } from "lucide-react";
+import { LayoutDashboard, Scissors, FolderKanban, Settings, Film, Menu, X } from "lucide-react";
 import { SettingsDialog } from "@/components/layout/settings-dialog";
 
 export function TabNav() {
@@ -22,15 +22,14 @@ export function TabNav() {
 
   // Cada tab tiene su propio color (definido en lib/section-colors.ts — single
   // source of truth, también lo usan los SectionHeader de cada pantalla).
-  // Orden por flujo de principiante: empezar → crear → ver lo creado →
-  // resultados → referencia (largos / inspiración).
+  // NAV SIMPLE (4 secciones, decisión 2026-06): el flujo completo es subir →
+  // crear → ver. "Resultados" e "Inspiración" siguen existiendo por URL
+  // (/metricas, /research) pero fuera del menú: confundían a usuarios nuevos.
   const links = [
     { href: "/", label: "Inicio", icon: LayoutDashboard, color: SECTION_COLORS.inicio },
     { href: "/editor", label: "Crear video", icon: Scissors, color: SECTION_COLORS.editor },
-    { href: "/produccion", label: "Mis videos", icon: FolderKanban, color: SECTION_COLORS.produccion },
-    { href: "/metricas", label: "Resultados", icon: LineChart, color: SECTION_COLORS.metricas },
     { href: "/largos", label: "Videos largos", icon: Film, color: SECTION_COLORS.largos },
-    { href: "/research", label: "Inspiración", icon: Telescope, color: SECTION_COLORS.research },
+    { href: "/produccion", label: "Mis videos", icon: FolderKanban, color: SECTION_COLORS.produccion },
   ];
 
   return (

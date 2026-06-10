@@ -1,0 +1,9 @@
+# Donaciones del proyecto — GitHub muestra el botón "Sponsor" en el repo.
+# PASOS PARA ACTIVAR (5 min):
+#   1. GitHub Sponsors: github.com/sponsors → "Join the waitlist"/activar tu cuenta
+#      (requiere cuenta bancaria o Stripe). Después descomentá la línea `github:`.
+#   2. Ko-fi (alternativa inmediata, sin espera): creá tu página en ko-fi.com,
+#      reemplazá el usuario abajo y descomentá.
+# github: [ponchovillalobos]
+# ko_fi: ponchovillalobos
+# custom: ["https://www.paypal.me/TU_USUARIO"]

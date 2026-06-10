@@ -18,6 +18,7 @@ import { FilterChip } from "@/components/produccion/filter-chip";
 import { ProjectPreviewDialog } from "@/components/produccion/project-preview-dialog";
 import * as publishActions from "@/lib/produccion/publish-actions";
 import * as scheduleHelpers from "@/lib/produccion/schedule-helpers";
+import { PUBLISHING_ENABLED } from "@/lib/app-mode";
 import * as transcriptHelpers from "@/lib/produccion/transcript-helpers";
 import {
   STATUS_COLOR,
@@ -552,20 +553,22 @@ export function ProductionList() {
                       >
                         <ExternalLink className="h-3 w-3" /> Editor
                       </Link>
-                      <button
-                        type="button"
-                        onClick={() => setScheduleTarget(p)}
-                        disabled={!p.caption}
-                        title={
-                          !p.caption
-                            ? "Generá un caption primero con ✨"
-                            : "Programar publicación en una o varias redes"
-                        }
-                        className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono-tab uppercase tracking-wider hover:bg-muted hover:text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <Calendar className="h-3 w-3" />
-                        programar
-                      </button>
+                      {PUBLISHING_ENABLED && (
+                        <button
+                          type="button"
+                          onClick={() => setScheduleTarget(p)}
+                          disabled={!p.caption}
+                          title={
+                            !p.caption
+                              ? "Generá un caption primero con ✨"
+                              : "Programar publicación en una o varias redes"
+                          }
+                          className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono-tab uppercase tracking-wider hover:bg-muted hover:text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Calendar className="h-3 w-3" />
+                          programar
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="flex items-center gap-1">
@@ -582,7 +585,10 @@ export function ProductionList() {
                       </button>
                     </div>
                   </div>
-                  {/* Fila 2 — bridges manuales por plataforma + status badges del schedule */}
+                  {/* Fila 2 — publicación directa por plataforma. SOLO en modo personal
+                      (PUBLISHING_ENABLED): la versión escritorio publica copiando el
+                      texto por red + abriendo el archivo — sin OAuth ni apps aprobadas. */}
+                  {PUBLISHING_ENABLED && (
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground">
                       subir ahora:
@@ -632,6 +638,7 @@ export function ProductionList() {
                       <ScheduleStatusBadge state={scheduledByProjectId[p.id]?.linkedin} />
                     </button>
                   </div>
+                  )}
                 </div>
               </div>
             </div>

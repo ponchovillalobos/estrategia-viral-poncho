@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Scissors, FolderKanban, Share2, ArrowRight, Upload, Wand2, Sparkles, Send, LineChart, Telescope, Film } from "lucide-react";
+import { Scissors, FolderKanban, Share2, ArrowRight, Upload, Wand2, Sparkles, Send, Telescope, Film } from "lucide-react";
 import { GettingStarted } from "@/components/home/getting-started";
 
 export const dynamic = "force-dynamic";
@@ -27,9 +27,9 @@ const ACTIONS = [
     primary: false,
   },
   {
-    href: "/setup/linkedin",
-    title: "Conectar mis redes",
-    desc: "Conectá Instagram o LinkedIn para publicar con un clic.",
+    href: "/metricas",
+    title: "Mis resultados",
+    desc: "Anotá cómo le fue a cada video y descubrí qué te funciona.",
     icon: Share2,
     primary: false,
   },
@@ -43,8 +43,7 @@ const FLOW = [
 ] as const;
 
 const SECONDARY = [
-  { href: "/metricas", label: "Ver resultados", icon: LineChart },
-  { href: "/research", label: "Buscar inspiración", icon: Telescope },
+  { href: "/research", label: "Buscar inspiración (analizar virales ajenos)", icon: Telescope },
 ] as const;
 
 export default function Home() {
