@@ -14,6 +14,18 @@ $repo = Resolve-Path "$PSScriptRoot\.."
 $out = "$PSScriptRoot\src-tauri\target\release\payload"
 
 Write-Host "== Payload -> $out"
+# Payload LIMPIO siempre: Copy-Item -Recurse ANIDA la carpeta si el destino ya
+# existe (un re-bundle dejaba el standalone viejo sirviendo y el nuevo enterrado
+# en standalone\standalone). Es un artefacto de build: se borra y rearma entero.
+if (Test-Path $out) {
+  # robocopy /MIR con carpeta vacia: borra arboles con rutas mas largas que
+  # MAX_PATH (torch tiene headers anidados que Remove-Item no puede tocar).
+  $empty = "$env:TEMP\__empty_payload"
+  New-Item -ItemType Directory -Force $empty | Out-Null
+  robocopy $empty $out /MIR /NFL /NDL /NJH /NJS | Out-Null
+  Remove-Item $out -Force -ErrorAction SilentlyContinue
+  Remove-Item $empty -Force -ErrorAction SilentlyContinue
+}
 New-Item -ItemType Directory -Force $out | Out-Null
 
 # 1) Server Next standalone (+static +public)
