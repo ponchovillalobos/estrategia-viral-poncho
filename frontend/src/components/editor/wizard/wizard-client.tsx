@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, FileVideo, Mic, Sparkles, Music2, Camera, Briefcase, Send } from "lucide-react";
 import { toast } from "sonner";
+import { StyleMiniDemo } from "@/components/editor/wizard/style-mini-demo";
 import { CinematicStep } from "@/components/editor/wizard/cinematic-step";
 import { HelpHint } from "@/components/ui/help-hint";
 import { Confetti } from "@/components/ui/confetti";
@@ -812,7 +813,8 @@ export function WizardClient() {
                       Recomendado
                     </span>
                   )}
-                  <div className="text-3xl">{s.emoji}</div>
+                  {/* Mini-demo EN MOVIMIENTO del estilo: se entiende sin leer. */}
+                  <StyleMiniDemo styleId={s.id} accent={accent} />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{s.name}</span>

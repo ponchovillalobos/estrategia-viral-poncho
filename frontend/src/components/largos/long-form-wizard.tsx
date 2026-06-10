@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { StyleMiniDemo } from "@/components/editor/wizard/style-mini-demo";
 
 // ─── Fuentes para el preview (mismas que el wizard de shorts; gratis, self-host) ──
 const _mont = Montserrat({ subsets: ["latin"], weight: "800", display: "swap" });
@@ -791,33 +792,38 @@ export function LongFormWizard() {
           </div>
 
           {!useHeuristic && (
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div className="space-y-1">
-                <Label className="text-xs">
-                  Modelo Ollama <span className="text-muted-foreground">(opcional)</span>
-                </Label>
-                <Input
-                  value={ollamaModel}
-                  onChange={(e) => setOllamaModel(e.target.value)}
-                  placeholder="default qwen3:1.7b"
-                  className="font-mono-tab"
-                />
+            <details className="mt-4 rounded-md border border-border bg-muted/20 p-3">
+              <summary className="cursor-pointer font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
+                ⚙️ Avanzado (opcional — el default funciona solo)
+              </summary>
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    Modelo de IA local <span className="text-muted-foreground">(Ollama)</span>
+                  </Label>
+                  <Input
+                    value={ollamaModel}
+                    onChange={(e) => setOllamaModel(e.target.value)}
+                    placeholder="default qwen3:1.7b"
+                    className="font-mono-tab"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    Cantidad máxima de clips
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={maxClips}
+                    onChange={(e) => setMaxClips(e.target.value)}
+                    placeholder="auto: mín 15, más si el video es largo"
+                    className="font-mono-tab"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">
-                  Max clips <span className="text-muted-foreground">(opcional)</span>
-                </Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={maxClips}
-                  onChange={(e) => setMaxClips(e.target.value)}
-                  placeholder="auto: mín 15, más si el video es largo"
-                  className="font-mono-tab"
-                />
-              </div>
-            </div>
+            </details>
           )}
 
           {allSelectedHaveTranscript && (
@@ -993,7 +999,8 @@ export function LongFormWizard() {
                       : "border-border hover:border-foreground/30"
                   )}
                 >
-                  <div className="text-3xl">{s.emoji}</div>
+                  {/* Mini-demo EN MOVIMIENTO del estilo: se entiende sin leer. */}
+                  <StyleMiniDemo styleId={s.id} accent={accent} />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{s.name}</span>
