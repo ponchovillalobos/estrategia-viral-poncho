@@ -1,4 +1,4 @@
-# bundle.ps1 — Arma la carpeta `payload/` distribuible junto al exe de Tauri.
+﻿# bundle.ps1 — Arma la carpeta `payload/` distribuible junto al exe de Tauri.
 # El launcher la detecta sola: con payload, la app corre en CUALQUIER máquina
 # sin instalar node/python/ffmpeg.
 #

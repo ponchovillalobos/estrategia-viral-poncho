@@ -1,4 +1,4 @@
-# make-python-runtime.ps1 — Construye el Python PORTABLE del instalador.
+﻿# make-python-runtime.ps1 — Construye el Python PORTABLE del instalador.
 # El venv de desarrollo NO es relocatable (pyvenv.cfg apunta al Python base);
 # este script arma python/runtime/ con el Python EMBEDDABLE oficial + todas las
 # dependencias instaladas adentro → corre en cualquier Windows x64 sin instalar nada.
@@ -21,10 +21,13 @@ if (Test-Path "$rt\python.exe") {
   Expand-Archive $zip $rt -Force
   Remove-Item $zip -Force
 
-  # Habilitar site-packages (el embeddable lo trae apagado por default).
-  Write-Host "[2/4] Habilitando site-packages..."
+  # Habilitar site-packages (el embeddable lo trae apagado por default) y sumar
+  # ".." al path: el embeddable NO agrega la carpeta del script a sys.path, y
+  # nuestros scripts viven en python\ (un nivel arriba del runtime) e importan
+  # `config` entre sí.
+  Write-Host "[2/4] Habilitando site-packages + path de scripts..."
   $pth = "$rt\python311._pth"
-  (Get-Content $pth) -replace "^#import site", "import site" | Set-Content $pth -Encoding ascii
+  ((Get-Content $pth) -replace "^#import site", "import site") + ".." | Set-Content $pth -Encoding ascii
 
   Write-Host "[3/4] Instalando pip..."
   Invoke-WebRequest "https://bootstrap.pypa.io/get-pip.py" -OutFile "$rt\get-pip.py"
