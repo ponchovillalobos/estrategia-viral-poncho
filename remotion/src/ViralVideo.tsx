@@ -516,7 +516,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   // (derecha → izquierda → cuadrado → grande → fullscreen) con transición suave.
   // Sin editorial: inset 0 (passthrough exacto al comportamiento histórico).
   const editorialPanel = editorialLayout
-    ? editorialPanelAt(editorialLayout, currentTime, compWidth, compHeight)
+    ? editorialPanelAt(editorialLayout, currentTime, compWidth, compHeight, sourceAspect)
     : null;
   const videoContainerStyle: React.CSSProperties = editorialPanel
     ? {

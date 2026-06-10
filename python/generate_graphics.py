@@ -581,6 +581,11 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
         if not card["icon"]:
             card["icon"] = _FALLBACK_ICONS[i % len(_FALLBACK_ICONS)]
         cards.append(card)
+    # La ÚLTIMA tarjeta se extiende hasta el final: acompaña la escena de cierre
+    # (cuando el aspecto no permite fullscreen, el panel grande va con esta frase).
+    if cards:
+        last = cards[-1]
+        last["duration"] = round(max(last["duration"], duration - last["at"] - 0.2), 2)
     return cards
 
 

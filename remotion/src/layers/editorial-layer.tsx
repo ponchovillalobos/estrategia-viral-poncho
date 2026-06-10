@@ -103,7 +103,13 @@ export interface PanelRect {
 
 type PanelMode = "right" | "left" | "square_right" | "square_left" | "big" | "full";
 
-function rectFor(mode: PanelMode, pw: number, W: number, H: number): PanelRect {
+function rectFor(
+  mode: PanelMode,
+  pw: number,
+  W: number,
+  H: number,
+  sourceAspect?: number
+): PanelRect {
   const tall = { w: pw * W, h: 0.88 * H, y: 0.06 * H, r: 18 };
   const s = Math.min(0.52 * H, 0.8 * W);
   switch (mode) {
@@ -118,8 +124,29 @@ function rectFor(mode: PanelMode, pw: number, W: number, H: number): PanelRect {
       const bh = 0.78 * H;
       return { x: (W - bw) / 2, y: (H - bh) / 2, w: bw, h: bh, r: 22, cardsHidden: true, textSide: "left" };
     }
-    case "full":
-      return { x: 0, y: 0, w: W, h: H, r: 0, cardsHidden: true, textSide: "left" };
+    case "full": {
+      // FULLSCREEN solo si el aspecto del VIDEO ORIGINAL coincide con el del
+      // output (±15%). Si no (ej: fuente 9:16 en salida 16:9), recortar a
+      // pantalla completa destruiría el encuadre → escena de CIERRE: panel
+      // grande que RESPETA el aspecto de la fuente + tarjeta final visible.
+      const outAspect = W / H;
+      const src = sourceAspect && sourceAspect > 0 ? sourceAspect : outAspect;
+      const mismatch = Math.abs(src - outAspect) / outAspect > 0.15;
+      if (!mismatch) {
+        return { x: 0, y: 0, w: W, h: H, r: 0, cardsHidden: true, textSide: "left" };
+      }
+      const ch = 0.88 * H;
+      const cw = Math.min(ch * src, 0.6 * W);
+      return {
+        x: W - 48 - cw,
+        y: (H - ch) / 2,
+        w: cw,
+        h: cw / src,
+        r: 20,
+        cardsHidden: false,
+        textSide: "left",
+      };
+    }
     default: // right
       return { x: W - 36 - pw * W, ...tall, cardsHidden: false, textSide: "left" };
   }
@@ -133,12 +160,13 @@ export function editorialPanelAt(
   layout: EditorialLayout,
   t: number,
   W: number,
-  H: number
+  H: number,
+  sourceAspect?: number
 ): PanelRect {
   const pw = layout.panelWidth ?? 0.4;
   const baseMode: PanelMode = (layout.panel ?? "right") as PanelMode;
   const scenes = (layout.scenes ?? []).filter((s) => typeof s?.at === "number");
-  if (scenes.length === 0) return rectFor(baseMode, pw, W, H);
+  if (scenes.length === 0) return rectFor(baseMode, pw, W, H, sourceAspect);
 
   const sorted = [...scenes].sort((a, b) => a.at - b.at);
   let idx = -1;
@@ -148,8 +176,8 @@ export function editorialPanelAt(
   }
   const prevMode: PanelMode = idx <= 0 ? (idx === 0 ? baseMode : baseMode) : (sorted[idx - 1].mode as PanelMode);
   const curMode: PanelMode = idx < 0 ? baseMode : (sorted[idx].mode as PanelMode);
-  const from = rectFor(idx <= 0 ? baseMode : prevMode, pw, W, H);
-  const to = rectFor(curMode, pw, W, H);
+  const from = rectFor(idx <= 0 ? baseMode : prevMode, pw, W, H, sourceAspect);
+  const to = rectFor(curMode, pw, W, H, sourceAspect);
   const p = idx < 0 ? 1 : easeInOut(clamp01((t - sorted[idx].at) / 0.8));
   const lerp = (a: number, b: number) => a + (b - a) * p;
   return {
