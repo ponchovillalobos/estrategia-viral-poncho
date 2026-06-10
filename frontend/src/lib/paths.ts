@@ -50,7 +50,11 @@ export const LF_RENDERS = path.join(LF_ROOT, "renders");
 // Estructura: {OVERLAYS_DIR}/{videoId}/{overlayId}.{jpg|png|webp}
 export const OVERLAYS_DIR = path.join(DATA_ROOT, "overlays");
 
-export const PYTHON_EXE = path.join(PROJECT_ROOT, "python", "venv", "Scripts", "python.exe");
+// VIRAL_PYTHON_EXE: el instalador distribuible usa Python EMBEDDABLE
+// (payload/python/runtime/python.exe) en vez del venv de desarrollo.
+export const PYTHON_EXE =
+  process.env.VIRAL_PYTHON_EXE ??
+  path.join(PROJECT_ROOT, "python", "venv", "Scripts", "python.exe");
 export const PYTHON_DIR = path.join(PROJECT_ROOT, "python");
 export const REMOTION_DIR = path.join(PROJECT_ROOT, "remotion");
 

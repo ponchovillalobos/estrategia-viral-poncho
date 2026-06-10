@@ -41,9 +41,13 @@ foreach ($f in @("npx.cmd", "npm.cmd", "node_modules")) {
 Write-Host "[3/5] remotion (esto tarda)..."
 robocopy "$repo\remotion" "$out\remotion" /E /NFL /NDL /NJH /NJS /XD "vendor" | Out-Null
 
-# 4) Python venv completo (torch + whisperx; LO MÁS PESADO)
-Write-Host "[4/5] python venv (esto tarda MUCHO)..."
-robocopy "$repo\python" "$out\python" /E /NFL /NDL /NJH /NJS /XD "__pycache__" | Out-Null
+# 4) Python PORTABLE: scripts + runtime embeddable (NO el venv de dev, que no es
+#    relocatable). Construir antes con make-python-runtime.ps1.
+Write-Host "[4/5] python portable (esto tarda)..."
+if (-not (Test-Path "$repo\python\runtime\python.exe")) {
+  throw "Falta python\runtime — corré primero desktop\make-python-runtime.ps1"
+}
+robocopy "$repo\python" "$out\python" /E /NFL /NDL /NJH /NJS /XD "__pycache__" "venv" | Out-Null
 
 # 5) ffmpeg
 Write-Host "[5/5] ffmpeg..."

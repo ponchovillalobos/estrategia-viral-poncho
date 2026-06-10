@@ -93,6 +93,11 @@ fn spawn_server() -> Option<Child> {
             cmd.env("VIRAL_FFMPEG_EXE", ff.join("ffmpeg.exe"));
             cmd.env("VIRAL_FFPROBE_EXE", ff.join("ffprobe.exe"));
         }
+        // Python EMBEDDABLE del payload (el venv de dev no es relocatable).
+        let py = root.join("python").join("runtime").join("python.exe");
+        if py.exists() {
+            cmd.env("VIRAL_PYTHON_EXE", &py);
+        }
         // El node del payload también debe estar en PATH para los `npx`/`node`
         // que lanza el server (renders de Remotion, build-props, etc.).
         if let Ok(old) = std::env::var("PATH") {
