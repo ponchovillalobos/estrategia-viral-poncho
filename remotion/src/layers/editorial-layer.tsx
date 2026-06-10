@@ -1,7 +1,7 @@
 import { AbsoluteFill } from "remotion";
 import { z } from "zod";
 import { loadFont as loadPlayfair } from "@remotion/google-fonts/PlayfairDisplay";
-import { LineArtIcon, type LineArtKind } from "./line-art-icons";
+import { LineArtIcon, LineArtLucide, LINE_ART_KINDS, type LineArtKind } from "./line-art-icons";
 
 /**
  * EDITORIAL — Tarjetas tipográficas estilo revista/documental (referencia: los
@@ -18,6 +18,30 @@ const { fontFamily: PLAYFAIR_IT } = loadPlayfair("italic", {
   weights: ["500", "700", "900"],
   subsets: ["latin", "latin-ext"],
 });
+// Temas tipográficos extra (todas Google Fonts gratis).
+import { loadFont as loadDMSerif } from "@remotion/google-fonts/DMSerifDisplay";
+import { loadFont as loadLora } from "@remotion/google-fonts/Lora";
+import { loadFont as loadAbril } from "@remotion/google-fonts/AbrilFatface";
+const { fontFamily: DMSERIF } = loadDMSerif("normal", { weights: ["400"], subsets: ["latin", "latin-ext"] });
+const { fontFamily: DMSERIF_IT } = loadDMSerif("italic", { weights: ["400"], subsets: ["latin", "latin-ext"] });
+const { fontFamily: LORA } = loadLora("normal", { weights: ["500", "700"], subsets: ["latin", "latin-ext"] });
+const { fontFamily: LORA_IT } = loadLora("italic", { weights: ["500", "700"], subsets: ["latin", "latin-ext"] });
+const { fontFamily: ABRIL } = loadAbril("normal", { weights: ["400"], subsets: ["latin", "latin-ext"] });
+
+/** Familia (normal, itálica) por tema de fuente. Abril no tiene itálica → reusa. */
+const FONT_THEMES: Record<string, [string, string]> = {
+  playfair: [PLAYFAIR, PLAYFAIR_IT],
+  dmserif: [DMSERIF, DMSERIF_IT],
+  lora: [LORA, LORA_IT],
+  abril: [ABRIL, ABRIL],
+};
+
+/** Colores de lienzo/texto por fondo. */
+export const EDITORIAL_BG: Record<string, { bg: string; text: string; muted: string }> = {
+  dark: { bg: "#0a0908", text: "#f3ede1", muted: "#9b958a" },
+  ink: { bg: "#0a0f16", text: "#e9eef5", muted: "#8b95a3" },
+  cream: { bg: "#f5efe3", text: "#1c1611", muted: "#7a7163" },
+};
 
 export const editorialCardSchema = z.object({
   at: z.number(),
@@ -33,14 +57,10 @@ export const editorialCardSchema = z.object({
   /** Stat: valor enorme ("$300") + unidad itálica ("al día"). */
   statValue: z.string().default(""),
   statUnit: z.string().default(""),
-  /** Ilustración line-art ("" = sin ícono). 18 disponibles. */
-  icon: z
-    .enum([
-      "", "clock", "calendar", "funnel", "faucet", "radar", "chart",
-      "lightbulb", "target", "rocket", "brain", "lock", "megaphone",
-      "scale", "gears", "trophy", "route", "fire", "hourglass",
-    ])
-    .default(""),
+  /** Ilustración line-art ("" = sin ícono). 18 dibujadas a mano (clock, funnel,
+   *  faucet, gears, route…) o CUALQUIER nombre de ícono Lucide ("shield-check",
+   *  "users", "map-pin"… 1,500+) animado genéricamente. */
+  icon: z.string().default(""),
 });
 export type EditorialCard = z.infer<typeof editorialCardSchema>;
 
@@ -52,12 +72,14 @@ export const editorialLayoutSchema = z.object({
   /** Color de acento del tema (reemplaza al dorado clásico): palabra itálica,
    *  números de capítulo y detalles de las ilustraciones line-art. */
   accent: z.string().default("#f0b429"),
+  /** Fuente serif del tema. */
+  font: z.enum(["playfair", "dmserif", "lora", "abril"]).default("playfair"),
+  /** Fondo del lienzo: oscuro clásico, tinta azulada, o crema claro (texto invertido). */
+  background: z.enum(["dark", "ink", "cream"]).default("dark"),
 });
 export type EditorialLayout = z.infer<typeof editorialLayoutSchema>;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-const CREAM = "#f3ede1";
-const GRAY = "#9b958a";
 
 /** Entrada por líneas: slide-up con máscara (el look "editorial" clásico). */
 const Reveal: React.FC<{ t: number; delay: number; children: React.ReactNode }> = ({
@@ -84,6 +106,10 @@ export const EditorialCardLayer: React.FC<{
   height: number;
 }> = ({ card, currentTime, layout, width, height }) => {
   const GOLD = layout.accent ?? "#f0b429";
+  const [FONT_N, FONT_I] = FONT_THEMES[layout.font ?? "playfair"] ?? FONT_THEMES.playfair;
+  const theme = EDITORIAL_BG[layout.background ?? "dark"] ?? EDITORIAL_BG.dark;
+  const TEXT = theme.text;
+  const MUTED = theme.muted;
   const t = currentTime - card.at;
   const remaining = card.at + (card.duration ?? 5) - currentTime;
   if (t < 0 || remaining < 0) return null;
@@ -123,7 +149,7 @@ export const EditorialCardLayer: React.FC<{
                 fontSize: height * 0.0165,
                 letterSpacing: "0.5em",
                 textTransform: "uppercase",
-                color: GRAY,
+                color: MUTED,
               }}
             >
               {card.kicker}
@@ -135,7 +161,7 @@ export const EditorialCardLayer: React.FC<{
           <Reveal t={t} delay={0.18}>
             <div
               style={{
-                fontFamily: PLAYFAIR,
+                fontFamily: FONT_N,
                 fontWeight: 900,
                 fontSize: titleSize * 1.05,
                 lineHeight: 1,
@@ -152,10 +178,10 @@ export const EditorialCardLayer: React.FC<{
             <div style={{ lineHeight: 1.02 }}>
               <span
                 style={{
-                  fontFamily: PLAYFAIR,
+                  fontFamily: FONT_N,
                   fontWeight: 900,
                   fontSize: titleSize * 1.5,
-                  color: CREAM,
+                  color: TEXT,
                 }}
               >
                 {card.statValue}
@@ -163,11 +189,11 @@ export const EditorialCardLayer: React.FC<{
               {card.statUnit ? (
                 <span
                   style={{
-                    fontFamily: PLAYFAIR_IT,
+                    fontFamily: FONT_I,
                     fontStyle: "italic",
                     fontWeight: 700,
                     fontSize: titleSize * 0.85,
-                    color: CREAM,
+                    color: TEXT,
                     marginLeft: 14,
                   }}
                 >
@@ -182,11 +208,11 @@ export const EditorialCardLayer: React.FC<{
           <Reveal t={t} delay={isStat || card.number ? 0.32 : 0.18}>
             <div
               style={{
-                fontFamily: PLAYFAIR,
+                fontFamily: FONT_N,
                 fontWeight: 900,
                 fontSize: titleSize,
                 lineHeight: 1.06,
-                color: CREAM,
+                color: TEXT,
               }}
             >
               {words.map((w, i) => {
@@ -198,7 +224,7 @@ export const EditorialCardLayer: React.FC<{
                     key={i}
                     style={
                       isAccent
-                        ? { fontFamily: PLAYFAIR_IT, fontStyle: "italic", color: GOLD }
+                        ? { fontFamily: FONT_I, fontStyle: "italic", color: GOLD }
                         : undefined
                     }
                   >
@@ -215,10 +241,10 @@ export const EditorialCardLayer: React.FC<{
           <Reveal t={t} delay={0.5}>
             <div
               style={{
-                fontFamily: PLAYFAIR,
+                fontFamily: FONT_N,
                 fontWeight: 500,
                 fontSize: titleSize * 0.42,
-                color: GRAY,
+                color: MUTED,
                 lineHeight: 1.35,
                 maxWidth: zoneWidth * 0.92,
               }}
@@ -230,12 +256,22 @@ export const EditorialCardLayer: React.FC<{
 
         {hasIcon ? (
           <div style={{ marginTop: height * 0.02, opacity: clamp01((t - 0.4) / 0.3) }}>
-            <LineArtIcon
-              kind={card.icon as LineArtKind}
-              elapsed={Math.max(0, t - 0.4)}
-              size={Math.min(zoneWidth * 0.52, height * 0.3)}
-              gold={GOLD}
-            />
+            {LINE_ART_KINDS.includes(card.icon as LineArtKind) ? (
+              <LineArtIcon
+                kind={card.icon as LineArtKind}
+                elapsed={Math.max(0, t - 0.4)}
+                size={Math.min(zoneWidth * 0.52, height * 0.3)}
+                gold={GOLD}
+              />
+            ) : (
+              // Cualquier ícono Lucide (1,500+) animado genéricamente.
+              <LineArtLucide
+                name={card.icon}
+                elapsed={Math.max(0, t - 0.4)}
+                size={Math.min(zoneWidth * 0.44, height * 0.26)}
+                gold={GOLD}
+              />
+            )}
           </div>
         ) : null}
       </div>

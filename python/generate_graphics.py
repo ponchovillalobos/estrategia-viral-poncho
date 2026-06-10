@@ -445,6 +445,28 @@ _EDITORIAL_ICON_WORDS = {
     "trophy": {"ganar", "gane", "gané", "exito", "éxito", "logro", "lograr", "premio", "mejor", "campeon", "campeón"},
     "route": {"camino", "ruta", "paso", "pasos", "estrategia", "plan", "mapa", "guia", "guía"},
     "fire": {"viral", "tendencia", "explotar", "exploto", "explotó", "boom", "caliente", "urgente"},
+    # ── Conceptos extra → íconos LUCIDE (animación genérica; 1,500+ disponibles,
+    #    cualquier nombre kebab-case de lucide.dev sirve como valor). ──
+    "users": {"equipo", "equipos", "gente", "personas", "comunidad", "grupo", "socios"},
+    "shield-check": {"seguro", "seguridad", "confianza", "garantia", "garantía", "proteger"},
+    "graduation-cap": {"curso", "cursos", "capacitacion", "capacitación", "clase", "taller", "certificacion", "certificación"},
+    "store": {"negocio", "negocios", "tienda", "empresa", "empresas", "local", "emprendimiento"},
+    "smartphone": {"celular", "telefono", "teléfono", "whatsapp", "llamada", "mensaje"},
+    "mail": {"correo", "email", "newsletter", "inbox"},
+    "search": {"buscar", "busca", "investigar", "analizar", "estudiar", "encontrar"},
+    "handshake": {"acuerdo", "alianza", "cerrar", "trato", "negociar"},
+    "wallet": {"cartera", "ahorro", "ahorrar", "cobrar", "cobro", "facturar"},
+    "presentation": {"presentacion", "presentación", "reunion", "reunión", "junta", "pitch"},
+    "mic": {"hablar", "voz", "podcast", "entrevista", "audio"},
+    "video": {"video", "videos", "grabar", "camara", "cámara", "contenido"},
+    "globe": {"mundo", "global", "internacional", "internet", "online"},
+    "key": {"acceso", "desbloquear", "contraseña", "password"},
+    "alarm-clock": {"deadline", "plazo", "urgencia", "ya"},
+    "book-open": {"libro", "libros", "leer", "lectura", "manual", "historia"},
+    "puzzle": {"problema", "problemas", "resolver", "pieza", "encajar"},
+    "sprout": {"empezar", "inicio", "semilla", "sembrar", "pequeño"},
+    "crown": {"lider", "líder", "liderazgo", "rey", "experto", "autoridad"},
+    "ban": {"error", "errores", "evitar", "nunca", "prohibido", "dejar"},
 }
 _KICKERS = ["LA VERDAD", "EL DATO", "CÓMO LE HAGO", "EL CONTEXTO", "LO QUE APRENDÍ", "EL RESULTADO"]
 _NUM_UNIT_RE = re.compile(r"^\$?\d[\d.,]*$")

@@ -247,6 +247,11 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       await applyRemoveBg(project, videoId);
       await applyVoiceover(project, projectId);
       await applyTextBehind(project, videoId);
+      // Tema editorial elegido en el wizard (fuente serif + fondo del lienzo).
+      if (body.editorialTheme && project.editorialLayout) {
+        Object.assign(project.editorialLayout, body.editorialTheme);
+      }
+
       await applyTranslate(project);
       await applyGraphics(project, videoId);
       // F1 — Director emocional: ducking de música + zooms en picos + SFX por arousal.

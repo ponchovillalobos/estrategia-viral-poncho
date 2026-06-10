@@ -1,4 +1,5 @@
 import React from "react";
+import * as Lucide from "lucide-react";
 
 /**
  * EDITORIAL — Ilustraciones LINE-ART animadas (trazo crema + acentos del color
@@ -21,6 +22,73 @@ export const LINE_ART_KINDS: LineArtKind[] = [
 const STROKE = "#e9e2d4"; // crema
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+/** kebab/lower → PascalCase de lucide ("trending-up" → "TrendingUp"). */
+function toPascal(name: string): string {
+  return name
+    .split(/[-_\s]/)
+    .filter(Boolean)
+    .map((p) => p[0].toUpperCase() + p.slice(1))
+    .join("");
+}
+
+/**
+ * LINE-ART GENÉRICO sobre los 1,500+ íconos de Lucide: cualquier ícono se vuelve
+ * una ilustración editorial — trazo crema, draw-on aproximado (dash/offset por
+ * CSS sobre todos los paths), flotación sutil y nodo de acento dorado latiendo.
+ * Así el generador puede pedir CUALQUIER concepto sin dibujarlo a mano.
+ */
+export const LineArtLucide: React.FC<{
+  name: string;
+  elapsed: number;
+  size?: number;
+  gold?: string;
+}> = ({ name, elapsed, size = 300, gold = "#f0b429" }) => {
+  const Cmp = (Lucide as unknown as Record<string, React.ComponentType<{
+    size?: number; color?: string; strokeWidth?: number; absoluteStrokeWidth?: boolean;
+  }>>)[toPascal(name)];
+  if (!Cmp) return null;
+  const p = clamp01(elapsed / 1.2);
+  const ease = 1 - Math.pow(1 - p, 3);
+  // dasharray 130 cubre los paths de un viewBox 24x24; offset uniforme aproximado.
+  const off = 130 * (1 - ease);
+  const float = Math.sin(elapsed * 1.6) * (size * 0.012);
+  const pulse = 0.5 + 0.5 * Math.sin(elapsed * 2.6);
+  const cls = `la-luc-${Math.abs(name.length * 7 + name.charCodeAt(0))}`;
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        transform: `translateY(${float}px)`,
+        filter: `drop-shadow(0 0 14px ${gold}55) drop-shadow(0 0 3px ${gold}33)`,
+        position: "relative",
+      }}
+      className={cls}
+    >
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `.${cls} svg * { stroke-dasharray: 130; stroke-dashoffset: ${off.toFixed(2)}; }`,
+        }}
+      />
+      <Cmp size={size} color={STROKE} strokeWidth={1.4} />
+      {/* nodo de acento que late (vida infinita, como los dibujados a mano) */}
+      <div
+        style={{
+          position: "absolute",
+          right: size * 0.1,
+          top: size * 0.1,
+          width: size * 0.07,
+          height: size * 0.07,
+          borderRadius: "50%",
+          background: gold,
+          opacity: clamp01((elapsed - 1.2) / 0.4) * (0.5 + pulse * 0.5),
+          boxShadow: `0 0 ${size * 0.06}px ${gold}`,
+        }}
+      />
+    </div>
+  );
+};
 
 function drawProps(len: number, elapsed: number, delay = 0, drawIn = 1.1) {
   const p = clamp01((elapsed - delay) / drawIn);

@@ -160,6 +160,15 @@ export function WizardClient() {
   const [subtitleFont, setSubtitleFont] = useState<string>("auto");
   // Color del TEXTO de los subtítulos ("auto" = el del estilo, normalmente blanco).
   const [subtitleColor, setSubtitleColor] = useState<string>("auto");
+  // Tema del estilo Editorial (fuente serif + fondo). Solo aplica si elegís 📰.
+  const EDITORIAL_THEMES = [
+    { id: "clasico", name: "Clásico", font: "playfair", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "Georgia, serif" },
+    { id: "tinta", name: "Tinta", font: "dmserif", background: "ink", bg: "#0a0f16", text: "#e9eef5", demoFont: "'Times New Roman', serif" },
+    { id: "crema", name: "Crema", font: "lora", background: "cream", bg: "#f5efe3", text: "#1c1611", demoFont: "Georgia, serif" },
+    { id: "bold", name: "Bold", font: "abril", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "'Arial Black', serif" },
+  ] as const;
+  const [editorialTheme, setEditorialTheme] = useState<string>("clasico");
+
   // F4 — Vista previa REAL: un frame (o clip de 3s) del video del user con el estilo.
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -445,6 +454,10 @@ export function WizardClient() {
           accentColor: accent,
           subtitleFont,
           subtitleColor,
+          editorialTheme: (() => {
+            const t = EDITORIAL_THEMES.find((x) => x.id === editorialTheme);
+            return t ? { font: t.font, background: t.background } : undefined;
+          })(),
           platforms: selectedPlatforms,
           aspectRatio,
           day: day ? parseInt(day, 10) : undefined,
@@ -827,6 +840,38 @@ export function WizardClient() {
               );
             })}
           </div>
+          {/* Tema editorial: aparece solo si elegiste 📰 Editorial. */}
+          {selectedStyles.includes("editorial") && (
+            <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+              <p className="mb-2 text-sm font-medium">📰 Tema del estilo Editorial</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {EDITORIAL_THEMES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setEditorialTheme(t.id)}
+                    className={`overflow-hidden rounded-lg border text-left transition-all ${
+                      editorialTheme === t.id
+                        ? "border-amber-400 ring-1 ring-amber-400"
+                        : "border-border hover:border-foreground/30"
+                    }`}
+                  >
+                    {/* mini-preview del tema: fondo + serif + acento */}
+                    <div className="flex h-14 flex-col justify-center px-2" style={{ background: t.bg }}>
+                      <span className="text-[7px] uppercase tracking-[0.3em]" style={{ color: t.text, opacity: 0.5 }}>
+                        La verdad
+                      </span>
+                      <span className="text-sm font-bold leading-tight" style={{ color: t.text, fontFamily: t.demoFont }}>
+                        Título <em style={{ color: accent }}>clave.</em>
+                      </span>
+                    </div>
+                    <div className="px-2 py-1 text-[10px] text-muted-foreground">{t.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <p className="mt-4 text-xs text-muted-foreground">
             {selectedStyles.length === 0
               ? "Elegí al menos un estilo"

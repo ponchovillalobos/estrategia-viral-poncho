@@ -54,6 +54,7 @@ import {
   EditorialCardLayer,
   editorialCardSchema,
   editorialLayoutSchema,
+  EDITORIAL_BG,
 } from "./layers/editorial-layer";
 
 const { fontFamily: BEBAS } = loadBebas();
@@ -528,7 +529,13 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
     : { position: "absolute", inset: 0 };
 
   return (
-    <AbsoluteFill style={{ backgroundColor: editorialLayout ? "#0a0908" : "#000" }}>
+    <AbsoluteFill
+      style={{
+        backgroundColor: editorialLayout
+          ? (EDITORIAL_BG[editorialLayout.background ?? "dark"]?.bg ?? "#0a0908")
+          : "#000",
+      }}
+    >
       <div style={videoContainerStyle}>
       <AbsoluteFill
         style={{

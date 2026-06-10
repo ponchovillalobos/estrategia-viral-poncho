@@ -78,8 +78,58 @@ CONCEPTS: dict[str, str] = {
 }
 
 
+API_URL = "https://googlefonts.github.io/noto-emoji-animation/data/api.json"
+CATALOG_DIR = OUT_DIR / "catalog"
+
+
+def download_full_catalog() -> dict:
+    """Baja el CATÁLOGO COMPLETO de Noto animado (~900 ilustraciones, ~50 MB) a
+    noto/catalog/{codepoint}.json + un index.json con tags/categorías para que el
+    generador pueda mapear conceptos nuevos sin tocar código. Salta variantes de
+    tono de piel (mismo dibujo) y lo ya descargado (idempotente)."""
+    CATALOG_DIR.mkdir(parents=True, exist_ok=True)
+    with urllib.request.urlopen(API_URL, timeout=60) as r:
+        api = json.loads(r.read())
+    icons = api.get("icons", [])
+    index: list[dict] = []
+    ok = skipped = failed = 0
+    for it in icons:
+        code = it.get("codepoint", "")
+        # variantes de tono de piel: _1f3fb.._1f3ff — mismo arte, ahorra 60%
+        if any(t in code for t in ("1f3fb", "1f3fc", "1f3fd", "1f3fe", "1f3ff")):
+            continue
+        index.append({
+            "code": code,
+            "tags": it.get("tags", []),
+            "categories": it.get("categories", []),
+            "popularity": it.get("popularity", 0),
+        })
+        dest = CATALOG_DIR / f"{code}.json"
+        if dest.exists() and dest.stat().st_size > 500:
+            skipped += 1
+            continue
+        try:
+            with urllib.request.urlopen(BASE.format(code=code), timeout=30) as r:
+                data = r.read()
+            if b'"layers"' not in data:
+                raise ValueError("no es lottie")
+            dest.write_bytes(data)
+            ok += 1
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            print(f"[fail] {code}: {e}", file=sys.stderr)
+    (OUT_DIR / "index.json").write_text(
+        json.dumps(index, ensure_ascii=False), encoding="utf-8"
+    )
+    return {"catalog": len(index), "downloaded": ok, "skipped": skipped, "failed": failed}
+
+
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    if "--all" in sys.argv:
+        result = download_full_catalog()
+        print(json.dumps({"ok": True, **result, "dir": str(CATALOG_DIR)}))
+        return 0
     ok = skipped = failed = 0
     for concept, code in CONCEPTS.items():
         dest = OUT_DIR / f"{concept}.json"
