@@ -77,6 +77,19 @@
 **Fase D — Temas estéticos**: portar 2-3 temas completos (minimal/cyberpunk)
    como variantes del estilo (paleta + fuente + fondo + motion coherentes).
 
+## Anexo 2026-06-10 — Frameworks de PRESENTACIONES con código (para Editorial v2+)
+
+| Repo | Qué robarle para nuestro Editorial |
+|---|---|
+| **[slidevjs/slidev](https://github.com/slidevjs/slidev)** (MIT, ~35k★) | Sus **layouts de slide** (two-cols, image-right, quote, fact, statement) son composiciones probadas para nuestras tarjetas; sus transiciones entre slides (slide-up, fade-out, view-transitions) y el patrón `v-click` (revelar elementos por pasos) → revelar kicker→título→subtítulo→ícono en pasos ya lo hacemos, pero sus **temas** (apple-basic, seriph, shibainu) son paletas/tipografías listas para portar como temas editoriales nuevos. |
+| **[motion-canvas/motion-canvas](https://github.com/motion-canvas/motion-canvas)** (MIT, ~17k★) | La referencia de animación vectorial narrada: **patrones de easing/signals** y sus escenas de ejemplo (diagramas que se construyen, flechas que conectan conceptos, código que se transforma) — ideas directas para más line-art animado (diagramas de flujo que se dibujan mientras el speaker explica). |
+| **open-slide.dev** | Framework de slides pensado para AGENTES — patrones de generación de slides por LLM aplicables a nuestro `_enrich_cards_llm`. |
+
+**Implementado hoy (Editorial v2)**: panel de video DINÁMICO por escenas
+(derecha→izquierda→cuadrado→grande→fullscreen, lerp 0.8s ease), ícono garantizado
+en toda tarjeta (fallback rotativo), y reescritura de textos con Ollama
+(títulos impactantes + subtítulos que APORTAN datos, con fallback heurístico).
+
 ## Fuentes
 - https://github.com/lifeprompt-team/remotion-scenes (MIT, 201+ escenas)
 - https://github.com/reactvideoeditor/remotion-templates (MIT, 81 plantillas)

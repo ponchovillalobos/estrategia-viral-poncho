@@ -480,6 +480,32 @@ def _icon_for_text(text: str) -> str:
     return ""
 
 
+# Fallback rotativo: NINGUNA tarjeta queda sin ilustración (la pantalla nunca se
+# ve vacía). Rota entre las dibujadas a mano que funcionan como "genéricas".
+_FALLBACK_ICONS = ["lightbulb", "chart", "target", "route", "megaphone", "brain", "gears", "trophy"]
+
+
+def editorial_panel_scenes(duration: float) -> list[dict]:
+    """Coreografía del PANEL de video: cambia de tamaño/lugar 4-5 veces a lo largo
+    del video (derecha → izquierda → cuadrado → grande → FULLSCREEN al final).
+    Le da vida al formato — el video nunca se queda clavado en un lugar."""
+    if duration < 20:
+        # corto: derecha → cuadrado → full al final
+        return [
+            {"at": 0.0, "mode": "right"},
+            {"at": round(duration * 0.45, 2), "mode": "square_left"},
+            {"at": round(duration * 0.8, 2), "mode": "full"},
+        ]
+    return [
+        {"at": 0.0, "mode": "right"},
+        {"at": round(duration * 0.2, 2), "mode": "left"},
+        {"at": round(duration * 0.4, 2), "mode": "square_right"},
+        {"at": round(duration * 0.55, 2), "mode": "big"},
+        {"at": round(duration * 0.65, 2), "mode": "left"},
+        {"at": round(duration * 0.88, 2), "mode": "full"},
+    ]
+
+
 def editorial_cards(words: list[dict], duration: float) -> list[dict]:
     """Escenas editoriales (~1 cada 11-15s): la frase más fuerte de cada ventana se
     vuelve tarjeta. Si tiene número → STAT ($300 / al día); si abre con ordinal →
@@ -551,8 +577,73 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
             card["accent"] = _clean_word(sig[-1] if sig else head[-1]).strip(".,")
             if len(toks) > 7:
                 card["subtitle"] = (" ".join(toks[7:16]).strip(" ,.") + ".")[:70].capitalize()
+        # NUNCA sin ilustración: fallback rotativo si el vocabulario no matcheó.
+        if not card["icon"]:
+            card["icon"] = _FALLBACK_ICONS[i % len(_FALLBACK_ICONS)]
         cards.append(card)
     return cards
+
+
+_EDITORIAL_LLM_PROMPT = """Sos el director de arte de un documental viral en español.
+Te paso las TARJETAS de texto que acompañan a un video hablado (generadas por
+heurística desde el transcript). Tu trabajo: REESCRIBIRLAS para que sean claras,
+impactantes y APORTEN — no repitas literal lo que se dice en el video.
+
+Reglas por tarjeta:
+- "title": máx 7 palabras, potente, estilo titular de revista. Termina en punto.
+- "accent": UNA palabra del título (la más fuerte) — va resaltada en color.
+- "subtitle": máx 12 palabras que AGREGAN VALOR: un dato interesante, contexto o
+  consecuencia relacionada al tema (no parafrasees el título).
+- "kicker": 2-4 palabras en mayúsculas tipo sección de revista (EL DATO, LA TRAMPA,
+  LO QUE NADIE DICE...). Variá entre tarjetas.
+- NO toques: at, duration, icon, number, statValue, statUnit (devolvelos igual).
+- Mantené el MISMO orden y la MISMA cantidad de tarjetas.
+
+Responde SOLO el JSON: {"cards": [ ... ]}
+
+TARJETAS:
+"""
+
+
+def _enrich_cards_llm(cards: list[dict], words: list[dict]) -> list[dict]:
+    """Reescritura con Ollama (si está): títulos impactantes + subtítulos que
+    aportan datos/insights en vez de repetir. Best-effort: ante cualquier fallo
+    se quedan las tarjetas heurísticas (el pipeline jamás se rompe)."""
+    if not cards:
+        return cards
+    try:
+        # Contexto corto del video para que el modelo entienda el tema.
+        full_text = " ".join(str(w.get("word", "")) for w in words)[:1500]
+        payload = [
+            {k: c[k] for k in ("at", "duration", "kicker", "title", "accent",
+                               "subtitle", "number", "statValue", "statUnit", "icon")}
+            for c in cards
+        ]
+        prompt = (
+            _EDITORIAL_LLM_PROMPT
+            + json.dumps(payload, ensure_ascii=False)
+            + f"\n\nTEMA DEL VIDEO (contexto): {full_text[:600]}\n\nJSON:"
+        )
+        raw = _ollama(prompt, temperature=0.4)
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not m:
+            return cards
+        out = json.loads(m.group(0)).get("cards", [])
+        if not isinstance(out, list) or len(out) != len(cards):
+            return cards
+        enriched: list[dict] = []
+        for orig, new in zip(cards, out):
+            c = dict(orig)  # at/duration/icon/number/stat* SIEMPRE de la heurística
+            for k in ("kicker", "title", "accent", "subtitle"):
+                v = str(new.get(k, "") or "").strip()
+                if v:
+                    c[k] = v[:80] if k != "title" else v[:60]
+            enriched.append(c)
+        print(f"[editorial] {len(enriched)} tarjetas enriquecidas con LLM", file=sys.stderr)
+        return enriched
+    except Exception as e:  # noqa: BLE001
+        print(f"[editorial] LLM skip ({e}) — tarjetas heurísticas", file=sys.stderr)
+        return cards
 
 
 def heuristic_headlines(words: list[dict], duration: float, max_h: int = 3) -> list[dict]:
@@ -706,13 +797,18 @@ def generate(transcript_path: Path, use_llm: bool = True) -> dict:
     )
     # kineticHeadlines vacío a propósito: las animaciones ahora son VISUALES (charts +
     # íconos), no copias del texto. La capa de titulares sigue disponible para uso manual.
-    # editorialCards: SIEMPRE se calculan (heurística barata); el render solo las usa
-    # si el project tiene editorialLayout (estilo "editorial").
+    # editorialCards: SIEMPRE se calculan (heurística barata); con Ollama vivo se
+    # REESCRIBEN para ser impactantes y aportar datos (no repetir el video).
+    # editorialScenes: coreografía del panel (derecha→izquierda→cuadrado→full).
+    ed_cards = editorial_cards(words, duration)
+    if use_llm and ed_cards:
+        ed_cards = _enrich_cards_llm(ed_cards, words)
     return {
         "dataViz": charts,
         "kineticHeadlines": [],
         "iconStickers": icons,
-        "editorialCards": editorial_cards(words, duration),
+        "editorialCards": ed_cards,
+        "editorialScenes": editorial_panel_scenes(duration),
     }
 
 

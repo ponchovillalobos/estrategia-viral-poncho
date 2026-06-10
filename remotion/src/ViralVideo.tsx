@@ -54,6 +54,7 @@ import {
   EditorialCardLayer,
   editorialCardSchema,
   editorialLayoutSchema,
+  editorialPanelAt,
   EDITORIAL_BG,
 } from "./layers/editorial-layer";
 
@@ -511,20 +512,23 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
     // F3 — las transiciones con movimiento también reciben motion blur real.
     transitionMotionActive;
 
-  // EDITORIAL — el video se encoge a un panel lateral redondeado; el resto del
-  // frame queda negro para las tarjetas tipográficas. Sin editorial: inset 0
-  // (passthrough exacto al comportamiento histórico).
-  const panelSide = editorialLayout?.panel === "left" ? "left" : "right";
-  const videoContainerStyle: React.CSSProperties = editorialLayout
+  // EDITORIAL — panel DINÁMICO: el video cambia de tamaño/lugar por escenas
+  // (derecha → izquierda → cuadrado → grande → fullscreen) con transición suave.
+  // Sin editorial: inset 0 (passthrough exacto al comportamiento histórico).
+  const editorialPanel = editorialLayout
+    ? editorialPanelAt(editorialLayout, currentTime, compWidth, compHeight)
+    : null;
+  const videoContainerStyle: React.CSSProperties = editorialPanel
     ? {
         position: "absolute",
-        top: "6%",
-        height: "88%",
-        width: `${(editorialLayout.panelWidth ?? 0.4) * 100}%`,
-        ...(panelSide === "left" ? { left: 36 } : { right: 36 }),
-        borderRadius: 18,
+        left: editorialPanel.x,
+        top: editorialPanel.y,
+        width: editorialPanel.w,
+        height: editorialPanel.h,
+        borderRadius: editorialPanel.r,
         overflow: "hidden",
-        boxShadow: "0 24px 90px rgba(0,0,0,0.65)",
+        boxShadow:
+          editorialPanel.r > 1 ? "0 24px 90px rgba(0,0,0,0.65)" : "none",
       }
     : { position: "absolute", inset: 0 };
 
@@ -729,8 +733,11 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         />
       ))}
 
-      {/* EDITORIAL — tarjetas tipográficas (kicker + titular serif + stat + line-art). */}
+      {/* EDITORIAL — tarjetas tipográficas (kicker + titular serif + stat + line-art).
+          Cuando el panel está en "big"/"full", se ocultan: el video respira. */}
       {editorialLayout &&
+        editorialPanel &&
+        !editorialPanel.cardsHidden &&
         editorialCards
           .filter((c) => currentTime >= c.at && currentTime <= c.at + (c.duration ?? 5))
           .map((c, i) => (
@@ -741,6 +748,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
               layout={editorialLayout}
               width={compWidth}
               height={compHeight}
+              panel={editorialPanel}
             />
           ))}
 

@@ -76,10 +76,92 @@ export const editorialLayoutSchema = z.object({
   font: z.enum(["playfair", "dmserif", "lora", "abril"]).default("playfair"),
   /** Fondo del lienzo: oscuro clásico, tinta azulada, o crema claro (texto invertido). */
   background: z.enum(["dark", "ink", "cream"]).default("dark"),
+  /** ESCENAS del panel de video: cambia de tamaño/lugar a lo largo del video
+   *  (derecha → izquierda → cuadrado → grande → FULLSCREEN al final) con
+   *  transición suave. [] = panel estático (compat). */
+  scenes: z
+    .array(
+      z.object({
+        at: z.number(),
+        mode: z.enum(["right", "left", "square_right", "square_left", "big", "full"]),
+      })
+    )
+    .default([]),
 });
 export type EditorialLayout = z.infer<typeof editorialLayoutSchema>;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+// ─── PANEL DINÁMICO: rect del video por escena, con transición suave. ─────────
+export interface PanelRect {
+  x: number; y: number; w: number; h: number; r: number;
+  /** En "big"/"full" las tarjetas se ocultan: el video respira. */
+  cardsHidden: boolean;
+  /** Lado donde va el TEXTO (contrario al panel). */
+  textSide: "left" | "right";
+}
+
+type PanelMode = "right" | "left" | "square_right" | "square_left" | "big" | "full";
+
+function rectFor(mode: PanelMode, pw: number, W: number, H: number): PanelRect {
+  const tall = { w: pw * W, h: 0.88 * H, y: 0.06 * H, r: 18 };
+  const s = Math.min(0.52 * H, 0.8 * W);
+  switch (mode) {
+    case "left":
+      return { x: 36, ...tall, cardsHidden: false, textSide: "right" };
+    case "square_right":
+      return { x: W - 48 - s, y: (H - s) / 2, w: s, h: s, r: 24, cardsHidden: false, textSide: "left" };
+    case "square_left":
+      return { x: 48, y: (H - s) / 2, w: s, h: s, r: 24, cardsHidden: false, textSide: "right" };
+    case "big": {
+      const bw = 0.56 * W;
+      const bh = 0.78 * H;
+      return { x: (W - bw) / 2, y: (H - bh) / 2, w: bw, h: bh, r: 22, cardsHidden: true, textSide: "left" };
+    }
+    case "full":
+      return { x: 0, y: 0, w: W, h: H, r: 0, cardsHidden: true, textSide: "left" };
+    default: // right
+      return { x: W - 36 - pw * W, ...tall, cardsHidden: false, textSide: "left" };
+  }
+}
+
+const easeInOut = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+
+/** Rect del panel en el tiempo t: interpola entre la escena anterior y la actual
+ *  durante 0.8s (ease cúbico). Sin escenas → panel estático clásico. */
+export function editorialPanelAt(
+  layout: EditorialLayout,
+  t: number,
+  W: number,
+  H: number
+): PanelRect {
+  const pw = layout.panelWidth ?? 0.4;
+  const baseMode: PanelMode = (layout.panel ?? "right") as PanelMode;
+  const scenes = (layout.scenes ?? []).filter((s) => typeof s?.at === "number");
+  if (scenes.length === 0) return rectFor(baseMode, pw, W, H);
+
+  const sorted = [...scenes].sort((a, b) => a.at - b.at);
+  let idx = -1;
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].at <= t) idx = i;
+    else break;
+  }
+  const prevMode: PanelMode = idx <= 0 ? (idx === 0 ? baseMode : baseMode) : (sorted[idx - 1].mode as PanelMode);
+  const curMode: PanelMode = idx < 0 ? baseMode : (sorted[idx].mode as PanelMode);
+  const from = rectFor(idx <= 0 ? baseMode : prevMode, pw, W, H);
+  const to = rectFor(curMode, pw, W, H);
+  const p = idx < 0 ? 1 : easeInOut(clamp01((t - sorted[idx].at) / 0.8));
+  const lerp = (a: number, b: number) => a + (b - a) * p;
+  return {
+    x: lerp(from.x, to.x),
+    y: lerp(from.y, to.y),
+    w: lerp(from.w, to.w),
+    h: lerp(from.h, to.h),
+    r: lerp(from.r, to.r),
+    cardsHidden: p > 0.4 ? to.cardsHidden : from.cardsHidden,
+    textSide: p > 0.4 ? to.textSide : from.textSide,
+  };
+}
 
 /** Entrada por líneas: slide-up con máscara (el look "editorial" clásico). */
 const Reveal: React.FC<{ t: number; delay: number; children: React.ReactNode }> = ({
@@ -104,7 +186,9 @@ export const EditorialCardLayer: React.FC<{
   layout: EditorialLayout;
   width: number;
   height: number;
-}> = ({ card, currentTime, layout, width, height }) => {
+  /** Rect actual del panel dinámico (define lado del texto y ancho disponible). */
+  panel?: PanelRect;
+}> = ({ card, currentTime, layout, width, height, panel }) => {
   const GOLD = layout.accent ?? "#f0b429";
   const [FONT_N, FONT_I] = FONT_THEMES[layout.font ?? "playfair"] ?? FONT_THEMES.playfair;
   const theme = EDITORIAL_BG[layout.background ?? "dark"] ?? EDITORIAL_BG.dark;
@@ -115,8 +199,11 @@ export const EditorialCardLayer: React.FC<{
   if (t < 0 || remaining < 0) return null;
   const fadeOut = clamp01(remaining / 0.35);
 
-  const textOnLeft = (layout.panel ?? "right") === "right";
-  const zoneWidth = width * (1 - (layout.panelWidth ?? 0.4)) - 90;
+  const textOnLeft =
+    (panel?.textSide ?? ((layout.panel ?? "right") === "right" ? "left" : "right")) === "left";
+  const zoneWidth = panel
+    ? Math.max(width * 0.3, width - panel.w - 140)
+    : width * (1 - (layout.panelWidth ?? 0.4)) - 90;
   const isStat = Boolean(card.statValue);
   const hasIcon = Boolean(card.icon);
   // Escala tipográfica relativa al alto del frame (sirve igual en 9:16 y 16:9).

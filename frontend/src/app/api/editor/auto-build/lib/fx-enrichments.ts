@@ -64,12 +64,19 @@ export async function applyGraphics(
       kineticHeadlines?: unknown[];
       iconStickers?: unknown[];
       editorialCards?: unknown[];
+      editorialScenes?: unknown[];
     };
     // EDITORIAL: las tarjetas tipográficas REEMPLAZAN charts/íconos (el lado
     // oscuro es de las tarjetas; mezclar saturaría). Solo si el estilo lo es.
     if (project.editorialLayout) {
       if (Array.isArray(g.editorialCards)) project.editorialCards = g.editorialCards;
-      console.log(`[auto-build] editorial: ${g.editorialCards?.length ?? 0} tarjetas`);
+      // Coreografía del panel dinámico (derecha→izquierda→cuadrado→fullscreen).
+      if (Array.isArray(g.editorialScenes)) {
+        (project.editorialLayout as { scenes?: unknown[] }).scenes = g.editorialScenes;
+      }
+      console.log(
+        `[auto-build] editorial: ${g.editorialCards?.length ?? 0} tarjetas · ${g.editorialScenes?.length ?? 0} escenas de panel`
+      );
       return;
     }
     if (Array.isArray(g.dataViz)) project.dataViz = g.dataViz;

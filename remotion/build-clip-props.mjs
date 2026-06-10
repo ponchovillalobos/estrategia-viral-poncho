@@ -182,6 +182,10 @@ if (_existsSync(graphicsPath)) {
       props.editorialCards = g.editorialCards;
       props.dataViz = [];
       props.iconStickers = [];
+      // Coreografía del panel dinámico.
+      if (Array.isArray(g.editorialScenes)) {
+        props.editorialLayout = { ...props.editorialLayout, scenes: g.editorialScenes };
+      }
     }
     console.error(
       `[graphics] mergeado ${props.dataViz.length} charts · ${(props.iconStickers || []).length} íconos`,
