@@ -125,6 +125,10 @@ export const iconStickerSchema = z.object({
   // ícono gigante animado + una palabra (label). Es el momento "motion graphic".
   fullscreen: z.boolean().default(false),
   label: z.string().default(""),
+  // ILUSTRACIÓN ANIMADA (Lottie de Noto): si viene una URL, se renderiza la
+  // animación de escena (dinero volando, reloj sonando, cohete…) EN LUGAR del
+  // ícono estático. "" = ícono clásico (compat total con projects viejos).
+  lottieSrc: z.string().default(""),
 });
 export type IconSticker = z.infer<typeof iconStickerSchema>;
 

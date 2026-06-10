@@ -1,5 +1,6 @@
 import { AbsoluteFill, spring, interpolate } from "remotion";
 import { ICON_MAP, FallbackIcon } from "../icon-map";
+import { RemoteLottie } from "./lottie-sticker-layer";
 import type { IconSticker } from "../schemas";
 
 /**
@@ -60,21 +61,36 @@ export const IconStickerLayer: React.FC<{
               style={{ filter: `drop-shadow(0 0 24px ${sticker.bg})` }}
             />
           </svg>
-          <div
-            style={{
-              width: big,
-              height: big,
-              borderRadius: "50%",
-              background: sticker.bg,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transform: `scale(${enter})`,
-              boxShadow: `0 0 90px ${sticker.bg}aa, 0 24px 60px rgba(0,0,0,0.6)`,
-            }}
-          >
-            <Icon size={big * 0.55} color={sticker.color} strokeWidth={2.2} />
-          </div>
+          {sticker.lottieSrc ? (
+            // ILUSTRACIÓN ANIMADA (Noto): dinero volando, reloj, cohete… La animación
+            // ES la protagonista — sin círculo de fondo, solo glow del color del estilo.
+            <div
+              style={{
+                width: big,
+                height: big,
+                transform: `scale(${enter})`,
+                filter: `drop-shadow(0 0 60px ${sticker.bg}88) drop-shadow(0 16px 40px rgba(0,0,0,0.55))`,
+              }}
+            >
+              <RemoteLottie src={sticker.lottieSrc} />
+            </div>
+          ) : (
+            <div
+              style={{
+                width: big,
+                height: big,
+                borderRadius: "50%",
+                background: sticker.bg,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transform: `scale(${enter})`,
+                boxShadow: `0 0 90px ${sticker.bg}aa, 0 24px 60px rgba(0,0,0,0.6)`,
+              }}
+            >
+              <Icon size={big * 0.55} color={sticker.color} strokeWidth={2.2} />
+            </div>
+          )}
         </div>
         {sticker.label ? (
           <div
@@ -118,21 +134,35 @@ export const IconStickerLayer: React.FC<{
         opacity,
       }}
     >
-      <div
-        style={{
-          width: diameter,
-          height: diameter,
-          borderRadius: "50%",
-          background: sticker.bg,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 16px 40px rgba(0,0,0,0.55), 0 0 0 4px rgba(255,255,255,0.1) inset",
-          transform: `translateY(${floatY}px) scale(${enter}) rotate(${wobbleRot}deg)`,
-        }}
-      >
-        <Icon size={sticker.size} color={sticker.color} strokeWidth={2.4} />
-      </div>
+      {sticker.lottieSrc ? (
+        // Ilustración animada de esquina: sin círculo — el arte de Noto ya es completo.
+        <div
+          style={{
+            width: diameter * 1.25,
+            height: diameter * 1.25,
+            transform: `translateY(${floatY}px) scale(${enter})`,
+            filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.5))",
+          }}
+        >
+          <RemoteLottie src={sticker.lottieSrc} />
+        </div>
+      ) : (
+        <div
+          style={{
+            width: diameter,
+            height: diameter,
+            borderRadius: "50%",
+            background: sticker.bg,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 16px 40px rgba(0,0,0,0.55), 0 0 0 4px rgba(255,255,255,0.1) inset",
+            transform: `translateY(${floatY}px) scale(${enter}) rotate(${wobbleRot}deg)`,
+          }}
+        >
+          <Icon size={sticker.size} color={sticker.color} strokeWidth={2.4} />
+        </div>
+      )}
     </AbsoluteFill>
   );
 };

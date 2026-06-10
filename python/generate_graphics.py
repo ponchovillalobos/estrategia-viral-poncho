@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -26,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from config import (
+    DATA_ROOT,
     LF_GRAPHICS,
     LF_TRANSCRIPTS,
     OLLAMA_MODEL,
@@ -110,6 +112,31 @@ ICON_LABELS = {
 }
 
 
+# ILUSTRACIONES ANIMADAS (Lottie de Noto, bajadas por download_animated_icons.py):
+# concepto del ICON_MAP → archivo .json en {DATA_ROOT}/assets/lottie/noto. Cuando
+# existe, el ícono se renderiza como ANIMACIÓN DE ESCENA (dinero volando, reloj
+# sonando, cohete despegando…) en vez del ícono estático.
+NOTO_FOR_ICON = {
+    "money": "money", "trending": "trending", "brain": "brain", "rocket": "rocket",
+    "target": "target", "lightbulb": "lightbulb", "fire": "fire", "heart": "heart",
+    "eye": "eyes", "warn": "warning", "check": "check", "message": "speech",
+    "award": "trophy", "film": "video", "gem": "gem", "crown": "crown",
+    "zap": "zap", "star": "star", "people": "handshake",
+}
+_API_HOST = os.environ.get("VIRAL_API_HOST", "http://localhost:3000")
+
+
+def _lottie_src_for(icon: str) -> str:
+    """URL de la ilustración animada del concepto, o "" si no está descargada."""
+    name = NOTO_FOR_ICON.get(icon)
+    if not name:
+        return ""
+    f = Path(DATA_ROOT) / "assets" / "lottie" / "noto" / f"{name}.json"
+    if not f.exists():
+        return ""
+    return f"{_API_HOST}/api/lottie/stream?file={name}.json"
+
+
 def concept_icons(words: list[dict], duration: float, target: int) -> list[dict]:
     """Genera íconos VISUALES (no texto) representando los conceptos que se mencionan.
     Uno por tipo de concepto (no repite el mismo ícono), distribuidos en el tiempo."""
@@ -158,6 +185,9 @@ def concept_icons(words: list[dict], duration: float, target: int) -> list[dict]
             "size": 120,
             "fullscreen": is_fs,
             "label": ICON_LABELS.get(icon, "") if is_fs else "",
+            # ILUSTRACIÓN ANIMADA: si el concepto tiene Lottie de Noto descargado,
+            # el render muestra la escena animada en vez del ícono estático.
+            "lottieSrc": _lottie_src_for(icon),
         })
     return out
 

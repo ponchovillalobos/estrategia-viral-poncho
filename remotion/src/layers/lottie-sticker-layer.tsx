@@ -1,6 +1,39 @@
-import { AbsoluteFill } from "remotion";
+import { useEffect, useState } from "react";
+import { AbsoluteFill, cancelRender, continueRender, delayRender } from "remotion";
 import { Lottie, type LottieAnimationData } from "@remotion/lottie";
 import type { LottieSticker } from "../schemas";
+
+/**
+ * Lottie REMOTO: carga el JSON de animación por URL (las ilustraciones animadas
+ * de Noto viven en {DATA_ROOT}/assets/lottie/noto y se sirven por
+ * /api/lottie/stream). delayRender pausa el frame hasta que el JSON llegó.
+ */
+export const RemoteLottie: React.FC<{ src: string; loop?: boolean }> = ({
+  src,
+  loop = true,
+}) => {
+  const [data, setData] = useState<LottieAnimationData | null>(null);
+  const [handle] = useState(() => delayRender(`lottie remoto: ${src}`));
+  useEffect(() => {
+    let cancelled = false;
+    fetch(src)
+      .then((r) => {
+        if (!r.ok) throw new Error(`lottie ${r.status}: ${src}`);
+        return r.json();
+      })
+      .then((d) => {
+        if (cancelled) return;
+        setData(d as LottieAnimationData);
+        continueRender(handle);
+      })
+      .catch((e) => cancelRender(e));
+    return () => {
+      cancelled = true;
+    };
+  }, [src, handle]);
+  if (!data) return null;
+  return <Lottie animationData={data} loop={loop} />;
+};
 import pulseRing from "../lottie/pulse-ring.json";
 import sparkle from "../lottie/sparkle.json";
 import arrowDown from "../lottie/arrow-down.json";
