@@ -89,6 +89,14 @@ export async function validateVideo(filePath: string): Promise<void> {
   );
 
   const lower = result.stderr.toLowerCase();
+  // Distinguir "falta ffprobe" (instalación rota) de "video corrupto": antes un
+  // ENOENT de spawn culpaba al video del usuario y lo mandaba a re-subir en vano.
+  if (lower.includes("enoent") || lower.includes("spawn")) {
+    throw new UploadError(
+      "La app no encuentra su procesador de video (ffprobe). Abrí Configuración → " +
+        "Verificar instalación — el video que subiste está bien."
+    );
+  }
   if (
     result.code !== 0 ||
     lower.includes("moov atom not found") ||

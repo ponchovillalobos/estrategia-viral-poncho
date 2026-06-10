@@ -22,4 +22,6 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Diálogos nativos de error en el arranque (sin plugin de Tauri).
+rfd = "0.15"
 

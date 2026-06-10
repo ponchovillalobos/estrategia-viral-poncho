@@ -9,7 +9,9 @@ import {
   RENDERS_DIR,
   PYTHON_EXE,
   PYTHON_DIR,
+  FFMPEG_EXE,
 } from "@/lib/paths";
+import { humanizeError } from "@/lib/humanize-error";
 import {
   buildProjectForStyle,
   type BuildContext,
@@ -271,7 +273,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       if (!buildProps.ok) {
         updateStep(job.id, styleId, {
           status: "fail",
-          error: `build-props: ${buildProps.stderr.slice(-300)}`,
+          error: humanizeError(buildProps.stderr, "No se pudo preparar el video para generar.").message,
         });
         continue;
       }
@@ -352,9 +354,11 @@ async function processJob(job: Job, body: AutoBuildRequest) {
 
       if (!renderRun.ok) {
         await fs.rm(outPath, { force: true }).catch(() => {});
+        const human = humanizeError(renderRun.stderr, "No se pudo generar el video con este estilo.");
         updateStep(job.id, styleId, {
           status: "fail",
-          error: `render: ${renderRun.stderr.slice(-600)}`,
+          // Mensaje humano primero; cola técnica corta al final para soporte.
+          error: `${human.message}\n[detalle] ${human.technical.slice(-180)}`,
         });
         continue;
       }
@@ -378,8 +382,10 @@ async function processJob(job: Job, body: AutoBuildRequest) {
                 "alimiter=level_in=1:level_out=0.95:limit=0.95," +
                 loudness
               : "alimiter=level_in=1:level_out=0.95:limit=0.95," + loudness;
+          // FFMPEG_EXE (no "ffmpeg" literal): en máquinas de usuarios finales
+          // ffmpeg NO está en el PATH del sistema — solo en tools/ del paquete.
           const masterRun = await runProcess(
-            "ffmpeg",
+            FFMPEG_EXE,
             [
               "-y",
               "-i", outPath,
@@ -430,7 +436,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
             // escaping del ":" de la unidad de Windows dentro del filtergraph.
             const lutFilter = `lut3d=public/luts/${lutName}`;
             const lutRun = await runProcess(
-              "ffmpeg",
+              FFMPEG_EXE,
               [
                 "-y",
                 "-i", outPath,
@@ -488,7 +494,10 @@ async function processJob(job: Job, body: AutoBuildRequest) {
     } catch (err) {
       // Si quedó un temporal a medias por la excepción, limpiarlo (projectId ya resuelto).
       await fs.rm(path.join(RENDERS_DIR, `${projectId}.__rendering.mp4`), { force: true }).catch(() => {});
-      updateStep(job.id, styleId, { status: "fail", error: String(err) });
+      updateStep(job.id, styleId, {
+        status: "fail",
+        error: humanizeError(String(err), "Falló la generación de este estilo.").message,
+      });
     }
   }
 }

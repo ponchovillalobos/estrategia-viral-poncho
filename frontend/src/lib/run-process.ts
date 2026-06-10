@@ -86,9 +86,15 @@ export function runProcess(
       clearTimers();
       resolve({ ok: !timedOut && code === 0, stdout, stderr });
     });
-    proc.on("error", () => {
+    proc.on("error", (err) => {
       clearTimers();
-      resolve({ ok: false, stdout, stderr });
+      // El error de spawn (ej. ENOENT: el ejecutable no existe) ES el diagnóstico —
+      // sin esto, un python/ffmpeg faltante devolvía stderr vacío y nadie sabía por qué.
+      const detail =
+        (err as NodeJS.ErrnoException).code === "ENOENT"
+          ? `[runProcess] ENOENT: no existe el ejecutable "${cmd}" — instalación incompleta`
+          : `[runProcess] ${String(err)}`;
+      resolve({ ok: false, stdout, stderr: `${stderr}\n${detail}` });
     });
   });
 }

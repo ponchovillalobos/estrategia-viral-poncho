@@ -78,6 +78,24 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
   const [pixabayKey, setPixabayKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Doctor: diagnóstico de la instalación (python, ffmpeg, modelos, carpeta).
+  const [doctorChecks, setDoctorChecks] = useState<
+    { id: string; label: string; ok: boolean; fix?: string }[] | null
+  >(null);
+  const [doctorLoading, setDoctorLoading] = useState(false);
+
+  async function runDoctor() {
+    setDoctorLoading(true);
+    try {
+      const r = await fetch("/api/doctor?deep=1", { cache: "no-store" });
+      const d = await r.json();
+      setDoctorChecks(d.checks ?? []);
+    } catch {
+      toast.error("No se pudo verificar la instalación");
+    } finally {
+      setDoctorLoading(false);
+    }
+  }
 
   // Cargar settings cuando se abre el diálogo. Patrón válido pero el lint quiere
   // `use(promise)` con Suspense; no migramos para no romper el flujo de error/finally.
@@ -201,6 +219,33 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
           </div>
         ) : (
           <div className="space-y-6">
+            {/* ── VERIFICAR INSTALACIÓN ──────────────────── */}
+            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
+                  Estado de la instalación
+                </h3>
+                <Button type="button" variant="outline" size="sm" onClick={runDoctor} disabled={doctorLoading}>
+                  {doctorLoading ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {doctorLoading ? "Verificando…" : "Verificar instalación"}
+                </Button>
+              </div>
+              {doctorChecks && (
+                <ul className="space-y-1 text-xs">
+                  {doctorChecks.map((c) => (
+                    <li key={c.id} className={c.ok ? "text-emerald-300" : "text-amber-300"}>
+                      {c.ok ? "✓" : "✗"} {c.label}
+                      {!c.ok && c.fix && <span className="block pl-4 text-[11px] text-muted-foreground">{c.fix}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
             {/* ── HANDLES ──────────────────────────────── */}
             <section className="space-y-3">
               <h3 className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
@@ -225,6 +270,14 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                 );
               })}
             </section>
+
+            {/* ── AVANZADO (colapsado): credenciales OAuth para publicar.
+                Asustaban a usuarios nuevos — el flujo principal no las necesita. */}
+            <details className="rounded-md border border-border bg-muted/20">
+              <summary className="cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+                Avanzado: publicar en redes desde la app (opcional)
+              </summary>
+              <div className="space-y-6 border-t border-border p-3">
 
             {/* ── TIKTOK API CREDENTIALS ─────────────────── */}
             <section className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
@@ -430,6 +483,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                 )}
               </div>
             </section>
+              </div>
+            </details>
 
             {/* ──────── Pixabay API (SFX + música para modo cinematográfico) ──────── */}
             <section className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">

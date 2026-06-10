@@ -181,12 +181,12 @@ export function CinematicStep({
 
   async function convokeAssembly() {
     if (!transcriptPath || !videoDurationSec) {
-      toast.error("Necesito transcript + duración del video para convocar la asamblea");
+      toast.error("Primero transcribí el video (paso 1) para poder analizarlo con IA");
       return;
     }
     if (overlays.length === 0) {
       const ok = confirm(
-        "No subiste imágenes. La asamblea decidirá pacing, camera moves, color, SFX y subtítulos pero NO ubicará overlays. ¿Continuar?"
+        "No subiste imágenes. La IA va a decidir el ritmo, los movimientos de cámara, el color y los sonidos, pero sin imágenes superpuestas. ¿Continuar?"
       );
       if (!ok) return;
     }
@@ -203,10 +203,10 @@ export function CinematicStep({
         }),
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "asamblea falló");
+      if (!r.ok) throw new Error(d.error ?? "el análisis con IA falló — reintentá");
       onChange({ ...value, assemblyResult: d });
       toast.success(
-        `Asamblea lista en ${d._elapsed_sec}s · ${overlays.length} overlays distribuidos`
+        `Análisis IA listo en ${d._elapsed_sec}s · ${overlays.length} imágenes ubicadas`
       );
       refresh();
     } catch (err) {
@@ -381,7 +381,7 @@ export function CinematicStep({
                 <Sparkles className="mr-2 h-3.5 w-3.5" />
               )}
               {assemblyLoading
-                ? "Asamblea trabajando (3-5 min)…"
+                ? "La IA está analizando tu video (3-5 min)…"
                 : "Convocar asamblea cinematográfica"}
             </Button>
             {!transcriptPath && (

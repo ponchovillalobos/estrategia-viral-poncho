@@ -6,6 +6,7 @@ import { REMOTION_DIR, RENDERS_DIR, RAW_DIR } from "@/lib/paths";
 import {
   acquireRenderLock,
   releaseRenderLock,
+  sweepOrphanLocks,
   remotionConcurrency,
   renameWithRetry,
   REMOTION_DELAY_TIMEOUT_MS,
@@ -39,10 +40,17 @@ export async function POST(req: NextRequest) {
 
     await fs.mkdir(RENDERS_DIR, { recursive: true });
 
+    // Locks huérfanos de una sesión anterior (app cerrada a mitad de render):
+    // se barren una vez por boot, antes del primer acquire.
+    await sweepOrphanLocks();
+
     // Lock por video: dos renders simultáneos del mismo id corromperían el temporal.
     if (!(await acquireRenderLock(videoId))) {
       return NextResponse.json(
-        { error: "ya hay un render en curso para este video" },
+        {
+          error:
+            "Este video ya se está generando en este momento. Esperá a que termine (mirá el panel de tareas abajo a la derecha) y reintentá.",
+        },
         { status: 409 }
       );
     }

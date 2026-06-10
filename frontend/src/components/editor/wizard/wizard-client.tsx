@@ -3,7 +3,7 @@
 // Thumbnails dinámicos de videos raw (sizes flexibles).
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -181,6 +181,7 @@ export function WizardClient() {
   const [generatingCaption, setGeneratingCaption] = useState(false);
   const [building, setBuilding] = useState(false);
   const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
   // Configuración del modo cinematográfico (opt-in). Cuando enabled=true, el sistema
   // sube imágenes, convoca asamblea de agentes IA, y aplica film grain + vignette +
   // subtítulos cinematográficos al render.
@@ -612,6 +613,7 @@ export function WizardClient() {
                 )}
                 {importing ? "importando…" : "importar desde mi compu"}
                 <input
+                  ref={importInputRef}
                   type="file"
                   accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm"
                   multiple
@@ -627,8 +629,12 @@ export function WizardClient() {
             <EmptyState
               icon={FileVideo}
               tone="amber"
-              title="No hay videos en tu carpeta de grabaciones"
-              description={`Usá «importar desde mi compu» arriba a la derecha o copiá MP4s a ${rawDir || "raw/"}.`}
+              title="Traé tu primer video"
+              description="Elegí un video de tu computadora (MP4, MOV o similar) y la app lo edita por vos."
+              cta={{
+                label: importing ? "Importando…" : "Importar desde mi compu",
+                onClick: () => importInputRef.current?.click(),
+              }}
             />
           ) : (
             <>
@@ -646,7 +652,7 @@ export function WizardClient() {
                   disabled={selectedVideos.size === 0}
                   className="rounded border border-border bg-muted/30 px-2 py-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
                 >
-                  limpiar
+                  quitar selección
                 </button>
                 <span className="ml-auto font-mono-tab text-[10px] text-muted-foreground">
                   ↕ scroll para ver más

@@ -53,6 +53,20 @@ export async function GET(
     // no cacheada, generala
   }
 
+  // NEGATIVE-CACHE: si este video ya falló (corrupto), no reintentar 8s de
+  // ffprobe + 30s de ffmpeg en CADA carga de la galería — 404 instantáneo.
+  // El marcador caduca a la hora (por si el archivo se reemplaza).
+  const failedMark = path.join(THUMB_DIR, `${id}.failed`);
+  try {
+    const st = await fs.stat(failedMark);
+    if (Date.now() - st.mtimeMs < 60 * 60 * 1000) {
+      return NextResponse.json({ error: "thumbnail no disponible (video ilegible)", id }, { status: 404 });
+    }
+    await fs.rm(failedMark, { force: true });
+  } catch {
+    /* sin marcador: seguir normal */
+  }
+
   // Buscar el video fuente en orden: short raw → long_form clip → long_form render (último recurso).
   // Para long-form, los "clips" son los videos individuales (uno por proyecto), generados desde el video clean.
   const source = req.nextUrl.searchParams.get("source"); // opcional: "short" | "long_form"
@@ -139,6 +153,8 @@ export async function GET(
       headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=86400" },
     });
   } catch (err) {
+    // Marcar el fallo para no re-pagar ffprobe+ffmpeg en cada render de la galería.
+    await fs.writeFile(failedMark, String(err)).catch(() => {});
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err), id },
       { status: 500 }

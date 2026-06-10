@@ -661,7 +661,7 @@ export function LongFormWizard() {
                     disabled={selectedIds.size === 0}
                     className="rounded border border-border bg-muted/30 px-2 py-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
                   >
-                    limpiar
+                    quitar selección
                   </button>
                 </div>
               )}
@@ -707,12 +707,13 @@ export function LongFormWizard() {
                           {new Date(v.modifiedAt).toLocaleString("es")}
                         </p>
                         <div className="mt-1.5 flex flex-wrap gap-1">
-                          <StatusPill ok={v.hasTranscript} label="transcript" />
-                          <StatusPill ok={v.hasClean} label="clean" />
-                          <StatusPill ok={v.hasProposals} label="propuestas" />
-                          <StatusPill ok={v.clipsExtracted > 0} label={`${v.clipsExtracted} clips`} />
+                          {/* Etiquetas en lenguaje simple (antes: jerga "transcript"/"clean") */}
+                          <StatusPill ok={v.hasTranscript} label="texto" title="Lo que se dice en el video ya está convertido a texto" />
+                          <StatusPill ok={v.hasClean} label="sin silencios" title="Ya se detectaron y marcaron los silencios para recortar" />
+                          <StatusPill ok={v.hasProposals} label="momentos elegidos" title="La IA ya eligió los mejores momentos para los clips" />
+                          <StatusPill ok={v.clipsExtracted > 0} label={`${v.clipsExtracted} clips`} title="Clips cortos ya recortados de este video" />
                           {v.rendersAvailable > 0 && (
-                            <StatusPill ok label={`${v.rendersAvailable} renders`} color="violet" />
+                            <StatusPill ok label={`${v.rendersAvailable} videos listos`} color="violet" title="Clips ya editados, listos en Mis videos" />
                           )}
                         </div>
                       </div>
@@ -1351,10 +1352,13 @@ function StatusPill({
   ok,
   label,
   color,
+  title,
 }: {
   ok: boolean;
   label: string;
   color?: "emerald" | "violet";
+  /** Tooltip en lenguaje simple: qué significa este estado. */
+  title?: string;
 }) {
   const colorClass = !ok
     ? "bg-muted text-muted-foreground"
@@ -1363,6 +1367,7 @@ function StatusPill({
       : "bg-emerald-500/20 text-emerald-300";
   return (
     <span
+      title={title}
       className={cn(
         "rounded px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider",
         colorClass

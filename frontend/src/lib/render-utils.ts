@@ -34,10 +34,24 @@ function lockPath(videoId: string): string {
   return path.join(RENDERS_DIR, `${videoId}.__lock`);
 }
 
+/** ¿El proceso dueño del lock sigue vivo? (señal 0 = solo chequeo, no mata). */
+function pidAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false; // ESRCH: el proceso murió (crash o cierre de la app)
+  }
+}
+
 /**
  * Intenta tomar el lock de render de un video. Devuelve `true` si lo tomó.
- * Si hay un lock vivo (otro render en curso, < 30 min), devuelve `false`.
- * Un lock viejo (crash previo) se considera stale y se roba.
+ * Un lock se considera HUÉRFANO (y se roba al instante) si el PID que lo creó
+ * ya no existe — cubre el caso real de cerrar la app a mitad de un render
+ * (TerminateProcess no deja correr el finally que lo liberaba; antes el
+ * usuario quedaba bloqueado con "409 ya hay un render en curso" hasta 30 min).
+ * El mtime > 30 min queda como red de seguridad adicional.
  */
 export async function acquireRenderLock(videoId: string): Promise<boolean> {
   const lock = lockPath(videoId);
@@ -48,8 +62,14 @@ export async function acquireRenderLock(videoId: string): Promise<boolean> {
     return true;
   } catch {
     try {
-      const stat = await fs.stat(lock);
-      if (Date.now() - stat.mtimeMs > STALE_LOCK_MS) {
+      const [stat, owner] = await Promise.all([
+        fs.stat(lock),
+        fs.readFile(lock, "utf-8").catch(() => ""),
+      ]);
+      const ownerPid = parseInt(owner.trim(), 10);
+      const orphan = Number.isFinite(ownerPid) && !pidAlive(ownerPid);
+      const stale = Date.now() - stat.mtimeMs > STALE_LOCK_MS;
+      if (orphan || stale) {
         await fs.rm(lock, { force: true });
         await fs.writeFile(lock, String(process.pid), { flag: "wx" });
         return true;
@@ -58,6 +78,29 @@ export async function acquireRenderLock(videoId: string): Promise<boolean> {
       /* carrera: otro proceso lo limpió/tomó entre medio */
     }
     return false;
+  }
+}
+
+/**
+ * Barre locks huérfanos al BOOT del server: cualquier `.__lock` cuyo PID ya no
+ * exista es de una sesión anterior. Se llama una vez por proceso (lazy).
+ */
+let lockSweepDone = false;
+export async function sweepOrphanLocks(): Promise<void> {
+  if (lockSweepDone) return;
+  lockSweepDone = true;
+  try {
+    const entries = await fs.readdir(RENDERS_DIR);
+    for (const e of entries) {
+      if (!e.endsWith(".__lock")) continue;
+      const p = path.join(RENDERS_DIR, e);
+      const owner = parseInt((await fs.readFile(p, "utf-8").catch(() => "")).trim(), 10);
+      if (!Number.isFinite(owner) || !pidAlive(owner)) {
+        await fs.rm(p, { force: true }).catch(() => {});
+      }
+    }
+  } catch {
+    /* RENDERS_DIR puede no existir aún */
   }
 }
 

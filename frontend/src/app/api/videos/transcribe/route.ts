@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { runPython } from "@/lib/run-python";
+import { runPythonJson } from "@/lib/run-python";
+import { humanizeError } from "@/lib/humanize-error";
 import { RAW_DIR, TRANSCRIPTS_DIR } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
@@ -23,11 +24,17 @@ export async function POST(req: NextRequest) {
   }
 
   const videoPath = path.join(RAW_DIR, match);
-  const result = await runPython("transcribe.py", [videoPath]);
+  // SIN timeout total: la primera vez puede descargar el modelo (~1.5 GB) y un
+  // video largo en CPU tarda. El idle-timeout de 8 min detecta cuelgues REALES
+  // (descarga y transcripción vivas emiten progreso) sin matar trabajo legítimo.
+  const result = await runPythonJson("transcribe.py", [videoPath], {
+    idleTimeoutMs: 8 * 60 * 1000,
+  });
 
   if (!result.ok) {
+    const human = humanizeError(result.stderr, "No se pudo transcribir el video.");
     return NextResponse.json(
-      { error: "transcribe failed", stderr: result.stderr.slice(-2000) },
+      { error: human.message, technical: human.technical },
       { status: 500 }
     );
   }

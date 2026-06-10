@@ -5,6 +5,7 @@ import { TabNav } from "@/components/layout/tab-nav";
 import { Toaster } from "@/components/ui/sonner";
 import { NotificationPoller } from "@/components/layout/notification-poller";
 import { QueuePanel } from "@/components/jobs/queue-panel";
+import { SetupBanner } from "@/components/layout/setup-banner";
 
 // Inter — sans-serif moderna y muy legible, estándar de UI (Figma, Linear, Notion).
 // Cargamos los weights variables para títulos (700/800) y cuerpo (400/500/600).
@@ -39,6 +40,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <TabNav />
+        <SetupBanner />
         <main className="flex-1 mx-auto w-full max-w-7xl px-6 py-6">
           {children}
         </main>

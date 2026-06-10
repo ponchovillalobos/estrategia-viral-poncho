@@ -32,7 +32,11 @@ export const IG_SCOPES = [
 ] as const;
 
 export function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+  return (
+    process.env.VIRAL_API_HOST ??
+    process.env.NEXT_PUBLIC_BASE_URL ??
+    "http://localhost:3000"
+  );
 }
 
 export function getRedirectUri(): string {
