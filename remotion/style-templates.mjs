@@ -694,7 +694,7 @@ export function buildProjectForStyle(ctx, styleId) {
         vignette: false,
         captionBounce: false,
         musicTrack: pickRandomMusicTrack(ctx.videoId),
-        musicVolume: 0.09,
+        musicVolume: 0.06,
         editorialLayout: {
           panel: "right",
           panelWidth: ctx.width > ctx.height ? 0.34 : 0.46,

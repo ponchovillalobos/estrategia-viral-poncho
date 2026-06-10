@@ -958,7 +958,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
         vignette: false,
         captionBounce: false,
         musicTrack: pickRandomMusicTrack(ctx.videoId),
-        musicVolume: 0.09,
+        musicVolume: 0.06,
         editorialLayout: {
           panel: "right" as const,
           // 16:9 → panel angosto tipo documental; 9:16 → casi media pantalla.

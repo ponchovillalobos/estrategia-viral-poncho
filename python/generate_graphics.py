@@ -528,7 +528,8 @@ def _fill_card_gaps(cards: list[dict], duration: float) -> list[dict]:
     for c in sorted(cards, key=lambda x: x["at"]):
         gap = c["at"] - cursor
         while gap > 1.0:
-            chunk = gap if gap <= 9.0 else min(7.0, gap - 1.0)
+            # bloques de ~5.5s: la ilustración/kicker rota seguido (ritmo visual)
+            chunk = gap if gap <= 7.0 else min(5.5, gap - 1.0)
             out.append(_visual(cursor + 0.15, chunk - 0.5))
             cursor += chunk
             gap = c["at"] - cursor
@@ -536,7 +537,7 @@ def _fill_card_gaps(cards: list[dict], duration: float) -> list[dict]:
         cursor = max(cursor, c["at"] + float(c.get("duration", 5)))
     gap = duration - cursor
     while gap > 1.5:
-        chunk = gap if gap <= 9.0 else min(7.0, gap - 1.0)
+        chunk = gap if gap <= 7.0 else min(5.5, gap - 1.0)
         out.append(_visual(cursor + 0.15, chunk - 0.6))
         cursor += chunk
         gap = duration - cursor
@@ -576,8 +577,9 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
     if not sents:
         # Sin frases utilizables: el lienzo igual se llena con tarjetas visuales.
         return _fill_card_gaps([], duration)
-    # Ventanas más densas (~1 tarjeta cada 8-12s) — menos aire muerto entre frases.
-    window = max(8.0, min(12.0, duration / max(2, round(duration / 10))))
+    # Ventanas CORTAS (~1 tarjeta cada 6-8s): el texto cambia al ritmo de la voz,
+    # nunca se queda la misma tarjeta clavada en pantalla.
+    window = max(5.5, min(8.0, duration / max(3, round(duration / 6.5))))
     picked: list[dict] = []
     t0 = 0.0
     while t0 < duration - 4:
@@ -609,9 +611,11 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
         text = s["text"].strip()
         toks = text.split()
         at = round(max(0.2, s["start"] - 0.2), 2)
-        # duración: CONTIGUA hasta justo antes de la próxima tarjeta (sin huecos)
+        # duración: hasta la próxima tarjeta PERO máx ~7.5s — si la siguiente frase
+        # fuerte tarda más, _fill_card_gaps mete una tarjeta visual en el medio
+        # (la pantalla siempre está CAMBIANDO, al ritmo del video).
         next_at = picked[i + 1]["start"] - 0.4 if i + 1 < len(picked) else min(duration, s["start"] + 8)
-        dur = round(max(3.5, min(20.0, next_at - at)), 2)
+        dur = round(max(3.5, min(7.5, next_at - at)), 2)
         icon = _icon_for_text(text)
         card: dict = {"at": at, "duration": dur, "kicker": _KICKERS[i % len(_KICKERS)],
                       "title": "", "accent": "", "subtitle": "", "number": "",
@@ -643,11 +647,11 @@ def editorial_cards(words: list[dict], duration: float) -> list[dict]:
         if not card["icon"]:
             card["icon"] = _FALLBACK_ICONS[i % len(_FALLBACK_ICONS)]
         cards.append(card)
-    # La ÚLTIMA tarjeta se extiende hasta el final: acompaña la escena de cierre
-    # (cuando el aspecto no permite fullscreen, el panel grande va con esta frase).
+    # La ÚLTIMA tarjeta se extiende hacia el cierre (máx 9s — si falta más, los
+    # bloques visuales rellenan y el cierre queda con frase o animación igual).
     if cards:
         last = cards[-1]
-        last["duration"] = round(max(last["duration"], duration - last["at"] - 0.2), 2)
+        last["duration"] = round(min(9.0, max(last["duration"], duration - last["at"] - 0.2)), 2)
     # Y cualquier hueco restante (>1s) se rellena con tarjetas VISUALES:
     # la pantalla NUNCA se queda con el video solo y el lienzo desnudo.
     return _fill_card_gaps(cards, duration)
@@ -657,6 +661,9 @@ _EDITORIAL_LLM_PROMPT = """Sos el director de arte de un documental viral en esp
 Te paso las TARJETAS de texto que acompañan a un video hablado (generadas por
 heurística desde el transcript). Tu trabajo: REESCRIBIRLAS para que sean claras,
 impactantes y APORTEN — no repitas literal lo que se dice en el video.
+Las tarjetas van EN VIVO con la voz: cada una refuerza lo que se está diciendo
+EN ESE MOMENTO (su "at" en segundos) o suma un dato que capte la atención justo
+ahí. No hagas resúmenes globales — acompañá el momento.
 
 Reglas por tarjeta:
 - "title": máx 7 palabras, potente, estilo titular de revista. Termina en punto.
