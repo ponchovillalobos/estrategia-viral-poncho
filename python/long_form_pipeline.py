@@ -502,6 +502,7 @@ def step_render_clip(
     remotion_concurrency: int = 0,
     subtitle_font: str | None = None,
     subtitle_color: str | None = None,
+    editorial_theme: str | None = None,
 ) -> Path:
     """Genera proyecto + props + render con Remotion para un (clip, style) específico.
 
@@ -525,6 +526,8 @@ def step_render_clip(
         # Fuente + color de subtítulos elegidos en el wizard de largos ("" = del estilo).
         subtitle_font or "",
         subtitle_color or "",
+        # Tema editorial "font:background" (solo lo usa el estilo editorial).
+        editorial_theme or "",
     ]
     run(build_args, cwd=REMOTION_DIR)
     # 1.5) motion tracking opt-in (estilos que lo declaran, ej. hype): parchea trackPath
@@ -603,6 +606,11 @@ def main() -> int:
         "--subtitle-color",
         default=None,
         help="Color del TEXTO de subtítulos en hex (#fde047). 'auto' o vacío = el del estilo",
+    )
+    parser.add_argument(
+        "--editorial-theme",
+        default=None,
+        help="Tema del estilo editorial como 'font:background' (ej. playfair:dark). Solo aplica al estilo editorial",
     )
     parser.add_argument(
         "--platforms",
@@ -797,6 +805,7 @@ def main() -> int:
                 remotion_concurrency=rc,
                 subtitle_font=args.subtitle_font,
                 subtitle_color=args.subtitle_color,
+                editorial_theme=args.editorial_theme,
             )
             return (c["index"], style_id, out)
 

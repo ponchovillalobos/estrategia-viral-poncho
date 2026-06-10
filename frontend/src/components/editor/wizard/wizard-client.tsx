@@ -10,7 +10,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, FileVideo, Mic, Sparkles, Music2, Camera, Briefcase, Send } from "lucide-react";
 import { toast } from "sonner";
 import { StyleMiniDemo } from "@/components/editor/wizard/style-mini-demo";
@@ -77,7 +76,7 @@ const PLATFORMS_META: { id: PlatformId; label: string; icon: typeof Music2; colo
   { id: "linkedin", label: "LinkedIn", icon: Briefcase, color: "#38bdf8" },
 ];
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
 
 // Nombres en lenguaje de principiante (no los codenames internos). `recommended` marca
 // el más fácil/rápido para un primer video. Orden: el recomendado primero.
@@ -179,7 +178,6 @@ export function WizardClient() {
   // Plantillas guardables: combos favoritos (estilo+color+fuente+plataformas).
   type Template = { id: string; name: string; styles: string[]; accentColor: string; subtitleFont: string; subtitleColor?: string; platforms: string[]; aspectRatio: "9:16" | "16:9" };
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [day, setDay] = useState<string>("");
   const [caption, setCaption] = useState<string>("");
   const [captionMeta, setCaptionMeta] = useState<CaptionMeta | null>(null);
   const [transcribing, setTranscribing] = useState(false);
@@ -227,6 +225,11 @@ export function WizardClient() {
   const selectedVideoList = videos.filter((v) => selectedVideos.has(v.id));
   const firstSelected = selectedVideoList[0];
 
+  // Editorial no lleva subtítulos: su tipografía y colores vienen del TEMA elegido en el
+  // paso 2. Si es el ÚNICO estilo, los selectores de texto no aplican y se ocultan.
+  const hasEditorial = selectedStyles.includes("editorial");
+  const editorialOnly = hasEditorial && selectedStyles.every((s) => s === "editorial");
+
   function toggleVideo(id: string) {
     setSelectedVideos((prev) => {
       const next = new Set(prev);
@@ -270,6 +273,7 @@ export function WizardClient() {
     }
   }
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadTemplates();
   }, []);
 
@@ -460,7 +464,6 @@ export function WizardClient() {
           })(),
           platforms: selectedPlatforms,
           aspectRatio,
-          day: day ? parseInt(day, 10) : undefined,
           caption: caption || undefined,
           captionMeta: captionMeta ?? undefined,
           // Modo cinematográfico (opt-in). Si enabled=false, el render sale idéntico a antes.
@@ -532,7 +535,7 @@ export function WizardClient() {
             const okCount = allResults.filter((r) => r.ok).length;
             toast.success(`${okCount}/${allResults.length} renders OK`);
             setBuilding(false);
-            setStep(6);
+            setStep(5);
             return;
           }
           setTimeout(poll, 2000);
@@ -552,7 +555,7 @@ export function WizardClient() {
       {/* Stepper visual — muestra el recorrido completo para que el usuario sepa dónde está.
           Pasos hechos: check verde, paso actual: bg primary con glow, futuros: gris. */}
       <div className="flex items-start gap-1 text-xs sm:gap-2">
-        {["Video", "Estilo", "Color", "Redes", "Generar"].map((label, i) => {
+        {["Video", "Estilo", "Color", "Generar"].map((label, i) => {
           const n = i + 1;
           const done = step > n;
           const current = step === n;
@@ -885,8 +888,9 @@ export function WizardClient() {
         <Card className="border-border bg-card p-6">
           <h2 className="mb-2 text-lg font-medium">3. Elegí el color principal</h2>
           <p className="mb-4 text-sm text-muted-foreground">
-            Este color se usa en todo el video: el resaltado de los subtítulos, los stickers y
-            los detalles. Elegí el que mejor vaya con tu marca o tu mensaje.
+            {editorialOnly
+              ? "En el estilo Editorial este color pinta las palabras destacadas de los titulares y las ilustraciones animadas."
+              : "Este color se usa en todo el video: el resaltado de los subtítulos, los stickers y los detalles. Elegí el que mejor vaya con tu marca o tu mensaje."}
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {PALETTE.map((c) => {
@@ -911,6 +915,27 @@ export function WizardClient() {
             })}
           </div>
 
+          {/* Editorial-solo: la tipografía/colores del texto vienen del TEMA del paso 2,
+              así que los selectores de subtítulos no aplican y se ocultan. */}
+          {editorialOnly && (
+            <div className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+              <p className="font-medium">📰 El estilo Editorial no lleva subtítulos</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Usa titulares serif gigantes con la tipografía y el fondo del tema que elegiste
+                en el paso anterior. Por eso acá no hay nada más que configurar: solo el color
+                principal de arriba.
+              </p>
+            </div>
+          )}
+
+          {!editorialOnly && (
+            <>
+          {hasEditorial && (
+            <p className="mt-6 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90">
+              📰 Lo de abajo no afecta al estilo Editorial (usa la tipografía de su tema); solo
+              aplica a los demás estilos elegidos.
+            </p>
+          )}
           <h3 className="mb-2 mt-6 text-sm font-medium">Color del texto de los subtítulos</h3>
           <p className="mb-3 text-xs text-muted-foreground">
             El color de las palabras (el resaltado de la palabra activa usa el color principal de
@@ -956,6 +981,8 @@ export function WizardClient() {
               subtítulos
             </span>
           </div>
+            </>
+          )}
 
           {/* F4 — Vista previa REAL: un frame de TU video con el estilo + color + fuente. */}
           <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3 text-center">
@@ -991,7 +1018,6 @@ export function WizardClient() {
               />
             )}
             {previewUrl && !previewIsVideo && (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={previewUrl}
                 alt="Vista previa del estilo sobre tu video"
@@ -1000,6 +1026,8 @@ export function WizardClient() {
             )}
           </div>
 
+          {!editorialOnly && (
+            <>
           <h3 className="mb-2 mt-6 text-sm font-medium">Tipografía de los subtítulos</h3>
           <p className="mb-3 text-xs text-muted-foreground">
             &quot;Automática&quot; usa la del estilo. O elegí una para darle otra personalidad.
@@ -1028,64 +1056,45 @@ export function WizardClient() {
               );
             })}
           </div>
+            </>
+          )}
         </Card>
       )}
 
-      {/* STEP 4: plataformas destino */}
+      {/* STEP 4: redes + caption + confirmar */}
       {step === 4 && (
         <Card className="border-border bg-card p-6">
-          <h2 className="mb-2 text-lg font-medium">4. ¿En qué redes lo vas a publicar?</h2>
-          <p className="mb-4 text-sm text-muted-foreground">
-            La descripción se adapta a la primera red que elijas: en LinkedIn va una versión
-            más larga, y en Instagram una más corta. Siempre podés editarla después.
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {PLATFORMS_META.map((p) => {
-              const selected = selectedPlatforms.includes(p.id);
-              const Icon = p.icon;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => togglePlatform(p.id)}
-                  className={`flex flex-col items-center gap-2 rounded-lg border p-4 transition-all ${
-                    selected
-                      ? "border-emerald-400 ring-1 ring-emerald-400 bg-emerald-500/5"
-                      : "border-border hover:border-foreground/30"
-                  }`}
-                >
-                  <Icon className="h-6 w-6" style={{ color: selected ? p.color : undefined }} />
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium">{p.label}</span>
-                    {selected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <p className="mt-4 text-xs text-muted-foreground">
-            {selectedPlatforms.length === 0
-              ? "Seleccioná al menos una"
-              : `${selectedPlatforms.length} plataforma${selectedPlatforms.length === 1 ? "" : "s"} seleccionada${selectedPlatforms.length === 1 ? "" : "s"}`}
-          </p>
-        </Card>
-      )}
-
-      {/* STEP 5: meta + confirmar + caption IA */}
-      {step === 5 && (
-        <Card className="border-border bg-card p-6">
-          <h2 className="mb-4 text-lg font-medium">5. Revisá y generá tu video</h2>
+          <h2 className="mb-4 text-lg font-medium">4. Revisá y generá tu video</h2>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5">
-                  Día del plan (opcional)
-                  <HelpHint label="Para qué sirve el día del plan">
-                    Si seguís el plan de 30 días, podés anotar a qué día corresponde este
-                    video para organizarte. Es opcional: dejalo vacío si no lo usás.
-                  </HelpHint>
-                </Label>
-                <Input type="number" min={1} max={30} value={day} onChange={(e) => setDay(e.target.value)} />
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                ¿Para qué redes es?
+                <HelpHint label="Para qué sirven las redes">
+                  Solo ajusta el TONO de la descripción: para LinkedIn se genera una versión
+                  más larga y profesional, para Instagram una más corta con hashtags.
+                </HelpHint>
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                {PLATFORMS_META.map((p) => {
+                  const selected = selectedPlatforms.includes(p.id);
+                  const Icon = p.icon;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => togglePlatform(p.id)}
+                      className={`flex items-center justify-center gap-2 rounded-lg border p-3 transition-all ${
+                        selected
+                          ? "border-emerald-400 ring-1 ring-emerald-400 bg-emerald-500/5"
+                          : "border-border hover:border-foreground/30"
+                      }`}
+                    >
+                      <Icon className="h-5 w-5" style={{ color: selected ? p.color : undefined }} />
+                      <span className="text-sm font-medium">{p.label}</span>
+                      {selected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div className="space-y-1.5">
@@ -1180,7 +1189,6 @@ export function WizardClient() {
                 · Plataformas:{" "}
                 <span className="text-foreground">{selectedPlatforms.join(", ") || "—"}</span>
               </li>
-              <li>· Día: {day || "—"}</li>
               <li>
                 · Vas a generar{" "}
                 <span className="text-foreground">
@@ -1294,8 +1302,8 @@ export function WizardClient() {
         </Card>
       )}
 
-      {/* STEP 6: resultados — cierre celebratorio */}
-      {step === 6 && (
+      {/* STEP 5: resultados — cierre celebratorio */}
+      {step === 5 && (
         <Card className="border-border bg-card p-6">
           {results.some((r) => r.ok) && <Confetti />}
           {(() => {
@@ -1372,7 +1380,7 @@ export function WizardClient() {
       )}
 
       {/* Navegación */}
-      {step < 6 && (
+      {step < 5 && (
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
@@ -1382,14 +1390,13 @@ export function WizardClient() {
             <ChevronLeft className="mr-1.5 h-4 w-4" />
             Atrás
           </Button>
-          {step < 5 && (
+          {step < 4 && (
             <Button
               onClick={step === 1 ? advanceFromStep1 : () => setStep(step + 1)}
               disabled={
                 transcribing ||
                 (step === 1 && selectedVideos.size === 0) ||
-                (step === 2 && selectedStyles.length === 0) ||
-                (step === 4 && selectedPlatforms.length === 0)
+                (step === 2 && selectedStyles.length === 0)
               }
             >
               {step === 1 && transcribing ? (

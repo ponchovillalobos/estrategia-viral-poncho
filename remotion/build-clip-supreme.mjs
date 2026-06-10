@@ -53,6 +53,8 @@ const subtitleColorOverride =
   process.argv[8] && process.argv[8].trim() && process.argv[8].trim() !== "auto"
     ? process.argv[8].trim()
     : null;
+// Tema editorial "font:background" (ej. "playfair:dark"). Solo aplica al estilo editorial.
+const editorialThemeArg = (process.argv[9] && process.argv[9].trim()) || null;
 
 if (!videoId || !clipIndex) {
   console.error("Uso: node build-clip-supreme.mjs <video_id> <clip_index> [style_id] [accent_color] [aspect_ratio]");
@@ -167,6 +169,12 @@ const project = buildProjectForStyle(ctx, styleId);
 // Se aplican DESPUÉS de buildProjectForStyle para ganarle al default del estilo.
 if (subtitleFontOverride) project.subtitleFont = subtitleFontOverride;
 if (subtitleColorOverride) project.subtitleColor = subtitleColorOverride;
+// Tema editorial elegido en el wizard de largos: pisa font/background del layout.
+if (editorialThemeArg && project.editorialLayout) {
+  const [themeFont, themeBg] = editorialThemeArg.split(":");
+  if (themeFont) project.editorialLayout.font = themeFont;
+  if (themeBg) project.editorialLayout.background = themeBg;
+}
 
 writeFileSync(outPath, JSON.stringify(project, null, 2), "utf-8");
 console.log(

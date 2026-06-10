@@ -212,7 +212,15 @@ const PLATFORMS_META: { id: PlatformId; label: string; icon: typeof Music2; colo
   { id: "linkedin", label: "LinkedIn", icon: Briefcase, color: "#38bdf8" },
 ];
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 5;
+
+// Temas del estilo Editorial (paridad con el wizard de shorts): fuente serif + fondo.
+const EDITORIAL_THEMES = [
+  { id: "clasico", name: "Clásico", font: "playfair", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "Georgia, serif" },
+  { id: "tinta", name: "Tinta", font: "dmserif", background: "ink", bg: "#0a0f16", text: "#e9eef5", demoFont: "'Times New Roman', serif" },
+  { id: "crema", name: "Crema", font: "lora", background: "cream", bg: "#f5efe3", text: "#1c1611", demoFont: "Georgia, serif" },
+  { id: "bold", name: "Bold", font: "abril", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "'Arial Black', serif" },
+] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -266,7 +274,11 @@ export function LongFormWizard() {
   // Fuente + color del TEXTO de subtítulos (paridad con el wizard de shorts).
   const [subtitleFont, setSubtitleFont] = useState<string>("auto");
   const [subtitleColor, setSubtitleColor] = useState<string>("auto");
-  const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["tiktok", "instagram"]);
+  // Tema del estilo Editorial (fuente serif + fondo). Solo aplica si elegís 📰.
+  const [editorialTheme, setEditorialTheme] = useState<string>("clasico");
+  // Solo las redes visibles en los botones (antes arrancaba con "tiktok" preseleccionado
+  // pero invisible — quedó de cuando existía auto-publicación).
+  const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["instagram", "linkedin"]);
   const [doRender, setDoRender] = useState(true);
   // Aspect ratio. Para largos default 9:16 también (extract_clips hace center-crop si el source es 16:9).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
@@ -458,6 +470,10 @@ export function LongFormWizard() {
       };
       if (maxClips.trim()) body.maxClips = parseInt(maxClips, 10);
       if (ollamaModel.trim()) body.model = ollamaModel.trim();
+      if (selectedStyles.includes("editorial")) {
+        const t = EDITORIAL_THEMES.find((x) => x.id === editorialTheme);
+        if (t) body.editorialTheme = { font: t.font, background: t.background };
+      }
 
       const r = await fetch("/api/long_form/process", {
         method: "POST",
@@ -495,6 +511,11 @@ export function LongFormWizard() {
   // sólo cuando TODOS tienen transcript ya hecho.
   const selectedList = list?.videos.filter((v) => selectedIds.has(v.videoId)) ?? [];
   const allSelectedHaveTranscript = selectedList.length > 0 && selectedList.every((v) => v.hasTranscript);
+
+  // Editorial no lleva subtítulos: su tipografía/colores vienen del tema. Si es el ÚNICO
+  // estilo elegido, los selectores de texto de subtítulos no aplican y se ocultan.
+  const hasEditorial = selectedStyles.includes("editorial");
+  const editorialOnly = hasEditorial && selectedStyles.every((s) => s === "editorial");
 
   // ─── Render: si hay job activo, mostrar JobView (panel dedicado) ────────
   if (activeJob) {
@@ -1014,6 +1035,39 @@ export function LongFormWizard() {
               );
             })}
           </div>
+          {/* Tema editorial: aparece solo si elegiste 📰 Editorial (paridad con shorts). */}
+          {hasEditorial && (
+            <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+              <p className="mb-2 text-sm font-medium">📰 Tema del estilo Editorial</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {EDITORIAL_THEMES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setEditorialTheme(t.id)}
+                    className={cn(
+                      "overflow-hidden rounded-lg border text-left transition-all",
+                      editorialTheme === t.id
+                        ? "border-amber-400 ring-1 ring-amber-400"
+                        : "border-border hover:border-foreground/30"
+                    )}
+                  >
+                    {/* mini-preview del tema: fondo + serif + acento */}
+                    <div className="flex h-14 flex-col justify-center px-2" style={{ background: t.bg }}>
+                      <span className="text-[7px] uppercase tracking-[0.3em]" style={{ color: t.text, opacity: 0.5 }}>
+                        La verdad
+                      </span>
+                      <span className="text-sm font-bold leading-tight" style={{ color: t.text, fontFamily: t.demoFont }}>
+                        Título <em style={{ color: accent }}>clave.</em>
+                      </span>
+                    </div>
+                    <div className="px-2 py-1 text-[10px] text-muted-foreground">{t.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <p className="mt-4 text-xs text-muted-foreground">
             {selectedStyles.length === 0
               ? "Seleccioná al menos uno"
@@ -1043,7 +1097,9 @@ export function LongFormWizard() {
         <Card className="border-border bg-card p-6">
           <h2 className="mb-2 text-lg font-medium">4. Color principal</h2>
           <p className="mb-4 text-xs text-muted-foreground">
-            Un solo color para todos los clips del lote (subtítulos highlight, stickers, vignette, border).
+            {editorialOnly
+              ? "En el estilo Editorial este color pinta las palabras destacadas de los titulares y las ilustraciones animadas."
+              : "Un solo color para todos los clips del lote (subtítulos highlight, stickers, vignette, border)."}
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {PALETTE.map((c) => {
@@ -1072,6 +1128,26 @@ export function LongFormWizard() {
             })}
           </div>
 
+          {/* Editorial-solo: la tipografía/colores vienen del TEMA elegido en el paso 3. */}
+          {editorialOnly && (
+            <div className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+              <p className="font-medium">📰 El estilo Editorial no lleva subtítulos</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Usa titulares serif gigantes con la tipografía y el fondo del tema que elegiste
+                en el paso anterior. Por eso acá no hay nada más que configurar: solo el color
+                principal de arriba.
+              </p>
+            </div>
+          )}
+
+          {!editorialOnly && (
+            <>
+          {hasEditorial && (
+            <p className="mt-6 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90">
+              📰 Lo de abajo no afecta al estilo Editorial (usa la tipografía de su tema); solo
+              aplica a los demás estilos elegidos.
+            </p>
+          )}
           {/* Color del TEXTO de los subtítulos (paridad con el wizard de shorts) */}
           <h3 className="mb-2 mt-6 text-sm font-medium">Color del texto de los subtítulos</h3>
           <p className="mb-3 text-xs text-muted-foreground">
@@ -1151,49 +1227,44 @@ export function LongFormWizard() {
               );
             })}
           </div>
+            </>
+          )}
         </Card>
       )}
 
-      {/* STEP 5 — Plataformas */}
+      {/* STEP 5 — Redes + confirmar + arrancar */}
       {step === 5 && (
         <Card className="border-border bg-card p-6">
-          <h2 className="mb-2 text-lg font-medium">5. Plataformas destino</h2>
-          <p className="mb-4 text-xs text-muted-foreground">
-            Se guarda en el project JSON de cada clip para que los botones TT/IG/LI de /produccion sepan
-            dónde publicar.
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {PLATFORMS_META.map((p) => {
-              const sel = selectedPlatforms.includes(p.id);
-              const Icon = p.icon;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => togglePlatform(p.id)}
-                  className={cn(
-                    "flex flex-col items-center gap-2 rounded-lg border p-4 transition-all",
-                    sel
-                      ? "border-violet-400 ring-1 ring-violet-400 bg-violet-500/5"
-                      : "border-border hover:border-foreground/30"
-                  )}
-                >
-                  <Icon className="h-6 w-6" style={{ color: sel ? p.color : undefined }} />
-                  <div className="flex items-center gap-1.5">
+          <h2 className="mb-4 text-lg font-medium">5. Confirmar y arrancar</h2>
+
+          <div className="mb-4">
+            <p className="mb-2 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
+              ¿Para qué redes son los clips? (ajusta el tono de los captions)
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {PLATFORMS_META.map((p) => {
+                const sel = selectedPlatforms.includes(p.id);
+                const Icon = p.icon;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => togglePlatform(p.id)}
+                    className={cn(
+                      "flex items-center justify-center gap-2 rounded-lg border p-3 transition-all",
+                      sel
+                        ? "border-violet-400 ring-1 ring-violet-400 bg-violet-500/5"
+                        : "border-border hover:border-foreground/30"
+                    )}
+                  >
+                    <Icon className="h-5 w-5" style={{ color: sel ? p.color : undefined }} />
                     <span className="text-sm font-medium">{p.label}</span>
                     {sel && <CheckCircle2 className="h-3.5 w-3.5 text-violet-400" />}
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </Card>
-      )}
-
-      {/* STEP 6 — Confirmar + arrancar */}
-      {step === 6 && (
-        <Card className="border-border bg-card p-6">
-          <h2 className="mb-4 text-lg font-medium">6. Confirmar y arrancar</h2>
 
           <div className="rounded-md border border-border bg-muted/30 p-4 text-sm">
             <p className="mb-2 font-medium">Resumen</p>
@@ -1221,19 +1292,29 @@ export function LongFormWizard() {
                   <li>· Color: <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: accent }} />{" "}
                     <span className="font-mono-tab text-foreground">{accent}</span>
                   </li>
-                  <li>
-                    · Subtítulos:{" "}
-                    <span className="text-foreground">
-                      {SUBTITLE_FONTS.find((f) => f.id === subtitleFont)?.name ?? subtitleFont}
-                      {subtitleColor !== "auto" && (
-                        <>
-                          {" · texto "}
-                          <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: subtitleColor }} />{" "}
-                          <span className="font-mono-tab">{subtitleColor}</span>
-                        </>
-                      )}
-                    </span>
-                  </li>
+                  {!editorialOnly && (
+                    <li>
+                      · Subtítulos:{" "}
+                      <span className="text-foreground">
+                        {SUBTITLE_FONTS.find((f) => f.id === subtitleFont)?.name ?? subtitleFont}
+                        {subtitleColor !== "auto" && (
+                          <>
+                            {" · texto "}
+                            <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: subtitleColor }} />{" "}
+                            <span className="font-mono-tab">{subtitleColor}</span>
+                          </>
+                        )}
+                      </span>
+                    </li>
+                  )}
+                  {hasEditorial && (
+                    <li>
+                      · Tema editorial:{" "}
+                      <span className="text-foreground">
+                        {EDITORIAL_THEMES.find((t) => t.id === editorialTheme)?.name ?? editorialTheme}
+                      </span>
+                    </li>
+                  )}
                 </>
               )}
               <li>· Plataformas: <span className="text-foreground">{selectedPlatforms.join(", ") || "—"}</span></li>
@@ -1270,7 +1351,8 @@ export function LongFormWizard() {
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
-          onClick={() => setStep(Math.max(1, step - 1))}
+          // Sin render, el paso 4 (color/tipografía) no aplica: se salta en ambos sentidos.
+          onClick={() => setStep(step === 5 && !doRender ? 3 : Math.max(1, step - 1))}
           disabled={step === 1 || submitting}
         >
           <ChevronLeft className="mr-1.5 h-4 w-4" />
@@ -1278,11 +1360,10 @@ export function LongFormWizard() {
         </Button>
         {step < TOTAL_STEPS && (
           <Button
-            onClick={() => setStep(step + 1)}
+            onClick={() => setStep(step === 3 && !doRender ? 5 : step + 1)}
             disabled={
               (step === 1 && selectedIds.size === 0) ||
-              (step === 3 && doRender && selectedStyles.length === 0) ||
-              (step === 5 && selectedPlatforms.length === 0)
+              (step === 3 && doRender && selectedStyles.length === 0)
             }
           >
             Siguiente
