@@ -702,20 +702,29 @@ def _fill_card_gaps(cards: list[dict], duration: float, seed: int = 0) -> list[d
     cursor = 0.3
     for c in sorted(cards, key=lambda x: x["at"]):
         gap = c["at"] - cursor
-        while gap > 1.0:
-            # bloques de ~5.5s: la ilustración/kicker rota seguido (ritmo visual)
+        # Huecos GRANDES (>2.6s): entran visuales de ~5.5s (ritmo). Con menos de
+        # 2.6s una visual no llega a su mínimo de 2s y PISABA la siguiente
+        # tarjeta (encime visto en prod).
+        while gap > 2.6:
             chunk = gap if gap <= 7.0 else min(5.5, gap - 1.0)
             out.append(_visual(cursor + 0.15, chunk - 0.5))
             cursor += chunk
             gap = c["at"] - cursor
+        if gap > 0.6 and out:
+            # hueco chico: se estira lo anterior hasta la próxima (sin encime)
+            prev = out[-1]
+            prev["duration"] = round(c["at"] - prev["at"] - 0.25, 2)
         out.append(c)
         cursor = max(cursor, c["at"] + float(c.get("duration", 5)))
     gap = duration - cursor
-    while gap > 1.5:
+    while gap > 2.6:
         chunk = gap if gap <= 7.0 else min(5.5, gap - 1.0)
         out.append(_visual(cursor + 0.15, chunk - 0.6))
         cursor += chunk
         gap = duration - cursor
+    if gap > 0.6 and out:
+        prev = out[-1]
+        prev["duration"] = round(duration - prev["at"] - 0.2, 2)
     return out
 
 
@@ -778,6 +787,10 @@ def editorial_cards(words: list[dict], duration: float, seed: int = 0) -> list[d
                 )
             # solo frases que SOBREVIVEN la limpieza (nunca mostrar basura)
             cands = [s for s in cands if clean_screen_text(s["text"], min_words=3)]
+            # separación mínima con la anterior: dos frases fuertes pegadas
+            # producían tarjetas ENCIMADAS (la duración mínima pisaba a la próxima)
+            if picked:
+                cands = [s for s in cands if s["start"] >= picked[-1]["start"] + 4.5]
             if cands:
                 picked.append(max(cands, key=score))
         t0 += window
@@ -852,6 +865,20 @@ def editorial_cards(words: list[dict], duration: float, seed: int = 0) -> list[d
         if cards and card["icon"] == cards[-1]["icon"]:
             card["icon"] = pool[(i * 13 + 5) % len(pool)]
         cards.append(card)
+    # ── ANTI-ENCIME: ninguna tarjeta puede pisar a la siguiente. Dos tarjetas a
+    # la vez se renderizan SUPERPUESTAS en la misma zona (bug visto en prod).
+    cards.sort(key=lambda c: c["at"])
+    sin_encime: list[dict] = []
+    for c in cards:
+        if sin_encime:
+            prev = sin_encime[-1]
+            max_dur = round(c["at"] - prev["at"] - 0.25, 2)
+            if max_dur < 2.0:
+                continue  # demasiado pegada a la anterior: se descarta esta
+            if prev["at"] + prev["duration"] > c["at"] - 0.25:
+                prev["duration"] = max_dur
+        sin_encime.append(c)
+    cards = sin_encime
     # La ÚLTIMA tarjeta se extiende hacia el cierre (máx 9s — si falta más, los
     # bloques visuales rellenan y el cierre queda con frase o animación igual).
     if cards:

@@ -99,6 +99,9 @@ export interface PanelRect {
   cardsHidden: boolean;
   /** Lado donde va el TEXTO (contrario al panel). */
   textSide: "left" | "right";
+  /** En 9:16 los modos cuadrado/cierre ponen el texto DEBAJO del panel (lado a
+   *  lado no entra sin encimarse — bug visto en producción). */
+  textBelow?: boolean;
 }
 
 type PanelMode = "right" | "left" | "square_right" | "square_left" | "big" | "full";
@@ -110,30 +113,56 @@ function rectFor(
   H: number,
   sourceAspect?: number
 ): PanelRect {
+  const portrait = H > W;
   const tall = { w: pw * W, h: 0.88 * H, y: 0.06 * H, r: 18 };
   const s = Math.min(0.52 * H, 0.8 * W);
   switch (mode) {
     case "left":
       return { x: 36, ...tall, cardsHidden: false, textSide: "right" };
-    case "square_right":
+    case "square_right": {
+      if (portrait) {
+        // 9:16: el cuadrado va ARRIBA y el texto DEBAJO. Lado a lado el panel
+        // tapaba el texto (el cuadrado ocupaba ~80% del ancho).
+        const sq = Math.min(0.74 * W, 0.4 * H);
+        return { x: W - 56 - sq, y: 0.06 * H, w: sq, h: sq, r: 24, cardsHidden: false, textSide: "left", textBelow: true };
+      }
       return { x: W - 48 - s, y: (H - s) / 2, w: s, h: s, r: 24, cardsHidden: false, textSide: "left" };
-    case "square_left":
+    }
+    case "square_left": {
+      if (portrait) {
+        const sq = Math.min(0.74 * W, 0.4 * H);
+        return { x: 56, y: 0.06 * H, w: sq, h: sq, r: 24, cardsHidden: false, textSide: "right", textBelow: true };
+      }
       return { x: 48, y: (H - s) / 2, w: s, h: s, r: 24, cardsHidden: false, textSide: "right" };
+    }
     case "big": {
+      if (portrait) {
+        // 9:16: "grande" = casi todo el ancho (el 0.56W de landscape quedaba flaco).
+        const bw = 0.86 * W;
+        const bh = 0.62 * H;
+        return { x: (W - bw) / 2, y: (H - bh) / 2, w: bw, h: bh, r: 22, cardsHidden: true, textSide: "left" };
+      }
       const bw = 0.56 * W;
       const bh = 0.78 * H;
       return { x: (W - bw) / 2, y: (H - bh) / 2, w: bw, h: bh, r: 22, cardsHidden: true, textSide: "left" };
     }
     case "full": {
       // FULLSCREEN solo si el aspecto del VIDEO ORIGINAL coincide con el del
-      // output (±15%). Si no (ej: fuente 9:16 en salida 16:9), recortar a
-      // pantalla completa destruiría el encuadre → escena de CIERRE: panel
-      // grande que RESPETA el aspecto de la fuente + tarjeta final visible.
+      // output (±15%). Si no, recortar a pantalla completa destruiría el
+      // encuadre → escena de CIERRE: el video GRANDE respetando su aspecto +
+      // la frase final cerca (nunca un video miniatura con el texto lejos).
       const outAspect = W / H;
       const src = sourceAspect && sourceAspect > 0 ? sourceAspect : outAspect;
       const mismatch = Math.abs(src - outAspect) / outAspect > 0.15;
       if (!mismatch) {
         return { x: 0, y: 0, w: W, h: H, r: 0, cardsHidden: true, textSide: "left" };
+      }
+      if (portrait) {
+        // salida 9:16 con fuente apaisada: banda ancha en el tercio superior
+        // (la cara se ve grande) + texto DEBAJO.
+        const cw = W - 96;
+        const ch = Math.min(cw / src, 0.5 * H);
+        return { x: 48, y: 0.13 * H, w: cw, h: ch, r: 20, cardsHidden: false, textSide: "left", textBelow: true };
       }
       const ch = 0.88 * H;
       const cw = Math.min(ch * src, 0.6 * W);
@@ -188,6 +217,7 @@ export function editorialPanelAt(
     r: lerp(from.r, to.r),
     cardsHidden: p > 0.4 ? to.cardsHidden : from.cardsHidden,
     textSide: p > 0.4 ? to.textSide : from.textSide,
+    textBelow: p > 0.4 ? to.textBelow : from.textBelow,
   };
 }
 
@@ -381,20 +411,49 @@ export const EditorialCardLayer: React.FC<{
 
   const textOnLeft =
     (panel?.textSide ?? ((layout.panel ?? "right") === "right" ? "left" : "right")) === "left";
-  const zoneWidth = panel
-    ? Math.max(width * 0.3, width - panel.w - 140)
-    : width * (1 - (layout.panelWidth ?? 0.4)) - 90;
+  // En 9:16 (cuadrado/cierre) el texto va DEBAJO del panel a lo ancho — al
+  // costado se encimaba con el video (bug visto en producción).
+  const textBelow = Boolean(panel?.textBelow);
+  const zoneWidth = textBelow
+    ? width - 112
+    : panel
+      ? Math.max(width * 0.3, width - panel.w - 140)
+      : width * (1 - (layout.panelWidth ?? 0.4)) - 90;
   const isStat = Boolean(card.statValue);
   const hasIcon = Boolean(card.icon);
   // Tarjeta VISUAL: sin titular/stat/capítulo → la ILUSTRACIÓN es la protagonista
   // (se usa para rellenar huecos entre frases fuertes; el lienzo nunca queda vacío).
   const isVisual = hasIcon && !card.title && !card.statValue && !card.number;
   // Escala tipográfica relativa al alto del frame (sirve igual en 9:16 y 16:9).
-  const titleSize = Math.min(zoneWidth * 0.135, height * 0.075);
+  const titleSize = Math.min(zoneWidth * (textBelow ? 0.082 : 0.135), height * 0.075);
   const variant = illoVariantFor(card, index);
   const iconSize = isVisual
-    ? Math.min(zoneWidth * 0.62, height * 0.36)
-    : Math.min(zoneWidth * 0.46, height * 0.26);
+    ? Math.min(zoneWidth * (textBelow ? 0.4 : 0.62), height * (textBelow ? 0.22 : 0.36))
+    : Math.min(zoneWidth * (textBelow ? 0.24 : 0.46), height * (textBelow ? 0.15 : 0.26));
+  const zoneStyle: React.CSSProperties =
+    textBelow && panel
+      ? {
+          position: "absolute",
+          left: 56,
+          right: 56,
+          top: panel.y + panel.h + height * 0.03,
+          bottom: height * 0.04,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-start",
+          gap: height * 0.014,
+        }
+      : {
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          [textOnLeft ? "left" : "right"]: 56,
+          width: zoneWidth,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          gap: height * 0.014,
+        };
   const iconNode = hasIcon ? (
     LINE_ART_KINDS.includes(card.icon as LineArtKind) ? (
       <LineArtIcon kind={card.icon as LineArtKind} elapsed={Math.max(0, t - 0.4)} size={iconSize} gold={GOLD} />
@@ -411,20 +470,7 @@ export const EditorialCardLayer: React.FC<{
   if (isVisual) {
     return (
       <AbsoluteFill style={{ pointerEvents: "none", opacity: fadeOut }}>
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            [textOnLeft ? "left" : "right"]: 56,
-            width: zoneWidth,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: height * 0.022,
-          }}
-        >
+        <div style={{ ...zoneStyle, alignItems: "center", justifyContent: "center", gap: height * 0.022 }}>
           {card.kicker ? (
             <Reveal t={t} delay={0.05}>
               <div
@@ -471,19 +517,7 @@ export const EditorialCardLayer: React.FC<{
 
   return (
     <AbsoluteFill style={{ pointerEvents: "none", opacity: fadeOut }}>
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          [textOnLeft ? "left" : "right"]: 56,
-          width: zoneWidth,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          gap: height * 0.014,
-        }}
-      >
+      <div style={zoneStyle}>
         {card.kicker ? (
           <Reveal t={t} delay={0.05}>
             <div
