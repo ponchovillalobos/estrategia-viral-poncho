@@ -154,12 +154,26 @@ export function WizardClient() {
   const [subtitleFont, setSubtitleFont] = useState<string>("auto");
   // Color del TEXTO de los subtítulos ("auto" = el del estilo, normalmente blanco).
   const [subtitleColor, setSubtitleColor] = useState<string>("auto");
-  // Tema del estilo Editorial (fuente serif + fondo). Solo aplica si elegís 📰.
+  // Tema del estilo Editorial. Los 4 clásicos + 13 SUB-TEMAS de clase mundial
+  // (Ola 3): cada uno con lienzo, tipografías y "gesto de motion" propios.
   const EDITORIAL_THEMES = [
-    { id: "clasico", name: "Clásico", font: "playfair", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "Georgia, serif" },
-    { id: "tinta", name: "Tinta", font: "dmserif", background: "ink", bg: "#0a0f16", text: "#e9eef5", demoFont: "'Times New Roman', serif" },
-    { id: "crema", name: "Crema", font: "lora", background: "cream", bg: "#f5efe3", text: "#1c1611", demoFont: "Georgia, serif" },
-    { id: "bold", name: "Bold", font: "abril", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "'Arial Black', serif" },
+    { id: "clasico", name: "Clásico", theme: "", font: "playfair", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "Georgia, serif" },
+    { id: "tinta", name: "Tinta", theme: "", font: "dmserif", background: "ink", bg: "#0a0f16", text: "#e9eef5", demoFont: "'Times New Roman', serif" },
+    { id: "crema", name: "Crema", theme: "", font: "lora", background: "cream", bg: "#f5efe3", text: "#1c1611", demoFont: "Georgia, serif" },
+    { id: "bold", name: "Bold", theme: "", font: "abril", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "'Arial Black', serif" },
+    { id: "prensa", name: "Prensa 1900", theme: "prensa", accent: "#8e2a1e", font: "playfair", background: "cream", bg: "#e8e1cf", text: "#1c1812", demoFont: "'Times New Roman', serif" },
+    { id: "vogue", name: "Vogue noir", theme: "vogue", accent: "#c9a96a", font: "bodoni", background: "dark", bg: "#0c0b0a", text: "#f4f0e6", demoFont: "'Didot', 'Bodoni MT', serif" },
+    { id: "kinfolk", name: "Kinfolk calma", theme: "kinfolk", accent: "#b06b4c", font: "lora", background: "cream", bg: "#f6f3ec", text: "#33302a", demoFont: "'Garamond', serif" },
+    { id: "riso", name: "Zine riso", theme: "riso", accent: "#FF48B0", font: "abril", background: "cream", bg: "#f1ece0", text: "#141414", demoFont: "'Arial Black', sans-serif" },
+    { id: "grabado", name: "Grabado", theme: "grabado", accent: "#8a6d3b", font: "playfair", background: "cream", bg: "#ece3cd", text: "#2a2118", demoFont: "'Book Antiqua', serif" },
+    { id: "constructivista", name: "Constructivista", theme: "constructivista", accent: "#cf2618", font: "abril", background: "cream", bg: "#ece2cf", text: "#181613", demoFont: "'Arial Narrow', sans-serif" },
+    { id: "bauhaus", name: "Bauhaus", theme: "bauhaus", accent: "#be1e2d", font: "lora", background: "cream", bg: "#f2e9d8", text: "#1f1d1a", demoFont: "'Century Gothic', sans-serif" },
+    { id: "swiss", name: "Suizo grid", theme: "swiss", accent: "#e30613", font: "lora", background: "cream", bg: "#f4f4f1", text: "#0d0d0d", demoFont: "'Helvetica', 'Arial', sans-serif" },
+    { id: "brutal", name: "Brutalista", theme: "brutal", accent: "#ff4d00", font: "lora", background: "cream", bg: "#efefea", text: "#000000", demoFont: "'Consolas', monospace" },
+    { id: "mincho", name: "Japón mincho", theme: "mincho", accent: "#b3342c", font: "lora", background: "cream", bg: "#f5f3ed", text: "#26241f", demoFont: "'MS Mincho', serif" },
+    { id: "stripe", name: "Stripe press", theme: "stripe", accent: "#635bff", font: "newsreader", background: "ink", bg: "#0a2540", text: "#f6f9fc", demoFont: "Georgia, serif" },
+    { id: "docu", name: "Docu rojo", theme: "docu", accent: "#e3120b", font: "lora", background: "cream", bg: "#f9f7f1", text: "#121212", demoFont: "'Franklin Gothic Medium', sans-serif" },
+    { id: "ft", name: "FT salmón", theme: "ft", accent: "#0d7680", font: "lora", background: "cream", bg: "#fff1e5", text: "#33302e", demoFont: "'Franklin Gothic Medium', sans-serif" },
   ] as const;
   const [editorialTheme, setEditorialTheme] = useState<string>("clasico");
 
@@ -460,7 +474,7 @@ export function WizardClient() {
           subtitleColor,
           editorialTheme: (() => {
             const t = EDITORIAL_THEMES.find((x) => x.id === editorialTheme);
-            return t ? { font: t.font, background: t.background } : undefined;
+            return t ? { font: t.font, background: t.background, theme: t.theme || undefined } : undefined;
           })(),
           platforms: selectedPlatforms,
           aspectRatio,
@@ -857,7 +871,12 @@ export function WizardClient() {
                   <button
                     key={t.id}
                     type="button"
-                    onClick={() => setEditorialTheme(t.id)}
+                    onClick={() => {
+                      setEditorialTheme(t.id);
+                      // Sub-temas con identidad fuerte: sugerir su acento (el
+                      // user puede cambiarlo después en el selector de color).
+                      if ("accent" in t && t.accent) setAccent(t.accent);
+                    }}
                     className={`overflow-hidden rounded-lg border text-left transition-all ${
                       editorialTheme === t.id
                         ? "border-amber-400 ring-1 ring-amber-400"

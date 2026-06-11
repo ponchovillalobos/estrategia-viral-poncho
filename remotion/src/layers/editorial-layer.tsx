@@ -10,6 +10,7 @@ import {
   inkKindFor,
   animatedStatText,
 } from "./editorial-ink";
+import { resolveEditorialLook, MotifLayer, EDITORIAL_THEME_DEFS } from "./editorial-themes";
 
 /**
  * EDITORIAL — Tarjetas tipográficas estilo revista/documental (referencia: los
@@ -113,6 +114,10 @@ export const editorialLayoutSchema = z.object({
   cohesion: z.boolean().default(false),
   /** Duotono del panel de video 0..1 (0 = off). Look Economist. */
   duotone: z.number().default(0),
+  /** SUB-TEMA de clase mundial (Ola 3): "prensa", "vogue", "kinfolk", "riso",
+   *  "grabado", "constructivista", "bauhaus", "swiss", "brutal", "mincho",
+   *  "stripe", "docu", "ft". "" = clásico (font+background de arriba). */
+  theme: z.string().default(""),
 });
 export type EditorialLayout = z.infer<typeof editorialLayoutSchema>;
 
@@ -338,13 +343,23 @@ export const EditorialAmbient: React.FC<{
   width: number;
   height: number;
 }> = ({ layout, currentTime, width, height }) => {
-  const GOLD = layout.accent ?? "#f0b429";
-  const theme = EDITORIAL_BG[layout.background ?? "dark"] ?? EDITORIAL_BG.dark;
+  const look = resolveEditorialLook(layout);
+  const GOLD = layout.accent ?? look.themeAccent ?? "#f0b429";
+  const theme = look.canvas;
   // 12 fps en lo gráfico (firma Vox) — el video del panel sigue a fps completos.
   const t = stepTime(currentTime, layout.fps12);
   const intro = clamp01(t / 1.2);
   const W = width;
   const H = height;
+  // Sub-tema: motivo procedural propio; los temas "limpios" silencian la
+  // decoración clásica (círculos punteados, marcas +, reglas con folio).
+  const motifNode =
+    look.motif !== "none" ? (
+      <MotifLayer motif={look.motif} t={t} width={W} height={H} accent={GOLD} canvas={theme} />
+    ) : null;
+  if (look.motif !== "none" && look.minimalAmbient) {
+    return <AbsoluteFill style={{ pointerEvents: "none", opacity: intro }}>{motifNode}</AbsoluteFill>;
+  }
   const marks = [
     { x: 0.12, y: 0.16, s: 0.9, ph: 0 },
     { x: 0.86, y: 0.12, s: 0.7, ph: 2.1 },
@@ -368,12 +383,18 @@ export const EditorialAmbient: React.FC<{
           opacity: 0.07,
         }}
       />
-      {/* reglas de página (arriba/abajo) con folio, como una revista */}
-      <div style={{ position: "absolute", top: H * 0.035, left: W * 0.045, right: W * 0.045, borderTop: `1px solid ${theme.muted}55`, display: "flex", justifyContent: "space-between", paddingTop: 6 }}>
-        <span style={{ fontFamily: "Arial, sans-serif", fontSize: H * 0.011, letterSpacing: "0.45em", color: theme.muted, opacity: 0.75, textTransform: "uppercase" }}>● Documental</span>
-        <span style={{ fontFamily: "Arial, sans-serif", fontSize: H * 0.011, letterSpacing: "0.45em", color: GOLD, opacity: 0.8 }}>{`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`}</span>
-      </div>
-      <div style={{ position: "absolute", bottom: H * 0.035, left: W * 0.045, right: W * 0.045, borderBottom: `1px solid ${theme.muted}55` }} />
+      {/* reglas de página (arriba/abajo) con folio, como una revista — los
+          sub-temas con motivo propio traen sus propias reglas (filetes, marcos). */}
+      {!motifNode && (
+        <>
+          <div style={{ position: "absolute", top: H * 0.035, left: W * 0.045, right: W * 0.045, borderTop: `1px solid ${theme.muted}55`, display: "flex", justifyContent: "space-between", paddingTop: 6 }}>
+            <span style={{ fontFamily: "Arial, sans-serif", fontSize: H * 0.011, letterSpacing: "0.45em", color: theme.muted, opacity: 0.75, textTransform: "uppercase" }}>● Documental</span>
+            <span style={{ fontFamily: "Arial, sans-serif", fontSize: H * 0.011, letterSpacing: "0.45em", color: GOLD, opacity: 0.8 }}>{`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`}</span>
+          </div>
+          <div style={{ position: "absolute", bottom: H * 0.035, left: W * 0.045, right: W * 0.045, borderBottom: `1px solid ${theme.muted}55` }} />
+        </>
+      )}
+      {motifNode}
       {/* círculo punteado GIGANTE que rota lentísimo (textura de fondo) */}
       <svg width={W} height={H} style={{ position: "absolute", inset: 0, opacity: 0.1 }}>
         <g transform={`rotate(${t * 2.4} ${W * 0.18} ${H * 0.7})`}>
@@ -432,9 +453,13 @@ export const EditorialCardLayer: React.FC<{
   /** Índice de la tarjeta (rota el tratamiento FX de la ilustración). */
   index?: number;
 }> = ({ card, currentTime, layout, width, height, panel, index = 0 }) => {
-  const GOLD = layout.accent ?? "#f0b429";
-  const [FONT_N, FONT_I] = FONT_THEMES[layout.font ?? "playfair"] ?? FONT_THEMES.playfair;
-  const theme = EDITORIAL_BG[layout.background ?? "dark"] ?? EDITORIAL_BG.dark;
+  const look = resolveEditorialLook(layout);
+  const GOLD = layout.accent ?? look.themeAccent ?? "#f0b429";
+  const [FONT_N, FONT_I] =
+    look.fontTitle ?? FONT_THEMES[layout.font ?? "playfair"] ?? FONT_THEMES.playfair;
+  const FONT_BODY = look.fontBody ?? FONT_N;
+  const FONT_KICKER = look.fontKicker ?? "Arial, sans-serif";
+  const theme = look.canvas;
   const TEXT = theme.text;
   const MUTED = theme.muted;
   // Reloj gráfico a 12 fps (las tarjetas entran/animan en pasos — look editorial).
@@ -502,7 +527,13 @@ export const EditorialCardLayer: React.FC<{
   const accentLc = (card.accent ?? "").toLowerCase();
   const words = (card.title ?? "").split(/\s+/).filter(Boolean);
   // Fuente variable: el titular "respira" por frame (undefined si no es variable).
-  const titleVar = titleVariation(layout.font, now);
+  // Los sub-temas con fuente variable mapean a su clave (vogue→bodoni, stripe→newsreader).
+  const varKey =
+    layout.theme === "vogue" ? "bodoni"
+    : layout.theme === "stripe" ? "newsreader"
+    : layout.theme && EDITORIAL_THEME_DEFS[layout.theme] ? undefined
+    : layout.font;
+  const titleVar = titleVariation(varKey, now);
   // Anotación a mano alzada sobre la palabra acento (seed determinista por tarjeta).
   const inkSeed = 1 + Math.abs(Math.round((card.at ?? 0) * 37) + index * 11);
   const inkProgress = clamp01((t - 0.55) / 0.6);
@@ -530,7 +561,7 @@ export const EditorialCardLayer: React.FC<{
           </div>
           {card.kicker ? (
             <Reveal t={t} delay={0.05}>
-              <div style={{ fontFamily: "Arial, sans-serif", fontSize: height * 0.0165, letterSpacing: "0.5em", textTransform: "uppercase", color: MUTED }}>
+              <div style={{ fontFamily: FONT_KICKER, fontSize: height * 0.0165, letterSpacing: "0.5em", textTransform: "uppercase", color: MUTED }}>
                 {card.kicker}
               </div>
             </Reveal>
@@ -580,7 +611,7 @@ export const EditorialCardLayer: React.FC<{
             <Reveal t={t} delay={0.05}>
               <div
                 style={{
-                  fontFamily: "Arial, sans-serif",
+                  fontFamily: FONT_KICKER,
                   fontSize: height * 0.0165,
                   letterSpacing: "0.5em",
                   textTransform: "uppercase",
@@ -627,11 +658,15 @@ export const EditorialCardLayer: React.FC<{
           <Reveal t={t} delay={0.05}>
             <div
               style={{
-                fontFamily: "Arial, sans-serif",
+                fontFamily: FONT_KICKER,
                 fontSize: height * 0.0165,
                 letterSpacing: "0.5em",
                 textTransform: "uppercase",
                 color: MUTED,
+                // DOCU: la barra roja Economist antes del kicker (la firma).
+                ...(look.motif === "docu"
+                  ? { borderLeft: `${Math.round(height * 0.006)}px solid ${GOLD}`, paddingLeft: 14 }
+                  : null),
               }}
             >
               {card.kicker}
@@ -691,13 +726,62 @@ export const EditorialCardLayer: React.FC<{
 
         {words.length > 0 && (
           <Reveal t={t} delay={isStat || card.number ? 0.32 : 0.18}>
+            <div style={{ position: "relative" }}>
+              {/* RISO: misregistración de tintas (rosa/azul multiply ±2px que
+                  respira ±1px) — la firma del tema zine. */}
+              {look.motif === "riso" ? (
+                <>
+                  {([["#FF48B0", 1], ["#0078BF", -1]] as const).map(([c, dir]) => (
+                    <div
+                      key={c}
+                      aria-hidden
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        fontFamily: FONT_N,
+                        fontWeight: titleVar ? undefined : 900,
+                        fontSize: titleSize,
+                        lineHeight: 1.06,
+                        color: c,
+                        mixBlendMode: "multiply",
+                        textTransform: look.titleTransform,
+                        transform: `translate(${dir * (2 + Math.round(Math.sin(now * 2.3) * 1))}px, ${dir * (1 + Math.round(Math.cos(now * 1.9) * 1))}px)`,
+                        opacity: 0.85,
+                      }}
+                    >
+                      {card.title}
+                    </div>
+                  ))}
+                </>
+              ) : null}
+              {/* VOGUE: numeral de capítulo GIGANTE detrás del titular (8%). */}
+              {look.motif === "vogue" && card.number ? (
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    right: "-4%",
+                    top: "-1.2em",
+                    fontFamily: FONT_N,
+                    fontSize: titleSize * 3.6,
+                    lineHeight: 1,
+                    color: TEXT,
+                    opacity: 0.08,
+                    fontVariationSettings: titleVar,
+                  }}
+                >
+                  {card.number}
+                </div>
+              ) : null}
             <div
               style={{
+                position: "relative",
                 fontFamily: FONT_N,
                 fontWeight: titleVar ? undefined : 900,
                 fontSize: titleSize,
                 lineHeight: 1.06,
                 color: TEXT,
+                textTransform: look.titleTransform,
                 // Fuente variable: el titular respira (wght/SOFT/GRAD por frame).
                 fontVariationSettings: titleVar,
               }}
@@ -732,6 +816,7 @@ export const EditorialCardLayer: React.FC<{
                 );
               })}
             </div>
+            </div>
           </Reveal>
         )}
 
@@ -739,7 +824,7 @@ export const EditorialCardLayer: React.FC<{
           <Reveal t={t} delay={0.5}>
             <div
               style={{
-                fontFamily: FONT_N,
+                fontFamily: FONT_BODY,
                 fontWeight: 500,
                 fontSize: titleSize * 0.42,
                 color: MUTED,

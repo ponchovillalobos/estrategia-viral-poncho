@@ -179,10 +179,12 @@ const project = buildProjectForStyle(ctx, styleId);
 if (subtitleFontOverride) project.subtitleFont = subtitleFontOverride;
 if (subtitleColorOverride) project.subtitleColor = subtitleColorOverride;
 // Tema editorial elegido en el wizard de largos: pisa font/background del layout.
+// Tercer segmento = SUB-TEMA de clase mundial ("prensa", "riso"… — Ola 3).
 if (editorialThemeArg && project.editorialLayout) {
-  const [themeFont, themeBg] = editorialThemeArg.split(":");
+  const [themeFont, themeBg, subTheme] = editorialThemeArg.split(":");
   if (themeFont) project.editorialLayout.font = themeFont;
   if (themeBg) project.editorialLayout.background = themeBg;
+  if (subTheme) project.editorialLayout.theme = subTheme;
 }
 
 writeFileSync(outPath, JSON.stringify(project, null, 2), "utf-8");

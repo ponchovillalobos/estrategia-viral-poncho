@@ -56,14 +56,13 @@ import {
   editorialCardSchema,
   editorialLayoutSchema,
   editorialPanelAt,
-  EDITORIAL_BG,
 } from "./layers/editorial-layer";
 import {
   EditorialPaper,
   EditorialFinish,
   EditorialDuotone,
-  DUOTONE_COLORS,
 } from "./layers/editorial-texture";
+import { resolveEditorialLook, isDarkCanvas, duotonePairFor } from "./layers/editorial-themes";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -526,6 +525,8 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   const editorialPanel = editorialLayout
     ? editorialPanelAt(editorialLayout, currentTime, compWidth, compHeight, sourceAspect)
     : null;
+  // Look resuelto del sub-tema (lienzo, duotono, textura) — o clásico si no hay theme.
+  const edLook = editorialLayout ? resolveEditorialLook(editorialLayout) : null;
   const videoContainerStyle: React.CSSProperties = editorialPanel
     ? {
         position: "absolute",
@@ -543,17 +544,15 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: editorialLayout
-          ? (EDITORIAL_BG[editorialLayout.background ?? "dark"]?.bg ?? "#0a0908")
-          : "#000",
+        backgroundColor: edLook ? edLook.canvas.bg : "#000",
       }}
     >
       {/* EDITORIAL — textura de papel procedural detrás de TODO (Ola 1). */}
-      {editorialLayout && (editorialLayout.texture ?? "none") === "paper" && (
+      {edLook && edLook.texture === "paper" && (
         <EditorialPaper
           width={compWidth}
           height={compHeight}
-          darkCanvas={(editorialLayout.background ?? "dark") !== "cream"}
+          darkCanvas={isDarkCanvas(edLook.canvas)}
         />
       )}
       {/* EDITORIAL — decoración ambiental SIEMPRE visible detrás de todo:
@@ -606,11 +605,11 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       </AbsoluteFill>
       {/* EDITORIAL — duotono del panel (look Economist): desatura el video y
           mapea sombras→tinta, luces→papel. Solo monta si el tema lo pide. */}
-      {editorialLayout && (editorialLayout.duotone ?? 0) > 0 && (
+      {edLook && edLook.duotone > 0 && (
         <EditorialDuotone
-          strength={editorialLayout.duotone}
-          shadow={(DUOTONE_COLORS[editorialLayout.background ?? "dark"] ?? DUOTONE_COLORS.dark).shadow}
-          highlight={(DUOTONE_COLORS[editorialLayout.background ?? "dark"] ?? DUOTONE_COLORS.dark).highlight}
+          strength={edLook.duotone}
+          shadow={duotonePairFor(edLook.canvas).shadow}
+          highlight={duotonePairFor(edLook.canvas).highlight}
         />
       )}
       </div>
@@ -791,12 +790,12 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
 
       {/* EDITORIAL — capa de cohesión final: grano vivo + viñeta + aberración
           sutil. Unifica todo el render "como filmado" (Ola 1). */}
-      {editorialLayout && editorialLayout.cohesion && (
+      {editorialLayout && editorialLayout.cohesion && edLook && (
         <EditorialFinish
           width={compWidth}
           height={compHeight}
           t={currentTime}
-          darkCanvas={(editorialLayout.background ?? "dark") !== "cream"}
+          darkCanvas={isDarkCanvas(edLook.canvas)}
         />
       )}
 

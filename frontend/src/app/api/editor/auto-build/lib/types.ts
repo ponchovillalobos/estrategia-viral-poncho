@@ -31,8 +31,9 @@ export interface AutoBuildRequest {
   subtitleFont?: string;
   /** Color del TEXTO de los subtítulos elegido en el wizard ("auto" = el del estilo). */
   subtitleColor?: string;
-  /** Tema del estilo Editorial: fuente serif + fondo del lienzo. */
-  editorialTheme?: { font?: string; background?: string };
+  /** Tema del estilo Editorial: fuente serif + fondo del lienzo + sub-tema
+   *  de clase mundial ("prensa", "vogue", "riso"… — ver editorial-themes.tsx). */
+  editorialTheme?: { font?: string; background?: string; theme?: string };
   caption?: string;
   captionMeta?: Record<string, unknown>;
   platforms?: string[];

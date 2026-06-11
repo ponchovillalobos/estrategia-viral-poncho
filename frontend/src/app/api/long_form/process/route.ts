@@ -40,8 +40,8 @@ interface ProcessBody {
   subtitleFont?: string;
   /** Color del TEXTO de subtítulos ("auto" = el del estilo). */
   subtitleColor?: string;
-  /** Tema del estilo Editorial (fuente serif + fondo). Solo aplica si styles incluye "editorial". */
-  editorialTheme?: { font?: string; background?: string };
+  /** Tema del estilo Editorial (fuente serif + fondo + sub-tema). Solo aplica si styles incluye "editorial". */
+  editorialTheme?: { font?: string; background?: string; theme?: string };
   /** Plataformas destino (informativo, se persiste en project JSON). */
   platforms?: string[];
   /** Aspecto del output. "9:16" vertical (default) o "16:9" horizontal. */
@@ -114,11 +114,14 @@ async function processJob(
   if (body.subtitleColor && body.subtitleColor !== "auto") {
     args.push("--subtitle-color", body.subtitleColor);
   }
-  if (body.editorialTheme && (body.editorialTheme.font || body.editorialTheme.background)) {
-    // Formato CLI compacto "font:background" (ej. "playfair:dark").
+  if (
+    body.editorialTheme &&
+    (body.editorialTheme.font || body.editorialTheme.background || body.editorialTheme.theme)
+  ) {
+    // Formato CLI compacto "font:background:theme" (ej. "playfair:dark:" o "::riso").
     args.push(
       "--editorial-theme",
-      `${body.editorialTheme.font ?? ""}:${body.editorialTheme.background ?? ""}`
+      `${body.editorialTheme.font ?? ""}:${body.editorialTheme.background ?? ""}:${body.editorialTheme.theme ?? ""}`
     );
   }
   if (body.platforms && body.platforms.length > 0) {
