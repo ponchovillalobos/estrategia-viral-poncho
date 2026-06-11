@@ -52,6 +52,7 @@ import {
   applyTextBehind,
   applyTranslate,
   applyGraphics,
+  applyEditorialCutout,
   applyEmotionDirector,
 } from "./lib/fx-enrichments";
 
@@ -256,6 +257,8 @@ async function processJob(job: Job, body: AutoBuildRequest) {
 
       await applyTranslate(project);
       await applyGraphics(project, videoId);
+      // EDITORIAL Ola 6 — recorte de sujeto (rembg) para la tarjeta de collage.
+      await applyEditorialCutout(project, videoId);
       // F1 — Director emocional: ducking de música + zooms en picos + SFX por arousal.
       await applyEmotionDirector(project, videoId);
 

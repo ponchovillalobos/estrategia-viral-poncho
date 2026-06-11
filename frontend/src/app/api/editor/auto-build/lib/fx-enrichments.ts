@@ -96,6 +96,44 @@ export async function applyGraphics(
 }
 
 /**
+ * EDITORIAL Ola 6 — Tarjeta de COLLAGE: recorta al sujeto de un frame del
+ * clímax (~58% del video) con rembg local (cutout_subject.py) y lo deja en
+ * project.editorialCutout. El render lo muestra como papel recortado con
+ * borde de tijera + sombra dura + Ken Burns sutil. OPT-IN total: sin rembg
+ * instalado o video corto → no hay tarjeta y nada se rompe.
+ */
+export async function applyEditorialCutout(
+  project: ResolvedProject,
+  videoId: string
+): Promise<void> {
+  if (!project.editorialLayout) return;
+  try {
+    const transcriptPath = path.join(TRANSCRIPTS_DIR, `${videoId}.json`);
+    const raw = await fs.readFile(transcriptPath, "utf-8").catch(() => null);
+    if (!raw) return;
+    const words = (JSON.parse(raw).words ?? []) as { end?: number }[];
+    const end = words.length ? Number(words[words.length - 1].end ?? 0) : 0;
+    if (end < 14) return; // videos muy cortos: el collage no aporta
+    const at = Math.round(end * 0.58 * 100) / 100;
+
+    const run = await runProcess(
+      PYTHON_EXE,
+      [path.join(PYTHON_DIR, "cutout_subject.py"), videoId, String(at)],
+      PYTHON_DIR,
+      undefined,
+      180_000
+    );
+    if (!run.ok) return;
+    const res = parseLastJsonLine(run.stdout) as { ok?: boolean; file?: string } | null;
+    if (!res?.ok || !res.file) return;
+    project.editorialCutout = { at, duration: 4.5, file: res.file };
+    console.log(`[auto-build] editorial: cutout de sujeto @${at}s (${res.file})`);
+  } catch (err) {
+    console.warn("[auto-build] cutout falló:", err);
+  }
+}
+
+/**
  * F1 — DIRECTOR EMOCIONAL: analiza CÓMO habla el speaker (no solo qué dice) con
  * emotion_director.py (librosa, 100% local) y dirige la edición con el resultado:
  *   1. musicVolumeCurve → auto-ducking: la música baja cuando hay voz y respira

@@ -168,6 +168,18 @@ const props = {
   editorialLayout: project.editorialLayout ?? null,
   // resolveEditorialCardIcons embebe el SVG de iconos "ph:"/"tb:" (Ola 4).
   editorialCards: resolveEditorialCardIcons(filterAndRemap(project.editorialCards || [], ["at"])),
+  // Ola 6 — tarjeta de COLLAGE (recorte de sujeto): file → URL del API local.
+  editorialCutout: (() => {
+    const c = project.editorialCutout;
+    if (!c || !c.file) return null;
+    const remapped = filterAndRemap([{ ...c }], ["at"])[0];
+    if (!remapped) return null;
+    return {
+      at: remapped.at,
+      duration: c.duration ?? 4.5,
+      url: `${HOST}/api/cutouts/stream?file=${encodeURIComponent(c.file)}`,
+    };
+  })(),
   subtitleStyle: project.subtitleStyle ?? "bebas",
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",

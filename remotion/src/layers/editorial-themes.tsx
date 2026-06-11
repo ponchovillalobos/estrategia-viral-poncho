@@ -78,6 +78,8 @@ export interface EditorialThemeDef {
   titleTransform?: "uppercase" | "lowercase";
   /** Ambient mínimo: sin círculos punteados ni marcas "+" (temas limpios). */
   minimalAmbient?: boolean;
+  /** Bordes del panel de video RASGADOS (feDisplacementMap — temas de papel). */
+  tornPanel?: boolean;
 }
 
 /** Claves de fuente variable (editorial-ink) usadas por algunos temas. */
@@ -92,6 +94,7 @@ export const EDITORIAL_THEME_DEFS: Record<string, EditorialThemeDef> = {
     canvas: { bg: "#e8e1cf", text: "#1c1812", muted: "#6e6450" },
     fontTitle: [OLDSTD, OLDSTD_IT], fontBody: OLDSTD, fontKicker: OLDSTD,
     accent: "#8e2a1e", motif: "prensa", duotone: 0.8, texture: "paper",
+    tornPanel: true,
   },
   vogue: {
     id: "vogue", name: "Vogue noir",
@@ -112,12 +115,14 @@ export const EDITORIAL_THEME_DEFS: Record<string, EditorialThemeDef> = {
     canvas: { bg: "#f1ece0", text: "#141414", muted: "#5a554c" },
     fontTitle: [ARCHIVO_BLACK, ARCHIVO_BLACK], fontBody: SPACE_MONO, fontKicker: SPACE_MONO,
     accent: "#FF48B0", motif: "riso", duotone: 0, texture: "paper",
+    tornPanel: true,
   },
   grabado: {
     id: "grabado", name: "Grabado victoriano",
     canvas: { bg: "#ece3cd", text: "#2a2118", muted: "#7a6a52" },
     fontTitle: [IMFELL, IMFELL_IT], fontBody: OLDSTD, fontKicker: OLDSTD,
     accent: "#8a6d3b", motif: "grabado", duotone: 0.85, texture: "paper",
+    tornPanel: true,
   },
   constructivista: {
     id: "constructivista", name: "Constructivista",
@@ -185,6 +190,7 @@ export interface ResolvedEditorialLook {
   titleTransform?: "uppercase" | "lowercase";
   minimalAmbient: boolean;
   themeAccent: string | null;
+  tornPanel: boolean;
 }
 
 const LEGACY_CANVAS: Record<string, { bg: string; text: string; muted: string }> = {
@@ -214,6 +220,7 @@ export function resolveEditorialLook(layout: {
       titleTransform: def.titleTransform,
       minimalAmbient: Boolean(def.minimalAmbient),
       themeAccent: def.accent,
+      tornPanel: Boolean(def.tornPanel),
     };
   }
   return {
@@ -226,6 +233,7 @@ export function resolveEditorialLook(layout: {
     texture: (layout.texture === "paper" ? "paper" : "none") as "none" | "paper",
     minimalAmbient: false,
     themeAccent: null,
+    tornPanel: false,
   };
 }
 

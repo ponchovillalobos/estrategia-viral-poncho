@@ -105,4 +105,6 @@ export interface ResolvedProject {
   // EDITORIAL — split-screen documental (tarjetas serif + line-art).
   editorialLayout?: { panel: string; panelWidth: number } | null;
   editorialCards?: unknown[];
+  // EDITORIAL Ola 6 — recorte de sujeto (rembg) para la tarjeta de collage.
+  editorialCutout?: { at: number; duration: number; file: string } | null;
 }

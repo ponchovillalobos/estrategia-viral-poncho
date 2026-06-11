@@ -59,6 +59,7 @@ import {
   editorialFontsFor,
 } from "./layers/editorial-layer";
 import { EditorialChartLayer } from "./layers/editorial-chart";
+import { EditorialCutoutLayer, editorialCutoutSchema } from "./layers/editorial-collage";
 import {
   EditorialPaper,
   EditorialFinish,
@@ -215,6 +216,8 @@ export const viralVideoSchema = z.object({
   // tarjetas tipográficas serif + ilustraciones line-art. null = layout normal.
   editorialLayout: editorialLayoutSchema.nullable().default(null),
   editorialCards: z.array(editorialCardSchema).default([]),
+  // Ola 6 — tarjeta de COLLAGE (recorte de sujeto rembg, papel de tijera).
+  editorialCutout: editorialCutoutSchema.nullable().default(null),
 });
 
 type ViralVideoProps = z.infer<typeof viralVideoSchema>;
@@ -273,6 +276,7 @@ export const defaultProps: ViralVideoProps = {
   animatedBackground: null,
   editorialLayout: null,
   editorialCards: [],
+  editorialCutout: null,
 };
 
 export const ViralVideo: React.FC<ViralVideoProps> = ({
@@ -327,6 +331,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   animatedBackground,
   editorialLayout,
   editorialCards,
+  editorialCutout,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -534,6 +539,13 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   const activeEditorialViz = editorialLayout
     ? dataViz.find((v) => currentTime >= v.at && currentTime <= v.at + (v.duration ?? 4)) ?? null
     : null;
+  // EDITORIAL — collage activo (Ola 6): igual que el chart, manda él solo.
+  const cutoutActive = Boolean(
+    editorialLayout &&
+      editorialCutout &&
+      currentTime >= editorialCutout.at &&
+      currentTime <= editorialCutout.at + (editorialCutout.duration ?? 4.5)
+  );
   const editorialChartFonts: [string, string] = editorialLayout
     ? editorialFontsFor(editorialLayout)
     : ["Georgia, serif", "Arial, sans-serif"];
@@ -548,6 +560,10 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         overflow: "hidden",
         boxShadow:
           editorialPanel.r > 1 ? "0 24px 90px rgba(0,0,0,0.65)" : "none",
+        // Ola 6 — temas de papel: bordes del panel RASGADOS (displacement map;
+        // seed fijo = determinista). Solo cuando el panel no es fullscreen.
+        filter:
+          edLook?.tornPanel && editorialPanel.r > 1 ? "url(#ed-torn-edge)" : undefined,
       }
     : { position: "absolute", inset: 0 };
 
@@ -557,6 +573,15 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         backgroundColor: edLook ? edLook.canvas.bg : "#000",
       }}
     >
+      {/* EDITORIAL — filtro de borde rasgado para temas de papel (Ola 6). */}
+      {edLook?.tornPanel && (
+        <svg width="0" height="0" style={{ position: "absolute" }}>
+          <filter id="ed-torn-edge" x="-5%" y="-5%" width="110%" height="110%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.012 0.05" numOctaves="2" seed="7" result="n" />
+            <feDisplacementMap in="SourceGraphic" in2="n" scale="13" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+        </svg>
+      )}
       {/* EDITORIAL — textura de papel procedural detrás de TODO (Ola 1). */}
       {edLook && edLook.texture === "paper" && (
         <EditorialPaper
@@ -783,6 +808,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         editorialPanel &&
         !editorialPanel.cardsHidden &&
         !activeEditorialViz &&
+        !cutoutActive &&
         editorialCards
           .map((c, i) => ({ c, i }))
           .filter(({ c }) => currentTime >= c.at && currentTime <= c.at + (c.duration ?? 5))
@@ -811,6 +837,19 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           panel={editorialPanel}
           fontTitle={editorialChartFonts[0]}
           fontKicker={editorialChartFonts[1]}
+        />
+      )}
+
+      {/* EDITORIAL — tarjeta de COLLAGE (Ola 6): sujeto recortado como papel
+          de tijera con sombra dura + Ken Burns sutil; manda él solo. */}
+      {editorialLayout && editorialPanel && !editorialPanel.cardsHidden && cutoutActive && editorialCutout && (
+        <EditorialCutoutLayer
+          cut={editorialCutout}
+          currentTime={currentTime}
+          layout={editorialLayout}
+          width={compWidth}
+          height={compHeight}
+          panel={editorialPanel}
         />
       )}
 
