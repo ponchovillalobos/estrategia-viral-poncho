@@ -168,6 +168,10 @@ const props = {
   editorialLayout: project.editorialLayout ?? null,
   // resolveEditorialCardIcons embebe el SVG de iconos "ph:"/"tb:" (Ola 4).
   editorialCards: resolveEditorialCardIcons(filterAndRemap(project.editorialCards || [], ["at"])),
+  // Ola 7 — globo con zoom al lugar mencionado (remapea con jump cuts).
+  editorialMap: project.editorialMap
+    ? (filterAndRemap([{ ...project.editorialMap }], ["at"])[0] ?? null)
+    : null,
   // Ola 6 — tarjeta de COLLAGE (recorte de sujeto): file → URL del API local.
   editorialCutout: (() => {
     const c = project.editorialCutout;

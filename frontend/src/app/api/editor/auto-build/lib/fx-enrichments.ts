@@ -65,6 +65,7 @@ export async function applyGraphics(
       iconStickers?: unknown[];
       editorialCards?: unknown[];
       editorialScenes?: unknown[];
+      editorialMap?: unknown;
     };
     // EDITORIAL: las tarjetas tipográficas mandan; los charts entran CURADOS
     // (máx 3) y el render los dibuja con el look del tema, ocultando las
@@ -72,6 +73,8 @@ export async function applyGraphics(
     if (project.editorialLayout) {
       if (Array.isArray(g.editorialCards)) project.editorialCards = g.editorialCards;
       project.dataViz = Array.isArray(g.dataViz) ? g.dataViz.slice(0, 3) : [];
+      // Ola 7 — globo al lugar mencionado (si el gazetteer encontró uno).
+      if (g.editorialMap) project.editorialMap = g.editorialMap as ResolvedProject["editorialMap"];
       // Coreografía del panel dinámico (derecha→izquierda→cuadrado→fullscreen).
       if (Array.isArray(g.editorialScenes)) {
         (project.editorialLayout as { scenes?: unknown[] }).scenes = g.editorialScenes;

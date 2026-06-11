@@ -107,4 +107,6 @@ export interface ResolvedProject {
   editorialCards?: unknown[];
   // EDITORIAL Ola 6 — recorte de sujeto (rembg) para la tarjeta de collage.
   editorialCutout?: { at: number; duration: number; file: string } | null;
+  // EDITORIAL Ola 7 — globo con zoom al lugar mencionado.
+  editorialMap?: { at: number; duration: number; lat: number; lon: number; label: string } | null;
 }

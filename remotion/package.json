@@ -19,16 +19,22 @@
     "@remotion/paths": "^4.0.462",
     "@remotion/transitions": "^4.0.465",
     "@remotion/zod-types": "^4.0.300",
+    "d3-geo": "^3.1.1",
     "lottie-web": "^5.13.0",
     "lucide-react": "^1.17.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "remotion": "^4.0.300",
     "roughjs": "^4.6.6",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@types/d3-geo": "^3.1.0",
+    "@types/geojson": "^7946.0.16",
     "@types/react": "^19.0.0",
+    "@types/topojson-client": "^3.1.5",
     "typescript": "^5.4.0"
   }
 }

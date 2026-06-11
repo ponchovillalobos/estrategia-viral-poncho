@@ -60,6 +60,7 @@ import {
 } from "./layers/editorial-layer";
 import { EditorialChartLayer } from "./layers/editorial-chart";
 import { EditorialCutoutLayer, editorialCutoutSchema } from "./layers/editorial-collage";
+import { EditorialGlobeLayer, editorialMapSchema } from "./layers/editorial-globe";
 import {
   EditorialPaper,
   EditorialFinish,
@@ -218,6 +219,8 @@ export const viralVideoSchema = z.object({
   editorialCards: z.array(editorialCardSchema).default([]),
   // Ola 6 — tarjeta de COLLAGE (recorte de sujeto rembg, papel de tijera).
   editorialCutout: editorialCutoutSchema.nullable().default(null),
+  // Ola 7 — globo con zoom al lugar mencionado en el transcript.
+  editorialMap: editorialMapSchema.nullable().default(null),
 });
 
 type ViralVideoProps = z.infer<typeof viralVideoSchema>;
@@ -277,6 +280,7 @@ export const defaultProps: ViralVideoProps = {
   editorialLayout: null,
   editorialCards: [],
   editorialCutout: null,
+  editorialMap: null,
 };
 
 export const ViralVideo: React.FC<ViralVideoProps> = ({
@@ -332,6 +336,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   editorialLayout,
   editorialCards,
   editorialCutout,
+  editorialMap,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -545,6 +550,13 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       editorialCutout &&
       currentTime >= editorialCutout.at &&
       currentTime <= editorialCutout.at + (editorialCutout.duration ?? 4.5)
+  );
+  // EDITORIAL — globo activo (Ola 7): el viaje al lugar mencionado manda solo.
+  const mapActive = Boolean(
+    editorialLayout &&
+      editorialMap &&
+      currentTime >= editorialMap.at &&
+      currentTime <= editorialMap.at + (editorialMap.duration ?? 5)
   );
   const editorialChartFonts: [string, string] = editorialLayout
     ? editorialFontsFor(editorialLayout)
@@ -809,6 +821,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         !editorialPanel.cardsHidden &&
         !activeEditorialViz &&
         !cutoutActive &&
+        !mapActive &&
         editorialCards
           .map((c, i) => ({ c, i }))
           .filter(({ c }) => currentTime >= c.at && currentTime <= c.at + (c.duration ?? 5))
@@ -845,6 +858,18 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       {editorialLayout && editorialPanel && !editorialPanel.cardsHidden && cutoutActive && editorialCutout && (
         <EditorialCutoutLayer
           cut={editorialCutout}
+          currentTime={currentTime}
+          layout={editorialLayout}
+          width={compWidth}
+          height={compHeight}
+          panel={editorialPanel}
+        />
+      )}
+
+      {/* EDITORIAL — globo con zoom al lugar mencionado (Ola 7). */}
+      {editorialLayout && editorialPanel && !editorialPanel.cardsHidden && mapActive && editorialMap && (
+        <EditorialGlobeLayer
+          map={editorialMap}
           currentTime={currentTime}
           layout={editorialLayout}
           width={compWidth}

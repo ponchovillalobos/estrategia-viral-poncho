@@ -185,6 +185,8 @@ if (_existsSync(graphicsPath)) {
       // Ola 5: máx 3 charts curados — el render editorial los dibuja con el
       // look del tema (hairline/sketchy) y oculta las tarjetas mientras duran.
       props.dataViz = Array.isArray(g.dataViz) ? g.dataViz.slice(0, 3) : [];
+      // Ola 7: globo al lugar mencionado (pass-through, los clips no remapean).
+      if (g.editorialMap) props.editorialMap = g.editorialMap;
       props.iconStickers = [];
       // Coreografía del panel dinámico.
       if (Array.isArray(g.editorialScenes)) {

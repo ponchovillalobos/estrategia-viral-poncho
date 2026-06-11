@@ -743,6 +743,74 @@ def _icon_pool(seed: int) -> list[str]:
     rnd.shuffle(pool)
     return pool
 
+# ─── Mapa editorial (Ola 7): gazetteer local ES → lat/lon (sin APIs) ──────────
+# Si el transcript menciona un lugar, el render muestra un GLOBO que gira y
+# hace zoom hasta ese punto (GlobeZoom con d3-geo, offline).
+_GAZETTEER: dict[str, tuple[float, float]] = {
+    # países
+    "méxico": (23.6, -102.5), "mexico": (23.6, -102.5),
+    "estados unidos": (39.8, -98.5), "gringos": (39.8, -98.5),
+    "españa": (40.4, -3.7), "argentina": (-34.6, -64.0),
+    "colombia": (4.6, -74.0), "chile": (-33.4, -70.6),
+    "perú": (-9.2, -75.0), "peru": (-9.2, -75.0),
+    "brasil": (-14.2, -51.9), "ecuador": (-1.8, -78.2),
+    "venezuela": (6.4, -66.6), "guatemala": (15.8, -90.2),
+    "costa rica": (9.7, -83.8), "panamá": (8.5, -80.8), "panama": (8.5, -80.8),
+    "uruguay": (-32.5, -55.8), "bolivia": (-16.3, -63.6),
+    "cuba": (21.5, -77.8), "república dominicana": (18.7, -70.2),
+    "japón": (36.2, 138.2), "japon": (36.2, 138.2),
+    "china": (35.8, 104.1), "india": (20.6, 78.9),
+    "alemania": (51.1, 10.4), "francia": (46.2, 2.2),
+    "italia": (41.9, 12.5), "portugal": (39.4, -8.2),
+    "inglaterra": (52.3, -1.2), "reino unido": (54.0, -2.0),
+    "canadá": (56.1, -106.3), "canada": (56.1, -106.3),
+    "australia": (-25.2, 133.7), "rusia": (61.5, 105.3),
+    "corea": (35.9, 127.7), "suiza": (46.8, 8.2),
+    # ciudades
+    "cdmx": (19.43, -99.13), "ciudad de méxico": (19.43, -99.13),
+    "guadalajara": (20.67, -103.35), "monterrey": (25.67, -100.31),
+    "cancún": (21.16, -86.85), "cancun": (21.16, -86.85),
+    "tijuana": (32.51, -117.04), "puebla": (19.04, -98.2),
+    "mérida": (20.97, -89.62), "querétaro": (20.59, -100.39),
+    "nueva york": (40.7, -74.0), "miami": (25.76, -80.19),
+    "los ángeles": (34.05, -118.24), "los angeles": (34.05, -118.24),
+    "houston": (29.76, -95.37), "chicago": (41.88, -87.63),
+    "madrid": (40.42, -3.7), "barcelona": (41.39, 2.17),
+    "bogotá": (4.71, -74.07), "bogota": (4.71, -74.07),
+    "buenos aires": (-34.6, -58.38), "lima": (-12.05, -77.04),
+    "santiago": (-33.45, -70.67), "tokio": (35.68, 139.69),
+    "parís": (48.86, 2.35), "paris": (48.86, 2.35),
+    "londres": (51.51, -0.13), "dubai": (25.2, 55.3),
+    "berlín": (52.52, 13.4), "roma": (41.9, 12.5),
+}
+
+
+def editorial_map(words: list[dict], duration: float) -> dict | None:
+    """Primera mención de un lugar del gazetteer → escena de globo (máx 1 por
+    video). Devuelve {at, duration, lat, lon, label} o None. Lugares de 2
+    palabras se buscan primero (\"nueva york\" antes que nada que matchee \"york\")."""
+    if duration < 12 or not words:
+        return None
+    toks = [(_clean_word(w.get("word", "")).lower(), float(w.get("start", 0))) for w in words]
+    names = sorted(_GAZETTEER, key=lambda n: -len(n.split()))
+    for name in names:
+        parts = name.split()
+        for i in range(len(toks) - len(parts) + 1):
+            if all(toks[i + j][0] == parts[j] for j in range(len(parts))):
+                at = round(max(0.3, toks[i][1] - 0.2), 2)
+                if at > duration - 4:
+                    continue  # mención al final: no hay tiempo para el zoom
+                lat, lon = _GAZETTEER[name]
+                return {
+                    "at": at,
+                    "duration": round(min(5.0, duration - at - 0.5), 2),
+                    "lat": lat,
+                    "lon": lon,
+                    "label": name.upper(),
+                }
+    return None
+
+
 # Tarjetas VISUALES de relleno: ilustración protagonista + kicker (sin titular).
 # Se usan para que el lienzo NUNCA quede vacío más de ~1s entre frases fuertes.
 _VISUAL_KICKERS = ["MIRÁ ESTO", "EL DETALLE", "MIENTRAS TANTO", "OJO ACÁ", "EL PUNTO CLAVE", "NO ES CASUALIDAD"]
@@ -1245,6 +1313,8 @@ def generate(transcript_path: Path, use_llm: bool = True) -> dict:
         "iconStickers": icons,
         "editorialCards": ed_cards,
         "editorialScenes": editorial_panel_scenes(duration),
+        # Ola 7 — si el transcript menciona un lugar, escena de GLOBO con zoom.
+        "editorialMap": editorial_map(words, duration),
     }
 
 
