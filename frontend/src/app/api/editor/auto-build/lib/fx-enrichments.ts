@@ -66,16 +66,18 @@ export async function applyGraphics(
       editorialCards?: unknown[];
       editorialScenes?: unknown[];
     };
-    // EDITORIAL: las tarjetas tipográficas REEMPLAZAN charts/íconos (el lado
-    // oscuro es de las tarjetas; mezclar saturaría). Solo si el estilo lo es.
+    // EDITORIAL: las tarjetas tipográficas mandan; los charts entran CURADOS
+    // (máx 3) y el render los dibuja con el look del tema, ocultando las
+    // tarjetas mientras duran (Ola 5 — antes se descartaban todos).
     if (project.editorialLayout) {
       if (Array.isArray(g.editorialCards)) project.editorialCards = g.editorialCards;
+      project.dataViz = Array.isArray(g.dataViz) ? g.dataViz.slice(0, 3) : [];
       // Coreografía del panel dinámico (derecha→izquierda→cuadrado→fullscreen).
       if (Array.isArray(g.editorialScenes)) {
         (project.editorialLayout as { scenes?: unknown[] }).scenes = g.editorialScenes;
       }
       console.log(
-        `[auto-build] editorial: ${g.editorialCards?.length ?? 0} tarjetas · ${g.editorialScenes?.length ?? 0} escenas de panel`
+        `[auto-build] editorial: ${g.editorialCards?.length ?? 0} tarjetas · ${(project.dataViz as unknown[]).length} charts · ${g.editorialScenes?.length ?? 0} escenas de panel`
       );
       return;
     }

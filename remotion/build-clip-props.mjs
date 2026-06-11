@@ -182,7 +182,9 @@ if (_existsSync(graphicsPath)) {
     // resolveEditorialCardIcons embebe el SVG de iconos "ph:"/"tb:" (Ola 4).
     if (props.editorialLayout && Array.isArray(g.editorialCards)) {
       props.editorialCards = resolveEditorialCardIcons(g.editorialCards);
-      props.dataViz = [];
+      // Ola 5: máx 3 charts curados — el render editorial los dibuja con el
+      // look del tema (hairline/sketchy) y oculta las tarjetas mientras duran.
+      props.dataViz = Array.isArray(g.dataViz) ? g.dataViz.slice(0, 3) : [];
       props.iconStickers = [];
       // Coreografía del panel dinámico.
       if (Array.isArray(g.editorialScenes)) {

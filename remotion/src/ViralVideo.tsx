@@ -56,7 +56,9 @@ import {
   editorialCardSchema,
   editorialLayoutSchema,
   editorialPanelAt,
+  editorialFontsFor,
 } from "./layers/editorial-layer";
+import { EditorialChartLayer } from "./layers/editorial-chart";
 import {
   EditorialPaper,
   EditorialFinish,
@@ -527,6 +529,14 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
     : null;
   // Look resuelto del sub-tema (lienzo, duotono, textura) — o clásico si no hay theme.
   const edLook = editorialLayout ? resolveEditorialLook(editorialLayout) : null;
+  // EDITORIAL — chart activo (Ola 5): mientras dura, las tarjetas se ocultan
+  // (anti-encime: el chart ES la tarjeta de ese momento).
+  const activeEditorialViz = editorialLayout
+    ? dataViz.find((v) => currentTime >= v.at && currentTime <= v.at + (v.duration ?? 4)) ?? null
+    : null;
+  const editorialChartFonts: [string, string] = editorialLayout
+    ? editorialFontsFor(editorialLayout)
+    : ["Georgia, serif", "Arial, sans-serif"];
   const videoContainerStyle: React.CSSProperties = editorialPanel
     ? {
         position: "absolute",
@@ -772,6 +782,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       {editorialLayout &&
         editorialPanel &&
         !editorialPanel.cardsHidden &&
+        !activeEditorialViz &&
         editorialCards
           .map((c, i) => ({ c, i }))
           .filter(({ c }) => currentTime >= c.at && currentTime <= c.at + (c.duration ?? 5))
@@ -787,6 +798,21 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
               index={i}
             />
           ))}
+
+      {/* EDITORIAL — data-viz de periódico (Ola 5): hairline Economist o
+          sketchy a mano según el tema; reemplaza a las tarjetas mientras dura. */}
+      {editorialLayout && editorialPanel && !editorialPanel.cardsHidden && activeEditorialViz && (
+        <EditorialChartLayer
+          viz={activeEditorialViz}
+          currentTime={currentTime}
+          layout={editorialLayout}
+          width={compWidth}
+          height={compHeight}
+          panel={editorialPanel}
+          fontTitle={editorialChartFonts[0]}
+          fontKicker={editorialChartFonts[1]}
+        />
+      )}
 
       {/* EDITORIAL — capa de cohesión final: grano vivo + viñeta + aberración
           sutil. Unifica todo el render "como filmado" (Ola 1). */}
@@ -956,8 +982,9 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         />
       )}
 
-      {/* MODO GRÁFICOS & MOTION — gráficas animadas (counter/bar/line/donut). Aditivo. */}
-      {dataViz.map((dv, i) => (
+      {/* MODO GRÁFICOS & MOTION — gráficas animadas (counter/bar/line/donut). Aditivo.
+          En EDITORIAL las dibuja EditorialChartLayer con el look del tema (Ola 5). */}
+      {!editorialLayout && dataViz.map((dv, i) => (
         <DataVizLayer
           key={`dv-${i}`}
           config={dv}

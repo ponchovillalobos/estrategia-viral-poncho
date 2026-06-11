@@ -127,6 +127,14 @@ export type EditorialLayout = z.infer<typeof editorialLayoutSchema>;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
+/** [familia del titular, familia de kickers] resueltas del tema (la usa el
+ *  chart layer de Ola 5 — misma lógica que las tarjetas). */
+export function editorialFontsFor(layout: EditorialLayout): [string, string] {
+  const look = resolveEditorialLook(layout);
+  const [n] = look.fontTitle ?? FONT_THEMES[layout.font ?? "playfair"] ?? FONT_THEMES.playfair;
+  return [n, look.fontKicker ?? "Arial, sans-serif"];
+}
+
 // ─── PANEL DINÁMICO: rect del video por escena, con transición suave. ─────────
 export interface PanelRect {
   x: number; y: number; w: number; h: number; r: number;
