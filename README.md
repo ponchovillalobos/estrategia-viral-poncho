@@ -12,14 +12,23 @@
 
 </div>
 
-### 🚀 Instalar en 3 pasos
+### 🚀 Instalar en 2 pasos (con instalador)
 
-1. **Bajá** el `.zip` (p. ej. `EstrategiaViralStudio-v0.1.0.zip`) desde
-   [**Releases → latest**](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest).
-2. **Descomprimilo** en una carpeta fuera de OneDrive, p. ej. `C:\EstrategiaViralStudio`.
-3. **Doble clic en `desktop.exe`** — la primera vez descarga el modelo de voz
-   (~1.5 GB, una sola vez, con barra de progreso) y queda lista. No necesitás
-   Node, Python ni ffmpeg: todo va adentro.
+1. **Bajá** `EstrategiaViralStudio-Setup.exe` desde
+   [**Releases → latest**](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest) (~0.2 MB).
+2. **Doble clic** — el instalador revisa tu compu, descarga todo solo con barra
+   de progreso, lo instala y te deja el **icono en el Escritorio**. La primera
+   vez que abras la app baja el modelo de voz (~1.5 GB, una sola vez) y queda
+   lista. No necesitás Node, Python ni ffmpeg: todo va adentro.
+
+<details>
+<summary>📦 Alternativa sin instalador (zip portable)</summary>
+
+1. Bajá el `.zip` (p. ej. `EstrategiaViralStudio-v0.2.0.zip`) desde Releases.
+2. Descomprimilo en una carpeta fuera de OneDrive, p. ej. `C:\EstrategiaViralStudio`.
+3. Doble clic en `desktop.exe`.
+
+</details>
 
 > Subís un video hablado → la IA lo transcribe, lo corta, le pone subtítulos
 > karaoke, efectos, música, gráficas animadas e ilustraciones según lo que decís,
