@@ -35,7 +35,7 @@ Gratis, en español, sin suscripciones, sin subir tus videos a la nube, sin API 
   Instagram y LinkedIn, listos para copiar y pegar.
 - **Timeline visual + previews**: mirá dónde cae cada efecto, y generá una vista
   previa real (foto o 3s en movimiento) antes de renderizar.
-- **App de escritorio** (Tauri): ventana nativa, instalador en camino.
+- **App de escritorio** (Tauri): ventana nativa, portable — descargá, descomprimí y listo.
 
 ## 🆓 Por qué gratis y local
 
@@ -45,7 +45,22 @@ El único costo es tu electricidad.
 
 ---
 
-## 🚀 Instalación (modo desarrollador, hasta que salga el instalador)
+## ⬇️ Descargar la app (recomendado — sin instalar nada)
+
+Requisitos: Windows 10/11 x64, 8 GB de RAM, ~6 GB libres en disco.
+
+1. Bajá **`EstrategiaViralStudio-v0.1.0.zip`** desde la página de
+   [**Releases**](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest).
+2. Descomprimilo en una carpeta fuera de OneDrive, p. ej. `C:\EstrategiaViralStudio`.
+3. Doble clic en **`desktop.exe`**. Si Windows muestra el cartel azul de SmartScreen:
+   **"Más información" → "Ejecutar de todas formas"** (ver nota abajo — es normal en
+   apps sin firma paga, podés verificar el SHA256 publicado).
+4. La primera vez la app descarga el modelo de voz (~1.5 GB, una sola vez, con barra
+   de progreso) y queda lista. No necesitás Node, Python ni ffmpeg: todo va adentro.
+
+---
+
+## 🚀 Instalación desde código (modo desarrollador)
 
 Requisitos: Windows 10/11 x64, Node 18+, Python 3.11, ~10 GB libres.
 
