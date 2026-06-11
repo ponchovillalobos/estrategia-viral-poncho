@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveEditorialCardIcons } from "./editorial-icons.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { existsSync as _existsSync } from "node:fs";
@@ -178,8 +179,9 @@ if (_existsSync(graphicsPath)) {
     }
     // EDITORIAL: tarjetas tipográficas (solo se usan si el estilo es editorial; en
     // ese caso reemplazan charts/íconos para no saturar el lado oscuro).
+    // resolveEditorialCardIcons embebe el SVG de iconos "ph:"/"tb:" (Ola 4).
     if (props.editorialLayout && Array.isArray(g.editorialCards)) {
-      props.editorialCards = g.editorialCards;
+      props.editorialCards = resolveEditorialCardIcons(g.editorialCards);
       props.dataViz = [];
       props.iconStickers = [];
       // Coreografía del panel dinámico.

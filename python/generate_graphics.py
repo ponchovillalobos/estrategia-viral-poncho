@@ -668,12 +668,77 @@ _LUCIDE_POOL = [
 ]
 
 
+# ─── Iconos EXTERNOS (Ola 4): Phosphor duotone ("ph:") y Tabler ("tb:") ───────
+# Descargados por download_editorial_icons.py a {DATA_ROOT}/assets/icons/.
+# Solo entran al pool los que EXISTEN en disco (sin pack descargado → pool
+# clásico, cero regresión). El render los pinta con el acento (currentColor).
+
+_EXT_ICONS_DIR = Path(DATA_ROOT) / "assets" / "icons"
+
+# Curaduría de conceptos fuertes (los nombres inexistentes se filtran solos).
+_PHOSPHOR_POOL = [
+    "ph:rocket-launch", "ph:brain", "ph:lightbulb", "ph:trophy", "ph:target",
+    "ph:chart-line-up", "ph:chart-bar", "ph:chart-pie-slice", "ph:coins",
+    "ph:piggy-bank", "ph:wallet", "ph:bank", "ph:credit-card", "ph:gift",
+    "ph:crown", "ph:diamond", "ph:fire", "ph:lightning", "ph:sun", "ph:globe",
+    "ph:map-pin", "ph:compass", "ph:airplane-takeoff", "ph:users-three",
+    "ph:handshake", "ph:chat-circle-dots", "ph:megaphone", "ph:microphone",
+    "ph:camera", "ph:video-camera", "ph:music-notes", "ph:headphones",
+    "ph:book-open", "ph:graduation-cap", "ph:magnifying-glass", "ph:lock-key",
+    "ph:key", "ph:shield-check", "ph:gear", "ph:wrench", "ph:paint-brush",
+    "ph:scissors", "ph:pencil-line", "ph:eye", "ph:smiley", "ph:thumbs-up",
+    "ph:clock", "ph:hourglass-high", "ph:infinity", "ph:puzzle-piece",
+    "ph:flag-banner", "ph:bell-ringing", "ph:envelope-open", "ph:device-mobile",
+    "ph:laptop", "ph:code", "ph:database", "ph:cpu", "ph:wifi-high",
+    "ph:plant", "ph:tree", "ph:flower-lotus", "ph:leaf", "ph:mountains",
+    "ph:waves", "ph:anchor", "ph:atom", "ph:flask", "ph:dna", "ph:barbell",
+    "ph:medal", "ph:strategy", "ph:steps", "ph:path", "ph:signpost",
+    "ph:binoculars", "ph:butterfly", "ph:campfire", "ph:shooting-star",
+    "ph:sparkle", "ph:magic-wand", "ph:alarm", "ph:calendar-check",
+    "ph:timer", "ph:gauge", "ph:scales", "ph:storefront", "ph:shopping-cart",
+    "ph:package", "ph:truck", "ph:armchair", "ph:coffee", "ph:fork-knife",
+]
+_TABLER_POOL = [
+    "tb:rocket", "tb:brain", "tb:bulb", "tb:trophy", "tb:target-arrow",
+    "tb:chart-line", "tb:chart-bar", "tb:chart-pie", "tb:coin", "tb:cash",
+    "tb:pig-money", "tb:wallet", "tb:building-bank", "tb:credit-card",
+    "tb:gift", "tb:crown", "tb:diamond", "tb:flame", "tb:bolt", "tb:sun",
+    "tb:world", "tb:map-pin", "tb:compass", "tb:plane-departure", "tb:users",
+    "tb:heart-handshake", "tb:message-circle", "tb:speakerphone",
+    "tb:microphone", "tb:camera", "tb:video", "tb:music", "tb:headphones",
+    "tb:book", "tb:school", "tb:zoom-check", "tb:lock", "tb:key",
+    "tb:shield-check", "tb:settings", "tb:tool", "tb:brush", "tb:scissors",
+    "tb:pencil", "tb:eye", "tb:mood-smile", "tb:thumb-up", "tb:clock",
+    "tb:hourglass", "tb:infinity", "tb:puzzle", "tb:flag", "tb:bell",
+    "tb:mail-opened", "tb:device-mobile", "tb:device-laptop", "tb:code",
+    "tb:database", "tb:cpu", "tb:wifi", "tb:plant", "tb:trees", "tb:flower",
+    "tb:leaf", "tb:mountain", "tb:ripple", "tb:anchor", "tb:atom", "tb:flask",
+    "tb:dna", "tb:barbell", "tb:medal", "tb:chess-knight", "tb:stairs",
+    "tb:route", "tb:binoculars", "tb:campfire", "tb:stars",
+    "tb:sparkles", "tb:wand", "tb:alarm", "tb:calendar-check", "tb:gauge",
+    "tb:scale", "tb:building-store", "tb:shopping-cart", "tb:package",
+    "tb:truck-delivery", "tb:armchair", "tb:coffee", "tb:run", "tb:swimming",
+    "tb:bike", "tb:car", "tb:train", "tb:sailboat", "tb:telescope",
+    "tb:microscope", "tb:sunrise", "tb:moon-stars",
+]
+
+
+def _ext_icon_exists(name: str) -> bool:
+    """¿El SVG del icono externo está descargado? (ph:/tb: → archivo en disco)."""
+    if name.startswith("ph:"):
+        return (_EXT_ICONS_DIR / "phosphor-duotone" / f"{name[3:]}-duotone.svg").exists()
+    if name.startswith("tb:"):
+        return (_EXT_ICONS_DIR / "tabler" / f"{name[3:]}.svg").exists()
+    return True
+
+
 def _icon_pool(seed: int) -> list[str]:
-    """Pool de ~260 ilustraciones BARAJADO determinísticamente POR VIDEO:
+    """Pool de ilustraciones BARAJADO determinísticamente POR VIDEO:
     dos videos distintos usan ilustraciones DISTINTAS (el mismo video re-rendea
-    igual). Antes el fallback rotaba siempre los mismos 16 → todos los videos
-    se veían iguales."""
-    pool = list(dict.fromkeys([*_FALLBACK_ICONS, *_LUCIDE_POOL]))
+    igual). Ola 4: se suman Phosphor duotone y Tabler (solo los descargados),
+    ~450 ilustraciones distintas en rotación."""
+    ext = [n for n in [*_PHOSPHOR_POOL, *_TABLER_POOL] if _ext_icon_exists(n)]
+    pool = list(dict.fromkeys([*_FALLBACK_ICONS, *_LUCIDE_POOL, *ext]))
     rnd = random.Random(seed)
     rnd.shuffle(pool)
     return pool

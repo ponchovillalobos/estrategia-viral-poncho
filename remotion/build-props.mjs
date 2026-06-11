@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveEditorialCardIcons } from "./editorial-icons.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const VIDEO_ID = process.argv[2] || "D01_test_01";
@@ -165,7 +166,8 @@ const props = {
   animatedBackground: project.animatedBackground ?? null,
   // EDITORIAL — layout split-screen + tarjetas (remapean con jump cuts).
   editorialLayout: project.editorialLayout ?? null,
-  editorialCards: filterAndRemap(project.editorialCards || [], ["at"]),
+  // resolveEditorialCardIcons embebe el SVG de iconos "ph:"/"tb:" (Ola 4).
+  editorialCards: resolveEditorialCardIcons(filterAndRemap(project.editorialCards || [], ["at"])),
   subtitleStyle: project.subtitleStyle ?? "bebas",
   subtitleColor: project.subtitleColor ?? "#ffffff",
   subtitleHighlight: project.subtitleHighlight ?? "#34d399",

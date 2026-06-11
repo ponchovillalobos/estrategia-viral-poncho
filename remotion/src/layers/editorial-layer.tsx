@@ -9,6 +9,7 @@ import {
   InkAnnotation,
   inkKindFor,
   animatedStatText,
+  InlineSvgIcon,
 } from "./editorial-ink";
 import { resolveEditorialLook, MotifLayer, EDITORIAL_THEME_DEFS } from "./editorial-themes";
 
@@ -77,6 +78,9 @@ export const editorialCardSchema = z.object({
    *  quoteWords trae los timestamps de Whisper de cada palabra. */
   quote: z.boolean().default(false),
   quoteWords: z.array(z.object({ w: z.string(), at: z.number() })).default([]),
+  /** SVG embebido para iconos externos "ph:"/"tb:" (Ola 4) — lo inyecta
+   *  editorial-icons.mjs en build-time; usa currentColor (se pinta del acento). */
+  iconSvg: z.string().default(""),
 });
 export type EditorialCard = z.infer<typeof editorialCardSchema>;
 
@@ -515,7 +519,11 @@ export const EditorialCardLayer: React.FC<{
           justifyContent: "center",
           gap: height * 0.014,
         };
-  const iconNode = hasIcon ? (
+  const iconNode = card.iconSvg ? (
+    // Icono EXTERNO embebido (Phosphor duotone / Tabler — Ola 4): currentColor
+    // lo pinta del acento; entra con fade+scale y flota suave.
+    <InlineSvgIcon svg={card.iconSvg} size={iconSize * 0.92} gold={GOLD} elapsed={Math.max(0, t - 0.4)} />
+  ) : hasIcon ? (
     LINE_ART_KINDS.includes(card.icon as LineArtKind) ? (
       <LineArtIcon kind={card.icon as LineArtKind} elapsed={Math.max(0, t - 0.4)} size={iconSize} gold={GOLD} />
     ) : (

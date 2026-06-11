@@ -133,6 +133,37 @@ export const InkAnnotation: React.FC<{
 export const inkKindFor = (index: number): InkKind =>
   (["underline", "circle", "underline", "box"] as InkKind[])[Math.abs(index) % 4];
 
+// ─── Icono SVG externo embebido (Phosphor duotone / Tabler — Ola 4) ──────────
+
+/**
+ * Renderiza el markup SVG embebido en build-time (editorial-icons.mjs). Los
+ * packs usan currentColor → `color` lo pinta del acento del tema; el duotone
+ * de Phosphor (capa opacity 0.2) se ve dorado + dorado translúcido solo.
+ */
+export const InlineSvgIcon: React.FC<{
+  svg: string;
+  size: number;
+  gold: string;
+  elapsed: number;
+}> = ({ svg, size, gold, elapsed }) => {
+  const p = Math.min(1, Math.max(0, elapsed / 0.6));
+  const ease = 1 - Math.pow(1 - p, 3);
+  const float = Math.sin(elapsed * 1.3) * size * 0.014;
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        color: gold,
+        opacity: ease,
+        transform: `translateY(${float.toFixed(2)}px) scale(${(0.85 + 0.15 * ease).toFixed(3)})`,
+        filter: `drop-shadow(0 0 ${size * 0.06}px ${gold}33)`,
+      }}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+};
+
 // ─── Contador gigante (el "dato estrella") ────────────────────────────────────
 
 const easeOutCubic = (p: number) => 1 - Math.pow(1 - p, 3);
