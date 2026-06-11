@@ -141,3 +141,21 @@ remotion/props_*.json
 
 # Python runtime portable (4-6 GB, se construye con desktop/make-python-runtime.ps1)
 python/runtime/
+
+# ===== Artefactos de la app de escritorio (NUNCA al repo) ===================
+# Build de Rust/Tauri (exe + payload viven adentro; también lo cubre
+# desktop/src-tauri/.gitignore, esto es cinturón y tirantes)
+desktop/src-tauri/target/
+# Payload autocontenido (3-7 GB: node+python+ffmpeg+remotion) — bundle.ps1 lo arma
+payload/
+# Carpeta release lista para distribuir (zip/exe/SHA256SUMS)
+release/
+*.exe
+
+# ===== Variables de entorno (cualquier variante) ============================
+.env*
+!.env.example
+!.env.local.example
+
+# Artefactos de tests manuales de Remotion
+remotion/__test*

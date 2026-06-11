@@ -125,6 +125,23 @@ async function processJob(job: Job, body: AutoBuildRequest) {
     videoId,
   });
 
+  // B6 — Handle para la marca de agua y el end-screen: prioridad instagram → linkedin →
+  // tiktok → facebook. Si no hay ninguno configurado en settings, watermark y handle del
+  // end-screen quedan vacíos y ViralVideo no los renderiza (render idéntico). Se lee una
+  // sola vez por job, no por estilo, y ANTES del ctx para que los estilos lo hereden.
+  let brandHandle = "";
+  try {
+    const s = await readSettings();
+    brandHandle =
+      s.handles?.instagram ||
+      s.handles?.linkedin ||
+      s.handles?.tiktok ||
+      s.handles?.facebook ||
+      "";
+  } catch {
+    /* sin settings → sin watermark, no rompe */
+  }
+
   const ctx: BuildContext = {
     videoId,
     duration: transcript.duration,
@@ -141,6 +158,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
     autoCameraMoves,
     autoStutterMarks,
     cinematicDensity,
+    ...(brandHandle ? { brandHandle } : {}),
   };
 
   await fs.mkdir(PROJECTS_DIR, { recursive: true });
@@ -148,22 +166,6 @@ async function processJob(job: Job, body: AutoBuildRequest) {
   // Título corto basado en el CONTENIDO del video (lo que más se dice), para que el archivo
   // de salida sea identificable: "<Título> <Estilo>.mp4". Cae al videoId si no hay nada útil.
   const contentTitle = sanitizeForFilename(generateContentTitle(transcript.words)) || videoId;
-
-  // B6 — Handle para la marca de agua: prioridad instagram → linkedin → tiktok → facebook.
-  // Si no hay ninguno configurado en settings, el watermark queda vacío y ViralVideo no lo
-  // renderiza (render idéntico). Se lee una sola vez por job, no por estilo.
-  let brandHandle = "";
-  try {
-    const s = await readSettings();
-    brandHandle =
-      s.handles?.instagram ||
-      s.handles?.linkedin ||
-      s.handles?.tiktok ||
-      s.handles?.facebook ||
-      "";
-  } catch {
-    /* sin settings → sin watermark, no rompe */
-  }
 
   // 4. Procesar cada estilo
   for (const styleId of job.styles) {
@@ -254,6 +256,11 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       if (body.editorialTheme && project.editorialLayout) {
         Object.assign(project.editorialLayout, body.editorialTheme);
       }
+      // Fondo animado elegido en el wizard (estilos motion_*): cambia solo el "kind"
+      // del animatedBackground que el estilo ya trae (colores/opacidad/beat intactos).
+      if (body.motionBackground && project.animatedBackground) {
+        project.animatedBackground.kind = body.motionBackground;
+      }
 
       await applyTranslate(project);
       await applyGraphics(project, videoId);
@@ -261,6 +268,40 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       await applyEditorialCutout(project, videoId);
       // F1 — Director emocional: ducking de música + zooms en picos + SFX por arousal.
       await applyEmotionDirector(project, videoId);
+
+      // Intensidad de FX elegida en el wizard (estilos hype*/supreme). Opera sobre los
+      // arrays que el estilo + enriquecedores YA generaron (zooms, stickers, SFX,
+      // stutter): "suave" recorta, "max" acentúa. No inventa FX nuevos en el render.
+      if (
+        body.fxIntensity &&
+        ["hype", "hype_max", "hype_max_sfx", "supreme"].includes(styleId)
+      ) {
+        const halve = (arr: unknown[]) => arr.filter((_, i) => i % 2 === 0);
+        if (body.fxIntensity === "suave") {
+          project.enableJumpCuts = false;
+          if (project.zoomMarks) project.zoomMarks = halve(project.zoomMarks);
+          if (project.reactionZooms?.length) project.reactionZooms = project.reactionZooms.slice(0, 1);
+          if (project.stutterMarks?.length) project.stutterMarks = [];
+          if (project.wordStickers) project.wordStickers = halve(project.wordStickers);
+          if (project.floatingEmojis) project.floatingEmojis = halve(project.floatingEmojis);
+          if (project.sfxMarks) project.sfxMarks = halve(project.sfxMarks);
+          if (project.particleBursts?.length) project.particleBursts = project.particleBursts.slice(0, 1);
+        } else if (body.fxIntensity === "max") {
+          project.enableJumpCuts = true;
+          if (project.zoomMarks) {
+            project.zoomMarks = (project.zoomMarks as { scale?: number }[]).map((z) => ({
+              ...z,
+              scale: Math.min(1.25, (z.scale ?? 1.14) + 0.06),
+            }));
+          }
+          if (project.reactionZooms) {
+            project.reactionZooms = (project.reactionZooms as { intensity?: number }[]).map((r) => ({
+              ...r,
+              intensity: Math.min(1.65, (r.intensity ?? 1.42) + 0.18),
+            }));
+          }
+        }
+      }
 
       const projectPath = path.join(PROJECTS_DIR, `${projectId}.json`);
       await writeJsonFileAtomic(projectPath, project);

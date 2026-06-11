@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from config import (
+    DATA_ROOT,
     LF_PROJECTS,
     LF_TRANSCRIPTS,
     OLLAMA_MODEL,
@@ -500,6 +501,51 @@ def validate_copy(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def load_user_handles() -> dict[str, str]:
+    """Lee los @handles configurados en la UI (user-settings.json, junto al data root).
+
+    Mismo archivo que escribe frontend/src/lib/user-settings.ts:
+    <DATA_ROOT>/../user-settings.json. Si no existe o está corrupto devuelve {} y los
+    captions salen sin firma (degradación graciosa, igual que el watermark).
+    """
+    try:
+        settings_file = DATA_ROOT.parent / "user-settings.json"
+        # utf-8-sig: tolera BOM (editores Windows); sin BOM se comporta igual que utf-8.
+        data = json.loads(settings_file.read_text(encoding="utf-8-sig"))
+        handles = data.get("handles", {}) if isinstance(data, dict) else {}
+        out: dict[str, str] = {}
+        for key in ("instagram", "linkedin"):
+            h = str(handles.get(key, "") or "").strip()
+            if h and not h.startswith("@"):
+                h = f"@{h}"
+            if h:
+                out[key] = h
+        return out
+    except Exception:
+        return {}
+
+
+def append_handle_signature(copy: dict[str, Any], handles: dict[str, str]) -> None:
+    """Firma con el @handle real al final del caption de IG/LinkedIn.
+
+    Los hashtags viven en su propio campo, así que la firma queda como última línea
+    del cuerpo. No duplica si el LLM ya mencionó el handle. Muta `copy` in-place.
+    """
+    signatures = {
+        "instagram": "Seguime en {h} para más como esto.",
+        "linkedin": "Más contenido así en {h}.",
+    }
+    for platform, h in handles.items():
+        block = copy["captions"].get(platform)
+        if not isinstance(block, dict) or not block.get("caption"):
+            continue
+        if h.lower() in block["caption"].lower():
+            continue  # el LLM ya lo incluyó — no repetir
+        block["caption"] = block["caption"].rstrip() + "\n\n" + signatures[platform].format(h=h)
+    # caption_long es el espejo legacy del caption de LinkedIn — mantenerlo en sync.
+    copy["caption_long"] = copy["captions"]["linkedin"]["caption"]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("video_id", help="ID del video (sin extensión)")
@@ -540,6 +586,10 @@ def main() -> int:
             return 1
 
     copy = validate_copy(raw)
+    # Firma por red: si hay @handle de IG/LinkedIn en user-settings, sumarlo al caption.
+    user_handles = load_user_handles()
+    if user_handles:
+        append_handle_signature(copy, user_handles)
     copy["_provider"] = provider
     copy["_model"] = model
 

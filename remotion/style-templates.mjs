@@ -15,7 +15,7 @@
  * generadores, así largos queda a paridad con shorts.
  */
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import nodePath from "node:path";
 
 // ─── viral-emojis (port) ──────────────────────────────────────────────────
@@ -454,7 +454,7 @@ function buildSupremeStyle(ctx, styleId) {
  * con URL 404 rompe el render). Sólo lo usan cinematic_pro/broll_* — que el
  * pipeline de largos NO ofrece — así que en la práctica acá devuelve null.
  */
-function pickRandomMusicTrack(seed) {
+function pickRandomMusicTrack(seed, mood) {
   try {
     const candidates = ["C:\\viral-data\\videos", "C:\\hermes-data\\videos"];
     let dataRoot = process.env.VIRAL_DATA_ROOT;
@@ -482,9 +482,45 @@ function pickRandomMusicTrack(seed) {
       }
     }
     if (files.length === 0) return null;
+    // Filtro por mood (filenames nuevos: incompetech-epic-..., chosic-calm-...)
+    let pool = files;
+    if (mood) {
+      const token = `-${mood.toLowerCase()}-`;
+      const filtered = files.filter((f) => f.toLowerCase().includes(token));
+      if (filtered.length > 0) pool = filtered;
+    }
+    pool = [...pool].sort(); // orden estable, independiente del orden de readdir
     let h = 0;
     for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-    return `/api/music/stream?file=${encodeURIComponent(files[h % files.length])}`;
+    let pick = pool[h % pool.length];
+    // Rotación anti-repetición (MISMA lógica que frontend/src/lib/style-templates.ts):
+    // mismo videoId → misma pista (assignments); videoId nuevo que cae en la última
+    // pista usada por OTRO video → siguiente del pool.
+    const rotPath = nodePath.join(MUSIC_DIR, "music-rotation.json");
+    try {
+      let rot = {};
+      try {
+        rot = JSON.parse(readFileSync(rotPath, "utf-8"));
+      } catch {
+        // sin estado previo
+      }
+      const assignments = rot.assignments ?? {};
+      const prev = assignments[seed];
+      if (prev && files.includes(prev)) {
+        pick = prev; // re-render del mismo video: respeta la asignación original
+      } else if (pool.length > 1 && rot.lastFile === pick && rot.lastVideoId !== seed) {
+        pick = pool[(h + 1) % pool.length];
+      }
+      assignments[seed] = pick;
+      const keys = Object.keys(assignments);
+      if (keys.length > 300) {
+        for (const k of keys.slice(0, keys.length - 300)) delete assignments[k];
+      }
+      writeFileSync(rotPath, JSON.stringify({ lastFile: pick, lastVideoId: seed, assignments }));
+    } catch {
+      // si el JSON no se puede leer/escribir, seguimos con el pick por hash
+    }
+    return `/api/music/stream?file=${encodeURIComponent(pick)}`;
   } catch {
     return null;
   }

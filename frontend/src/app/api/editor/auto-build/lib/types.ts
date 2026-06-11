@@ -34,6 +34,13 @@ export interface AutoBuildRequest {
   /** Tema del estilo Editorial: fuente serif + fondo del lienzo + sub-tema
    *  de clase mundial ("prensa", "vogue", "riso"… — ver editorial-themes.tsx). */
   editorialTheme?: { font?: string; background?: string; theme?: string };
+  /** Fondo animado elegido en el wizard para los estilos motion_* (mismo "kind"
+   *  que animatedBackground en style-templates). undefined = el propio del estilo. */
+  motionBackground?: "aurora" | "mesh" | "grid";
+  /** Intensidad de FX para los estilos hype/hype_max/hype_max_sfx/supreme:
+   *  "suave" recorta los FX que el estilo ya trae, "max" los acentúa.
+   *  undefined = "normal" (el balance original del estilo, sin cambios). */
+  fxIntensity?: "suave" | "max";
   caption?: string;
   captionMeta?: Record<string, unknown>;
   platforms?: string[];
@@ -96,6 +103,13 @@ export interface ResolvedProject {
   sfxMarks?: unknown[];
   // F3 — Partículas procedurales (chispas en el pico emocional, confeti, etc.).
   particleBursts?: { at: number; duration: number; kind: string; count?: number }[];
+  // FX que los estilos hype*/supreme ya generan (los lee el override fxIntensity).
+  wordStickers?: unknown[];
+  floatingEmojis?: unknown[];
+  stutterMarks?: unknown[];
+  // Fondo animado de los estilos motion_* (lo setea buildProjectForStyle; el
+  // override motionBackground del wizard solo cambia el "kind").
+  animatedBackground?: { kind: string; colors?: string[]; opacity?: number; audioReactive?: boolean };
   // Modo Gráficos & Motion (estilos graphics_*): applyGraphics genera dataViz +
   // kineticHeadlines desde el transcript del short y los deja acá.
   graphics?: boolean;

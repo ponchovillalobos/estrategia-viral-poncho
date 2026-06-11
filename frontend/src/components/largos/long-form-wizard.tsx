@@ -1011,7 +1011,7 @@ export function LongFormWizard() {
             Cada estilo seleccionado genera un MP4 por clip. Si elegís 2 estilos y se extraen 5 clips,
             se renderizan 10 archivos.
           </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {STYLES.map((s) => {
               const sel = selectedStyles.includes(s.id);
               return (
@@ -1043,7 +1043,10 @@ export function LongFormWizard() {
           {hasEditorial && (
             <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
               <p className="mb-2 text-sm font-medium">📰 Tema del estilo Editorial</p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {/* 17 temas: chips compactos (hasta 6 columnas) + tope de alto con
+                  scroll suave para que el submenú nunca se coma la pantalla. */}
+              <div className="max-h-[340px] overflow-y-auto scroll-smooth pr-1">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                 {EDITORIAL_THEMES.map((t) => (
                   <button
                     key={t.id}
@@ -1061,17 +1064,18 @@ export function LongFormWizard() {
                     )}
                   >
                     {/* mini-preview del tema: fondo + serif + acento */}
-                    <div className="flex h-14 flex-col justify-center px-2" style={{ background: t.bg }}>
-                      <span className="text-[7px] uppercase tracking-[0.3em]" style={{ color: t.text, opacity: 0.5 }}>
+                    <div className="flex h-14 flex-col justify-center overflow-hidden px-2" style={{ background: t.bg }}>
+                      <span className="truncate text-[7px] uppercase tracking-[0.3em]" style={{ color: t.text, opacity: 0.5 }}>
                         La verdad
                       </span>
-                      <span className="text-sm font-bold leading-tight" style={{ color: t.text, fontFamily: t.demoFont }}>
+                      <span className="truncate text-sm font-bold leading-tight" style={{ color: t.text, fontFamily: t.demoFont }}>
                         Título <em style={{ color: accent }}>clave.</em>
                       </span>
                     </div>
-                    <div className="px-2 py-1 text-[10px] text-muted-foreground">{t.name}</div>
+                    <div className="truncate px-2 py-1 text-[10px] text-muted-foreground">{t.name}</div>
                   </button>
                 ))}
+              </div>
               </div>
             </div>
           )}

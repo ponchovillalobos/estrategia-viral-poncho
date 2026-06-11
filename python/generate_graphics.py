@@ -194,7 +194,17 @@ def concept_icons(words: list[dict], duration: float, target: int) -> list[dict]
     return out
 
 
-def _ollama(prompt: str, temperature: float = 0.3) -> str:
+def _ollama_alive(timeout: float = 2.0) -> bool:
+    """Probe RÁPIDO: ¿Ollama está levantado? Evita esperar el timeout largo de
+    generación cuando el server ni siquiera responde (fallback silencioso)."""
+    try:
+        with urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=timeout):
+            return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _ollama(prompt: str, temperature: float = 0.3, timeout: float = 120) -> str:
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": prompt,
@@ -207,7 +217,7 @@ def _ollama(prompt: str, temperature: float = 0.3) -> str:
         f"{OLLAMA_URL}/api/generate", data=data,
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         body = json.loads(resp.read().decode("utf-8"))
     return body.get("response", "").strip()
 
@@ -466,6 +476,132 @@ _GENERIC_ACCENT = {
 _INLINE_FILLERS = {"eh", "em", "ehh", "mmm", "ehm", "ajá,", "osea,"}
 
 
+# ─── CORRECTOR ORTOGRÁFICO/GRAMATICAL ES (confusiones típicas de Whisper) ─────
+# Whisper translitera el HABLA y a veces confunde homófonos ("a ser"/"a hacer",
+# "haber"/"a ver") o escribe números en letra. Estas reglas son DETERMINISTAS y
+# CONSERVADORAS: solo corrigen patrones de ALTA confianza con contexto explícito;
+# ante la duda, no tocan nada. Mismo input → mismo output, sin LLM.
+
+# Números en letra → cifra (para "veinte por ciento" → "20%").
+_NUM_WORDS = {
+    "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+    "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
+    "once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15,
+    "dieciséis": 16, "dieciseis": 16, "diecisiete": 17, "dieciocho": 18,
+    "diecinueve": 19, "veinte": 20, "veintiuno": 21, "veintidós": 22,
+    "veintidos": 22, "veintitrés": 23, "veintitres": 23, "veinticuatro": 24,
+    "veinticinco": 25, "veintiséis": 26, "veintiseis": 26, "veintisiete": 27,
+    "veintiocho": 28, "veintinueve": 29, "treinta": 30, "cuarenta": 40,
+    "cincuenta": 50, "sesenta": 60, "setenta": 70, "ochenta": 80,
+    "noventa": 90, "cien": 100,
+}
+
+# Interrogativas SIN tilde justo después de "¿" → con tilde (alta confianza:
+# el signo de apertura confirma que es pregunta directa).
+_INTERROG_ACCENTS = {
+    "como": "cómo", "cuando": "cuándo", "donde": "dónde", "adonde": "adónde",
+    "quien": "quién", "quienes": "quiénes", "cual": "cuál", "cuales": "cuáles",
+    "cuanto": "cuánto", "cuanta": "cuánta", "cuantos": "cuántos",
+    "cuantas": "cuántas", "que": "qué", "porque": "por qué",
+}
+
+# Sustantivos de ACCIÓN (cosas que se HACEN, no que se ES): solo con estos la
+# regla "a ser"→"a hacer" es inequívoca. "Vamos a ser un equipo" / "va a ser un
+# éxito" son copulativos VÁLIDOS y NO deben tocarse.
+_HACER_NOUNS = (
+    r"(?:experimentos?|pruebas?|tests?|ejercicios?|an[áa]lisis|resumen|"
+    r"res[úu]menes|repasos?|videos?|sorteos?|retos?|tutorial(?:es)?|demos?|"
+    r"demostraci[óo]n(?:es)?|comparaci[óo]n(?:es)?|simulaci[óo]n(?:es)?|"
+    r"encuestas?|pausas?|viajes?|fiestas?|llamadas?|preguntas?|recorridos?)"
+)
+
+# (regex, reemplazo) — solo patrones con contexto que los hace inequívocos.
+_CONFUSION_RULES: list[tuple[re.Pattern, str]] = [
+    # "vamos a ser un experimento": 1ª/2ª persona + determinante + sustantivo de
+    # ACCIÓN = casi seguro "hacer". Excluye va/van (3ª persona: "va a ser un
+    # experimento brutal" puede ser copulativo válido) y cualquier sustantivo
+    # fuera de la whitelist ("vamos a ser un equipo" se respeta).
+    (re.compile(
+        r"\b(voy|vas|vamos)\s+a\s+ser\s+"
+        r"(un|una|unos|unas|el|la|los|las|este|esta|estos|estas|otro|otra)\s+"
+        rf"({_HACER_NOUNS})\b",
+        re.IGNORECASE), r"\1 a hacer \2 \3"),
+    # "haber si funciona" → "a ver si" (el clásico de Whisper).
+    (re.compile(r"\b(?:haber|aber|aver)\s+si\b", re.IGNORECASE), "a ver si"),
+    # "aber"/"aver" no existen en español → siempre "a ver".
+    (re.compile(r"\b(?:aber|aver)\b", re.IGNORECASE), "a ver"),
+    # "vamos haber qué pasa" → "vamos a ver".
+    (re.compile(r"\b(voy|vas|va|vamos|van)\s+haber\b", re.IGNORECASE), r"\1 a ver"),
+    # "que si" como afirmación final ("claro que si.") → "que sí".
+    (re.compile(r"\bque si\b(?=\s*[.,;:!?…]|\s*$)", re.IGNORECASE), "que sí"),
+]
+
+_PCT_RE = re.compile(r"\b([a-záéíóúñü]+|\d+)\s+por\s?ciento\b", re.IGNORECASE)
+_X_NUM_RE = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*[xX]\s*(?=\d)")
+_MAS_RE = re.compile(r"(?<![,;])(\s)mas\b", re.IGNORECASE)
+_INTERROG_RE = re.compile(r"¿\s*([A-Za-zÁÉÍÓÚÑÜáéíóúñü]+)")
+
+
+def _fix_es_confusions(text: str) -> str:
+    """Corrige confusiones de transcripción de ALTA confianza (determinista).
+
+    Solo reglas con contexto inequívoco; ante la duda no toca. Idempotente:
+    aplicarla dos veces da lo mismo que una.
+    """
+    t = str(text or "")
+    if not t.strip():
+        return t
+    for pat, repl in _CONFUSION_RULES:
+        t = pat.sub(repl, t)
+
+    # "veinte por ciento" / "50 por ciento" → "20%" / "50%"
+    def _pct(m: re.Match) -> str:
+        w = m.group(1)
+        if w.isdigit():
+            return f"{w}%"
+        n = _NUM_WORDS.get(w.lower())
+        return f"{n}%" if n is not None else m.group(0)
+    t = _PCT_RE.sub(_pct, t)
+
+    # "2 x 3" / "2x1" → "2 por 3" (solo "x" entre cifras).
+    t = _X_NUM_RE.sub(r"\1 por ", t)
+
+    # "mas" → "más" salvo tras coma/; (el "mas" adversativo viene tras pausa).
+    t = _MAS_RE.sub(r"\1más", t)
+
+    # Interrogativa sin tilde justo tras "¿" → con tilde ("¿como…" → "¿cómo…").
+    def _interrog(m: re.Match) -> str:
+        w = m.group(1)
+        rep = _INTERROG_ACCENTS.get(w.lower())
+        if not rep:
+            return m.group(0)
+        if w[0].isupper():
+            rep = rep[0].upper() + rep[1:]
+        return "¿" + rep
+    t = _INTERROG_RE.sub(_interrog, t)
+    # "porque" abriendo una pregunta con "?" → "por qué".
+    if "?" in t:
+        t = re.sub(r"^(\s*)porque\b", r"\1por qué", t, flags=re.IGNORECASE)
+    # "¿cómo estas?" → "¿cómo estás?" (solo con cierre/coma: contexto de saludo).
+    t = re.sub(r"\b([Cc]ómo)\s+estas(?=\s*[?,!]|\s*$)", r"\1 estás", t)
+    return t
+
+
+def review_screen_texts(texts: list[str]) -> list[str]:
+    """Aplica el corrector determinista a CUALQUIER lista de textos en pantalla
+    (titulares kinéticos, títulos/labels de dataViz y steps, kickers…).
+    Conserva MAYÚSCULAS si el texto venía todo en mayúsculas. Misma longitud,
+    mismo orden; textos vacíos pasan intactos."""
+    out: list[str] = []
+    for t in texts:
+        s = str(t or "")
+        fixed = _fix_es_confusions(re.sub(r"\s+", " ", s).strip()) if s.strip() else s
+        if s.isupper():
+            fixed = fixed.upper()
+        out.append(fixed)
+    return out
+
+
 def clean_screen_text(text: str, max_chars: int | None = None, min_words: int = 2) -> str:
     """Limpia un fragmento del transcript para mostrarlo COMO TITULAR.
 
@@ -479,6 +615,10 @@ def clean_screen_text(text: str, max_chars: int | None = None, min_words: int = 
     t = re.sub(r"\s+", " ", str(text or "")).strip()
     if not t:
         return ""
+    # Corrector de confusiones de Whisper ANTES de tokenizar (determinista,
+    # conservador: "a ser"→"a hacer" con determinante, "haber si"→"a ver si",
+    # "veinte por ciento"→"20%", tildes de pregunta…).
+    t = _fix_es_confusions(t)
     toks = t.split()
     # duplicados de dictado consecutivos (case-insensitive)
     dedup: list[str] = []
@@ -1072,6 +1212,10 @@ palabras mal reconocidas, muletillas (este, eh, o sea, bueno) y frases cortadas.
 Corregí los errores evidentes según el contexto, eliminá toda muletilla y
 entregá frases COMPLETAS y bien redactadas en español neutro — nunca copies
 un fragmento roto tal cual.
+Si una frase NO tiene sentido (transcripción rota o palabras mal reconocidas),
+REESCRIBILA con sentido manteniendo la intención de lo que el orador quiso decir.
+VARIÁ el fraseo: no repitas literal lo que se dice en el video — parafraseá con
+punch, sumá ángulo o dato. Dos tarjetas nunca deben sonar iguales entre sí.
 
 Reglas por tarjeta:
 - "title": máx 7 palabras, potente, estilo titular de revista. Termina en punto.
@@ -1093,17 +1237,30 @@ TARJETAS:
 
 def _enrich_cards_llm(cards: list[dict], words: list[dict]) -> list[dict]:
     """Reescritura con Ollama (si está): títulos impactantes + subtítulos que
-    aportan datos/insights en vez de repetir. Best-effort: ante cualquier fallo
-    se quedan las tarjetas heurísticas (el pipeline jamás se rompe)."""
+    aportan datos/insights en vez de repetir, corrigiendo de paso frases rotas
+    de la transcripción y VARIANDO el fraseo (no copia literal del video).
+    Las PULL-QUOTES quedan FUERA: son citas textuales del orador y jamás se
+    reescriben. Best-effort: probe corto primero; ante cualquier fallo se quedan
+    las tarjetas heurísticas (el pipeline jamás se rompe)."""
     if not cards:
         return cards
     try:
+        # Probe corto: si Ollama no está levantado, fallback inmediato (no
+        # esperamos el timeout largo de generación).
+        if not _ollama_alive():
+            print("[editorial] Ollama no disponible — tarjetas heurísticas", file=sys.stderr)
+            return cards
+        # Pull-quotes EXCLUIDAS: la cita es textual (palabra por palabra con
+        # timestamps), reescribirla rompería el sync y la honestidad de la cita.
+        idx_send = [i for i, c in enumerate(cards) if not c.get("quote")]
+        if not idx_send:
+            return cards
         # Contexto corto del video para que el modelo entienda el tema.
         full_text = " ".join(str(w.get("word", "")) for w in words)[:1500]
         payload = [
-            {k: c[k] for k in ("at", "duration", "kicker", "title", "accent",
-                               "subtitle", "number", "statValue", "statUnit", "icon")}
-            for c in cards
+            {k: cards[i][k] for k in ("at", "duration", "kicker", "title", "accent",
+                                      "subtitle", "number", "statValue", "statUnit", "icon")}
+            for i in idx_send
         ]
         prompt = (
             _EDITORIAL_LLM_PROMPT
@@ -1115,10 +1272,11 @@ def _enrich_cards_llm(cards: list[dict], words: list[dict]) -> list[dict]:
         if not m:
             return cards
         out = json.loads(m.group(0)).get("cards", [])
-        if not isinstance(out, list) or len(out) != len(cards):
+        if not isinstance(out, list) or len(out) != len(idx_send):
             return cards
-        enriched: list[dict] = []
-        for orig, new in zip(cards, out):
+        enriched: list[dict] = list(cards)  # las quotes quedan intactas en su lugar
+        for i, new in zip(idx_send, out):
+            orig = cards[i]
             c = dict(orig)  # at/duration/icon/number/stat* SIEMPRE de la heurística
             is_visual = not orig.get("title") and not orig.get("statValue") and not orig.get("number")
             for k in ("kicker", "title", "accent", "subtitle"):
@@ -1130,8 +1288,14 @@ def _enrich_cards_llm(cards: list[dict], words: list[dict]) -> list[dict]:
                 # (el LLM solo puede aportarles kicker + subtítulo con dato).
                 c["title"] = ""
                 c["accent"] = ""
-            enriched.append(c)
-        print(f"[editorial] {len(enriched)} tarjetas enriquecidas con LLM", file=sys.stderr)
+            # Corrector determinista también sobre lo que devuelve el LLM
+            # (a veces copia confusiones del transcript tal cual).
+            c["title"], c["subtitle"], c["kicker"] = review_screen_texts(
+                [c.get("title", ""), c.get("subtitle", ""), c.get("kicker", "")]
+            )
+            enriched[i] = c
+        print(f"[editorial] {len(idx_send)} tarjetas enriquecidas con LLM "
+              f"({len(cards) - len(idx_send)} pull-quotes textuales intactas)", file=sys.stderr)
         return enriched
     except Exception as e:  # noqa: BLE001
         print(f"[editorial] LLM skip ({e}) — tarjetas heurísticas", file=sys.stderr)
@@ -1190,7 +1354,10 @@ def heuristic_headlines(words: list[dict], duration: float, max_h: int = 3) -> l
     chosen.sort(key=lambda s: s["start"])
     headlines: list[dict] = []
     for i, s in enumerate(chosen):
-        text = clean_screen_text(s["text"], max_chars=40, min_words=2).upper()
+        # clean_screen_text ya corrige confusiones; review re-asegura tras .upper()
+        text = review_screen_texts(
+            [clean_screen_text(s["text"], max_chars=40, min_words=2).upper()]
+        )[0]
         if not text:
             continue
         headlines.append({
@@ -1235,8 +1402,11 @@ def llm_headlines(words: list[dict], duration: float, max_h: int = 3) -> list[di
     for i, it in enumerate(items[:max_h]):
         raw = str(it.get("text", "")).strip(" .,\"'")
         # El LLM escribe bien, pero a veces copia muletillas del transcript:
-        # mismo limpiador (si la limpieza lo destruye, queda el original corto).
-        text = (clean_screen_text(raw, max_chars=40, min_words=2) or raw[:40]).upper()
+        # mismo limpiador (si la limpieza lo destruye, queda el original corto)
+        # + corrector determinista (por si copió una confusión de Whisper).
+        text = review_screen_texts(
+            [(clean_screen_text(raw, max_chars=40, min_words=2) or raw[:40]).upper()]
+        )[0]
         if not text or len(text.split()) > 8:
             continue
         try:
@@ -1285,6 +1455,15 @@ def generate(transcript_path: Path, use_llm: bool = True) -> dict:
         c["accent"] = ACCENTS[(i * 2 + 1) % len(ACCENTS)]
         c["position"] = ["top", "bottom", "center"][i % 3]
 
+    # Corrector ortográfico determinista sobre TODO texto visible de dataViz y
+    # steps (títulos + labels): nada con confusiones de Whisper llega a pantalla.
+    for c in charts:
+        if c.get("title"):
+            c["title"] = review_screen_texts([c["title"]])[0]
+        for d in c.get("data", []):
+            if isinstance(d, dict) and d.get("label"):
+                d["label"] = review_screen_texts([d["label"]])[0]
+
     # Anti-solape: si un ícono cae sobre un chart fullscreen, lo corremos de esquina.
     chart_windows = [(c["at"], c["at"] + c["duration"]) for c in charts if c.get("fullscreen")]
     for ic in icons:
@@ -1318,13 +1497,72 @@ def generate(transcript_path: Path, use_llm: bool = True) -> dict:
     }
 
 
+def _selftest() -> int:
+    """Tests del corrector ES (determinista). Corre con: --selftest."""
+    cases_fix = [
+        # (entrada, salida esperada de _fix_es_confusions)
+        ("hoy vamos a ser un experimento", "hoy vamos a hacer un experimento"),
+        ("voy a ser una prueba rápida", "voy a hacer una prueba rápida"),
+        ("vamos a ser felices", "vamos a ser felices"),            # adjetivo: NO tocar
+        ("vamos a ser un equipo increíble", "vamos a ser un equipo increíble"),  # copulativo: NO tocar
+        ("esto va a ser un experimento brutal", "esto va a ser un experimento brutal"),  # 3ª persona: NO tocar
+        ("aber si funciona", "a ver si funciona"),
+        ("haber si llega el cliente", "a ver si llega el cliente"),
+        ("vamos haber qué pasa", "vamos a ver qué pasa"),
+        ("el veinte por ciento de las personas", "el 20% de las personas"),
+        ("creció 50 por ciento este año", "creció 50% este año"),
+        ("una promo de 2 x 1", "una promo de 2 por 1"),
+        ("quiero mas dinero", "quiero más dinero"),
+        ("lo intenté, mas no pude", "lo intenté, mas no pude"),    # adversativo: NO tocar
+        ("claro que si.", "claro que sí."),
+        ("no sé que si vienes mañana", "no sé que si vienes mañana"),  # condicional: NO tocar
+        ("¿como estas?", "¿cómo estás?"),
+        ("¿cuanto cuesta?", "¿cuánto cuesta?"),
+        ("porque no funciona?", "por qué no funciona?"),
+    ]
+    cases_clean = [
+        # (entrada, salida esperada de clean_screen_text)
+        ("hoy vamos a ser un experimento", "Hoy vamos a hacer un experimento"),
+        ("aber si funciona esto", "A ver si funciona esto"),
+        ("el veinte por ciento de las personas compran", "El 20% de las personas compran"),
+        ("bueno pues eh vamos a ser un experimento en vivo", "Vamos a hacer un experimento en vivo"),
+    ]
+    failed = 0
+    for inp, want in cases_fix:
+        got = _fix_es_confusions(inp)
+        ok = got == want
+        idem = _fix_es_confusions(got) == got  # idempotencia = determinismo seguro
+        failed += (not ok) + (not idem)
+        print(f"  {'OK ' if ok and idem else 'FAIL'} fix   {inp!r} → {got!r}"
+              + ("" if ok else f"  (esperaba {want!r})")
+              + ("" if idem else "  (NO idempotente)"))
+    for inp, want in cases_clean:
+        got = clean_screen_text(inp)
+        ok = got == want
+        failed += not ok
+        print(f"  {'OK ' if ok else 'FAIL'} clean {inp!r} → {got!r}"
+              + ("" if ok else f"  (esperaba {want!r})"))
+    # review_screen_texts: conserva mayúsculas y longitud/orden
+    got = review_screen_texts(["VEINTE POR CIENTO MAS", "", "aber si funciona"])
+    want = ["20% MÁS", "", "a ver si funciona"]
+    ok = got == want
+    failed += not ok
+    print(f"  {'OK ' if ok else 'FAIL'} review {got!r}" + ("" if ok else f" (esperaba {want!r})"))
+    print(f"[selftest] {'TODO OK' if not failed else f'{failed} FALLOS'}")
+    return 0 if not failed else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("clip_id", nargs="?", help="ID del clip (transcript en long_form/transcripts)")
     parser.add_argument("--transcript", help="Path al transcript JSON")
     parser.add_argument("--out", help="Path de salida (default: long_form/graphics/{clip_id}.json)")
     parser.add_argument("--no-llm", action="store_true", help="Solo heurística (sin Ollama)")
+    parser.add_argument("--selftest", action="store_true", help="Corre los tests del corrector ES y sale")
     args = parser.parse_args()
+
+    if args.selftest:
+        return _selftest()
 
     ensure_long_form_dirs()
 

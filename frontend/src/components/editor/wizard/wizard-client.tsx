@@ -3,7 +3,7 @@
 // Thumbnails dinámicos de videos raw (sizes flexibles).
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -108,6 +108,29 @@ const SUBTITLE_FONTS: { id: string; name: string }[] = [
   { id: "righteous", name: "Righteous (retro)" },
 ];
 
+// Familias de estilos con submenú propio (patrón "tema editorial"): el submenú
+// solo aparece si hay un estilo de la familia seleccionado, y el default ("auto"/
+// "normal") deja el render EXACTAMENTE como siempre — elegir nada = perfecto.
+const MOTION_STYLES: StyleId[] = ["motion_pro", "motion_beat", "motion_grid"];
+const HYPE_STYLES: StyleId[] = ["hype", "hype_max", "hype_max_sfx", "supreme"];
+
+// Fondos animados de los estilos Motion (mismo "kind" que animatedBackground en
+// style-templates). El preview es CSS puro — se VE cómo es cada fondo sin leer.
+const MOTION_BACKGROUNDS: { id: string; name: string; hint: string; preview: CSSProperties }[] = [
+  { id: "auto", name: "Automático", hint: "el de cada estilo", preview: { background: "linear-gradient(135deg, #1e293b, #0f172a)" } },
+  { id: "aurora", name: "Aurora", hint: "ondas que pulsan", preview: { background: "radial-gradient(circle at 30% 35%, rgba(52,211,153,0.8), transparent 60%), radial-gradient(circle at 70% 70%, rgba(167,139,250,0.8), transparent 60%), #07070d" } },
+  { id: "mesh", name: "Gradiente vivo", hint: "late con la música", preview: { background: "linear-gradient(135deg, #fb7185, #a78bfa 50%, #22d3ee)" } },
+  { id: "grid", name: "Cuadrícula retro", hint: "look futurista", preview: { background: "linear-gradient(rgba(34,211,238,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.35) 1px, transparent 1px), #060912", backgroundSize: "11px 11px, 11px 11px, auto" } },
+];
+
+// Intensidad de los FX de los estilos Viral/Premium. "normal" = el balance con el
+// que se diseñó cada estilo; "suave" recorta zooms/efectos; "max" los acentúa.
+const FX_INTENSITIES: { id: string; name: string; emoji: string; hint: string }[] = [
+  { id: "suave", name: "Suave", emoji: "🌙", hint: "Menos zooms y efectos, más respirable" },
+  { id: "normal", name: "Normal", emoji: "⚡", hint: "El balance del estilo (recomendado)" },
+  { id: "max", name: "Máximo", emoji: "🔥", hint: "Zooms más fuertes y cortes rápidos" },
+];
+
 // Nombre humano de un estilo a partir de su id (acepta "videoId::style" del progreso).
 function humanStyleName(rawId: string): string {
   const id = rawId.includes("::") ? rawId.split("::").pop()! : rawId;
@@ -176,6 +199,10 @@ export function WizardClient() {
     { id: "ft", name: "FT salmón", theme: "ft", accent: "#0d7680", font: "lora", background: "cream", bg: "#fff1e5", text: "#33302e", demoFont: "'Franklin Gothic Medium', sans-serif" },
   ] as const;
   const [editorialTheme, setEditorialTheme] = useState<string>("clasico");
+  // Fondo animado (estilos motion_*). "auto" = el fondo propio de cada estilo.
+  const [motionBackground, setMotionBackground] = useState<string>("auto");
+  // Intensidad de FX (estilos hype*/supreme). "normal" = el estilo tal cual.
+  const [fxIntensity, setFxIntensity] = useState<string>("normal");
 
   // F4 — Vista previa REAL: un frame (o clip de 3s) del video del user con el estilo.
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -476,6 +503,13 @@ export function WizardClient() {
             const t = EDITORIAL_THEMES.find((x) => x.id === editorialTheme);
             return t ? { font: t.font, background: t.background, theme: t.theme || undefined } : undefined;
           })(),
+          // Submenús opcionales: solo viajan si el user cambió el default —
+          // "auto"/"normal" = undefined = el render sale como siempre.
+          motionBackground:
+            motionBackground === "aurora" || motionBackground === "mesh" || motionBackground === "grid"
+              ? motionBackground
+              : undefined,
+          fxIntensity: fxIntensity === "suave" || fxIntensity === "max" ? fxIntensity : undefined,
           platforms: selectedPlatforms,
           aspectRatio,
           caption: caption || undefined,
@@ -830,7 +864,7 @@ export function WizardClient() {
             Para tu primer video, dejá el <strong className="text-foreground">Recomendado</strong>.
             Podés elegir varios para comparar — se genera uno por cada estilo (cada uno tarda unos minutos).
           </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {STYLES.map((s) => {
               const selected = selectedStyles.includes(s.id);
               return (
@@ -866,7 +900,10 @@ export function WizardClient() {
           {selectedStyles.includes("editorial") && (
             <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
               <p className="mb-2 text-sm font-medium">📰 Tema del estilo Editorial</p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {/* 17 temas: chips compactos (hasta 6 columnas) + tope de alto con
+                  scroll suave para que el submenú nunca se coma la pantalla. */}
+              <div className="max-h-[340px] overflow-y-auto scroll-smooth pr-1">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                 {EDITORIAL_THEMES.map((t) => (
                   <button
                     key={t.id}
@@ -884,15 +921,77 @@ export function WizardClient() {
                     }`}
                   >
                     {/* mini-preview del tema: fondo + serif + acento */}
-                    <div className="flex h-14 flex-col justify-center px-2" style={{ background: t.bg }}>
-                      <span className="text-[7px] uppercase tracking-[0.3em]" style={{ color: t.text, opacity: 0.5 }}>
+                    <div className="flex h-14 flex-col justify-center overflow-hidden px-2" style={{ background: t.bg }}>
+                      <span className="truncate text-[7px] uppercase tracking-[0.3em]" style={{ color: t.text, opacity: 0.5 }}>
                         La verdad
                       </span>
-                      <span className="text-sm font-bold leading-tight" style={{ color: t.text, fontFamily: t.demoFont }}>
+                      <span className="truncate text-sm font-bold leading-tight" style={{ color: t.text, fontFamily: t.demoFont }}>
                         Título <em style={{ color: accent }}>clave.</em>
                       </span>
                     </div>
-                    <div className="px-2 py-1 text-[10px] text-muted-foreground">{t.name}</div>
+                    <div className="truncate px-2 py-1 text-[10px] text-muted-foreground">{t.name}</div>
+                  </button>
+                ))}
+              </div>
+              </div>
+            </div>
+          )}
+
+          {/* Fondo animado: aparece solo si elegiste un estilo Motion (✨/🎧/🌐).
+              "Automático" = el fondo perfecto de cada estilo — no hay que tocar nada. */}
+          {selectedStyles.some((s) => MOTION_STYLES.includes(s)) && (
+            <div className="mt-5 rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
+              <p className="mb-1 text-sm font-medium">✨ Fondo animado</p>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Opcional: con &quot;Automático&quot; cada estilo Motion usa su fondo ideal.
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {MOTION_BACKGROUNDS.map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => setMotionBackground(b.id)}
+                    className={`overflow-hidden rounded-lg border text-left transition-all ${
+                      motionBackground === b.id
+                        ? "border-cyan-400 ring-1 ring-cyan-400"
+                        : "border-border hover:border-foreground/30"
+                    }`}
+                  >
+                    <div className="h-12" style={b.preview} />
+                    <div className="px-2 py-1">
+                      <p className="truncate text-[11px] font-medium">{b.name}</p>
+                      <p className="truncate text-[9px] text-muted-foreground">{b.hint}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Intensidad: aparece solo con estilos Viral/Premium. "Normal" viene
+              elegido — no tocar nada = el balance original de cada estilo. */}
+          {selectedStyles.some((s) => HYPE_STYLES.includes(s)) && (
+            <div className="mt-5 rounded-lg border border-orange-500/30 bg-orange-500/5 p-4">
+              <p className="mb-1 text-sm font-medium">🔥 Intensidad de los efectos</p>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Opcional: cuánta energía llevan los zooms y efectos de los estilos Viral y Premium.
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {FX_INTENSITIES.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setFxIntensity(f.id)}
+                    className={`rounded-lg border p-3 text-left transition-all ${
+                      fxIntensity === f.id
+                        ? "border-orange-400 ring-1 ring-orange-400 bg-orange-500/10"
+                        : "border-border hover:border-foreground/30"
+                    }`}
+                  >
+                    <p className="truncate text-sm font-medium">
+                      {f.emoji} {f.name}
+                    </p>
+                    <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">{f.hint}</p>
                   </button>
                 ))}
               </div>

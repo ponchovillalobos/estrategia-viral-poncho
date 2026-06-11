@@ -201,6 +201,129 @@ SFX_KEYWORDS: dict[str, dict[str, Any]] = {
         "volume": 0.5,
         "offset": -0.05,
     },
+    # ─── Kenney.nl packs (CC0, descargados por download_sfx_library.py a
+    #     assets/sfx/github/ — 345 archivos servidos por /api/sfx/stream).
+    #     Keywords NUEVAS (no pisan las de arriba: el match exacto itera en orden).
+    "kenney-interface-sounds-confirmation_001.ogg": {
+        "keywords": ["confirma", "correcto", "exacto", "listo", "perfecto", "asi es"],
+        "category": "confirm",
+        "volume": 0.4,
+        "offset": 0,
+    },
+    "kenney-interface-sounds-error_001.ogg": {
+        "keywords": ["incorrecto", "equivocado", "mentira", "falso", "jamas"],
+        "category": "error",
+        "volume": 0.4,
+        "offset": 0,
+    },
+    "kenney-interface-sounds-question_001.ogg": {
+        "keywords": ["pregunta", "duda", "sabias", "adivina", "imaginate"],
+        "category": "question",
+        "volume": 0.4,
+        "offset": -0.1,
+    },
+    "kenney-interface-sounds-glitch_001.ogg": {
+        "keywords": ["raro", "extrano", "bizarro", "absurdo"],
+        "category": "glitch",
+        "volume": 0.35,
+        "offset": 0,
+    },
+    "kenney-interface-sounds-maximize_001.ogg": {
+        "keywords": ["gigantesco", "agranda", "expande", "amplia", "duplica"],
+        "category": "ui",
+        "volume": 0.35,
+        "offset": 0,
+    },
+    "kenney-interface-sounds-minimize_001.ogg": {
+        "keywords": ["pequeno", "chico", "reduce", "achica", "minimo"],
+        "category": "ui",
+        "volume": 0.35,
+        "offset": 0,
+    },
+    "kenney-interface-sounds-select_001.ogg": {
+        "keywords": ["importante", "clave", "esencial", "fundamental", "critico"],
+        "category": "accent",
+        "volume": 0.38,
+        "offset": -0.05,
+    },
+    "kenney-interface-sounds-bong_001.ogg": {
+        "keywords": ["increible", "impresionante", "sorprendente", "brutal"],
+        "category": "accent",
+        "volume": 0.42,
+        "offset": -0.05,
+    },
+    "kenney-interface-sounds-open_001.ogg": {
+        "keywords": ["abre", "comienza", "empieza", "inicia", "arranca"],
+        "category": "ui",
+        "volume": 0.35,
+        "offset": 0,
+    },
+    "kenney-interface-sounds-close_001.ogg": {
+        "keywords": ["cierra", "termina", "acaba", "concluye"],
+        "category": "ui",
+        "volume": 0.35,
+        "offset": 0,
+    },
+    "kenney-interface-sounds-scroll_001.ogg": {
+        "keywords": ["lista", "siguiente", "continua", "ademas"],
+        "category": "ui",
+        "volume": 0.3,
+        "offset": 0,
+    },
+    "kenney-digital-audio-powerup7.ogg": {
+        "keywords": ["mejora", "potencia", "nivel", "evoluciona", "gana"],
+        "category": "powerup",
+        "volume": 0.4,
+        "offset": -0.05,
+    },
+    "kenney-digital-audio-phaserup3.ogg": {
+        "keywords": ["despega", "vuela", "cohete", "dispara"],
+        "category": "riser",
+        "volume": 0.38,
+        "offset": -0.05,
+    },
+    "kenney-digital-audio-zap1.ogg": {
+        "keywords": ["energia", "electrico", "poder", "fuerza"],
+        "category": "zap",
+        "volume": 0.38,
+        "offset": 0,
+    },
+    "kenney-digital-audio-lowdown.ogg": {
+        "keywords": ["baja", "cayo", "pierde", "derrota", "fracaso", "peor"],
+        "category": "fall",
+        "volume": 0.38,
+        "offset": -0.05,
+    },
+    "kenney-impact-sounds-impactpunch_heavy_000.ogg": {
+        "keywords": ["tremendo", "duro", "pega", "destroza"],
+        "category": "punch",
+        "volume": 0.5,
+        "offset": -0.05,
+    },
+    "kenney-impact-sounds-impactmetal_heavy_000.ogg": {
+        "keywords": ["metal", "hierro", "acero", "maquina"],
+        "category": "impact",
+        "volume": 0.45,
+        "offset": -0.05,
+    },
+    "kenney-impact-sounds-impactglass_heavy_000.ogg": {
+        "keywords": ["vidrio", "cristal", "quiebra", "estalla"],
+        "category": "impact",
+        "volume": 0.45,
+        "offset": -0.05,
+    },
+    "kenney-impact-sounds-impactbell_heavy_000.ogg": {
+        "keywords": ["campana", "anuncio", "aviso", "alerta"],
+        "category": "bell",
+        "volume": 0.42,
+        "offset": -0.05,
+    },
+    "kenney-impact-sounds-footstep_wood_000.ogg": {
+        "keywords": ["camina", "paso", "pasos", "llega"],
+        "category": "foley",
+        "volume": 0.35,
+        "offset": 0,
+    },
 }
 
 

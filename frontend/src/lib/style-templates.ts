@@ -47,6 +47,8 @@ export interface BuildContext {
   /** Dimensiones del render. Default 1080×1920 (vertical 9:16). */
   width?: number;
   height?: number;
+  /** @handle real del usuario (de user-settings) — endScreen y brandKit lo muestran si existe. */
+  brandHandle?: string;
   /** Modo cinematográfico — imageOverlays subidos por el user (con timestamps + effects ya seteados por asamblea IA). */
   imageOverlays?: Array<{
     id: string;
@@ -394,6 +396,9 @@ function applyCapcutFx<T extends object>(
       ? {
           endScreen: {
             text: "Seguime para más",
+            // @handle real del usuario (user-settings vía ctx) — el layer lo muestra
+            // debajo del copy. Vacío = end-screen genérico, render idéntico a antes.
+            handle: ctx.brandHandle ?? "",
             emoji: "🔥",
             accent: ctx.accentColor,
             durationSec: 2.5,
@@ -401,9 +406,11 @@ function applyCapcutFx<T extends object>(
         }
       : {}),
     ...(opts.progressBar ? { progressBar: true } : {}),
-    // Marca de agua: marcador con handle vacío; auto-build lo rellena desde user-settings.
-    // Si no hay handle configurado, ViralVideo no la renderiza (queda igual).
-    ...(opts.brandKit ? { brandKit: { handle: "", position: "bottom-right" } } : {}),
+    // Marca de agua: handle desde ctx (user-settings); si viene vacío, auto-build (B6)
+    // intenta rellenarlo. Sin handle configurado, ViralVideo no la renderiza (queda igual).
+    ...(opts.brandKit
+      ? { brandKit: { handle: ctx.brandHandle ?? "", position: "bottom-right" } }
+      : {}),
     ...(opts.iconStickers ? { iconStickers: generateIconStickers(ctx) } : {}),
     // A2 — autoReframe necesita tracking activo para tener trackPath. Si el estilo
     // ya pidió tracking (vía opts.tracking) o lo activamos acá, el trackPath se llena.
@@ -683,7 +690,7 @@ function buildSupremeStyle(ctx: BuildContext, styleId: StyleId) {
  * Hoy Pixabay descontinuó la API de música (404), así que el sistema queda
  * sin música hasta que el user suba archivos manualmente. Sin música = render OK.
  */
-function pickRandomMusicTrack(seed: string): string | null {
+function pickRandomMusicTrack(seed: string, mood?: string): string | null {
   // Sync check: ¿hay archivos en MUSIC_DIR? Lectura síncrona OK porque
   // commonBase corre en el server al momento de buildear project.
   try {
@@ -711,10 +718,54 @@ function pickRandomMusicTrack(seed: string): string | null {
       }
     }
     if (files.length === 0) return null; // ← sin música, render OK
+    // Filtro por mood: la biblioteca nueva codifica el mood en el filename
+    // (incompetech-epic-..., chosic-calm-...). Sin matches → pool completo.
+    let pool = files;
+    if (mood) {
+      const token = `-${mood.toLowerCase()}-`;
+      const filtered = files.filter((f) => f.toLowerCase().includes(token));
+      if (filtered.length > 0) pool = filtered;
+    }
+    pool = [...pool].sort(); // orden estable, independiente del orden de readdir
     // Hash-based pick determinístico
     let h = 0;
     for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-    return `/api/music/stream?file=${encodeURIComponent(files[h % files.length])}`;
+    let pick = pool[h % pool.length];
+    // Rotación anti-repetición (persistida en MUSIC_DIR/music-rotation.json):
+    //  - mismo videoId → SIEMPRE la misma pista (assignments ⇒ re-render determinista)
+    //  - videoId NUEVO cuyo hash cae en la última pista usada por OTRO video → siguiente
+    const rotPath = path.join(MUSIC_DIR, "music-rotation.json");
+    try {
+      let rot: {
+        lastFile?: string;
+        lastVideoId?: string;
+        assignments?: Record<string, string>;
+      } = {};
+      try {
+        rot = JSON.parse(fs.readFileSync(rotPath, "utf-8"));
+      } catch {
+        // sin estado previo
+      }
+      const assignments = rot.assignments ?? {};
+      const prev = assignments[seed];
+      if (prev && files.includes(prev)) {
+        pick = prev; // re-render del mismo video: respeta la asignación original
+      } else if (pool.length > 1 && rot.lastFile === pick && rot.lastVideoId !== seed) {
+        pick = pool[(h + 1) % pool.length]; // evita repetir la última pista entre videos distintos
+      }
+      assignments[seed] = pick;
+      const keys = Object.keys(assignments);
+      if (keys.length > 300) {
+        for (const k of keys.slice(0, keys.length - 300)) delete assignments[k];
+      }
+      fs.writeFileSync(
+        rotPath,
+        JSON.stringify({ lastFile: pick, lastVideoId: seed, assignments })
+      );
+    } catch {
+      // si el JSON no se puede leer/escribir, seguimos con el pick por hash
+    }
+    return `/api/music/stream?file=${encodeURIComponent(pick)}`;
   } catch {
     return null;
   }
