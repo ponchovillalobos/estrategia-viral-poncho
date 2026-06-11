@@ -23,7 +23,7 @@ SetCompressor /SOLID lzma
 ; ----------------------------------------------------------------------------
 !define APP_NAME      "Estrategia Viral Studio"
 !define APP_ID        "EstrategiaViralStudio"
-!define APP_VERSION   "0.1.0"
+!define APP_VERSION   "0.2.0"
 !define APP_PUBLISHER "Poncho Robles"
 !define APP_URL       "https://github.com/ponchovillalobos/estrategia-viral-poncho"
 !define APP_EXE       "desktop.exe"
