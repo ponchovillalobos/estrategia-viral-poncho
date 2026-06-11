@@ -10,11 +10,13 @@
   },
   "dependencies": {
     "@remotion/cli": "^4.0.300",
+    "@remotion/fonts": "^4.0.462",
     "@remotion/google-fonts": "^4.0.300",
     "@remotion/lottie": "^4.0.462",
     "@remotion/media-utils": "^4.0.300",
     "@remotion/motion-blur": "^4.0.465",
     "@remotion/noise": "^4.0.465",
+    "@remotion/paths": "^4.0.462",
     "@remotion/transitions": "^4.0.465",
     "@remotion/zod-types": "^4.0.300",
     "lottie-web": "^5.13.0",
@@ -22,6 +24,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "remotion": "^4.0.300",
+    "roughjs": "^4.6.6",
     "zod": "^4.0.0"
   },
   "devDependencies": {

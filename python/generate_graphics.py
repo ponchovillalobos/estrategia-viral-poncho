@@ -416,12 +416,15 @@ def _sentences(words: list[dict]) -> list[dict]:
                 out.append({
                     "text": " ".join(c.get("word", "") for c in cur).strip(),
                     "start": float(cur[0].get("start", 0)),
+                    # words con timestamps (para pull-quotes palabra-por-palabra)
+                    "words": list(cur),
                 })
                 cur = []
     if cur:
         out.append({
             "text": " ".join(c.get("word", "") for c in cur).strip(),
             "start": float(cur[0].get("start", 0)),
+            "words": list(cur),
         })
     return out
 
@@ -580,6 +583,12 @@ _EDITORIAL_ICON_WORDS = {
     "ban": {"error", "errores", "evitar", "nunca", "prohibido", "dejar"},
 }
 _KICKERS = ["LA VERDAD", "EL DATO", "CÓMO LE HAGO", "EL CONTEXTO", "LO QUE APRENDÍ", "EL RESULTADO"]
+
+# Marcadores de primera persona → la frase es candidata a PULL-QUOTE (cita).
+_QUOTE_MARKERS = {
+    "yo", "mi", "mis", "me", "mí", "creo", "siento", "pienso",
+    "aprendí", "aprendi", "descubrí", "descubri", "entendí", "entendi",
+}
 _NUM_UNIT_RE = re.compile(r"^\$?\d[\d.,]*$")
 
 
@@ -777,10 +786,13 @@ def editorial_cards(words: list[dict], duration: float, seed: int = 0) -> list[d
                 has_num = any(_NUM_UNIT_RE.match(_clean_word(t)) for t in toks)
                 starts_connector = _clean_word(toks[0]).lower() in _CONNECT
                 has_concept = 1.0 if _icon_for_text(s["text"]) else 0.0
+                # primera persona = candidata a pull-quote (el momento humano)
+                is_personal = bool({_clean_word(t).lower() for t in toks} & _QUOTE_MARKERS)
                 return (
                     (2.0 if has_num else 0.0)
                     + (1.0 if 5 <= len(toks) <= 14 else 0.0)
                     + has_concept
+                    + (0.6 if is_personal else 0.0)
                     - (1.5 if starts_connector else 0.0)
                     # las frases con muletillas/duplicados pierden contra las limpias
                     - _disfluency_penalty(s["text"])
@@ -797,6 +809,7 @@ def editorial_cards(words: list[dict], duration: float, seed: int = 0) -> list[d
     cards: list[dict] = []
     pool = _icon_pool(seed)
     chapter = 0
+    used_quote = False  # máx 1 pull-quote por video (el momento "en sus palabras")
     total_chapters = sum(
         1 for s in picked
         if _clean_word(s["text"].split()[0]).lower() in {"primero", "segundo", "tercero", "cuarto", "primera", "segunda", "tercera"}
@@ -838,6 +851,31 @@ def editorial_cards(words: list[dict], duration: float, seed: int = 0) -> list[d
             card["statValue"] = toks[num_idx].strip(".,")
             card["statUnit"] = " ".join(toks[num_idx + 1 : num_idx + 3]).strip(" ,.")[:18]
             card["subtitle"] = clean_screen_text(" ".join(toks[:num_idx]), max_chars=60)
+        elif (
+            not used_quote
+            and s.get("words")
+            and 6 <= len(toks) <= 16
+            and {_clean_word(t).lower() for t in toks} & _QUOTE_MARKERS
+        ):
+            # PULL-QUOTE: frase en primera persona → cita serif que aparece
+            # palabra por palabra EXACTAMENTE al ritmo de la voz (timestamps).
+            used_quote = True
+            card["kicker"] = "EN SUS PALABRAS"
+            qw = [
+                {"w": (w.get("word") or "").strip(), "at": round(float(w.get("start", s["start"])), 2)}
+                for w in s["words"][:16]
+                if (w.get("word") or "").strip()
+            ]
+            while qw and _clean_word(qw[0]["w"]).lower() in _LEAD_FILLERS:
+                qw.pop(0)
+            if len(qw) >= 5:
+                card["quote"] = True
+                card["quoteWords"] = qw
+            else:
+                used_quote = False  # quedó muy corta tras limpiar → titular normal
+            if not card.get("quote"):
+                title_txt = clean_screen_text(" ".join(toks[:7]), max_chars=52) or " ".join(toks[:5]).strip(" ,.")
+                card["title"] = title_txt + ("." if title_txt and title_txt[-1] not in ".?!…" else "")
         else:
             # TITULAR: máx 7 palabras, re-limpiado tras el corte (el corte en N
             # palabras puede dejar un conector colgando: "…vale más que tu").

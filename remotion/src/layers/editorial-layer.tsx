@@ -3,6 +3,13 @@ import { z } from "zod";
 import { loadFont as loadPlayfair } from "@remotion/google-fonts/PlayfairDisplay";
 import { LineArtIcon, LineArtLucide, LINE_ART_KINDS, type LineArtKind } from "./line-art-icons";
 import { stepTime, gateWeave } from "./editorial-texture";
+import {
+  VARIABLE_FONT_THEMES,
+  titleVariation,
+  InkAnnotation,
+  inkKindFor,
+  animatedStatText,
+} from "./editorial-ink";
 
 /**
  * EDITORIAL — Tarjetas tipográficas estilo revista/documental (referencia: los
@@ -29,12 +36,15 @@ const { fontFamily: LORA } = loadLora("normal", { weights: ["500", "700"], subse
 const { fontFamily: LORA_IT } = loadLora("italic", { weights: ["500", "700"], subsets: ["latin", "latin-ext"] });
 const { fontFamily: ABRIL } = loadAbril("normal", { weights: ["400"], subsets: ["latin", "latin-ext"] });
 
-/** Familia (normal, itálica) por tema de fuente. Abril no tiene itálica → reusa. */
+/** Familia (normal, itálica) por tema de fuente. Abril no tiene itálica → reusa.
+ *  Las VARIABLES (fraunces/bodoni/robotoserif/bricolage/newsreader) vienen de
+ *  editorial-ink (TTF locales, ejes animables por frame). */
 const FONT_THEMES: Record<string, [string, string]> = {
   playfair: [PLAYFAIR, PLAYFAIR_IT],
   dmserif: [DMSERIF, DMSERIF_IT],
   lora: [LORA, LORA_IT],
   abril: [ABRIL, ABRIL],
+  ...VARIABLE_FONT_THEMES,
 };
 
 /** Colores de lienzo/texto por fondo. */
@@ -62,6 +72,10 @@ export const editorialCardSchema = z.object({
    *  faucet, gears, route…) o CUALQUIER nombre de ícono Lucide ("shield-check",
    *  "users", "map-pin"… 1,500+) animado genéricamente. */
   icon: z.string().default(""),
+  /** PULL-QUOTE (Ola 2): cita serif palabra-por-palabra al ritmo de la voz.
+   *  quoteWords trae los timestamps de Whisper de cada palabra. */
+  quote: z.boolean().default(false),
+  quoteWords: z.array(z.object({ w: z.string(), at: z.number() })).default([]),
 });
 export type EditorialCard = z.infer<typeof editorialCardSchema>;
 
@@ -73,8 +87,10 @@ export const editorialLayoutSchema = z.object({
   /** Color de acento del tema (reemplaza al dorado clásico): palabra itálica,
    *  números de capítulo y detalles de las ilustraciones line-art. */
   accent: z.string().default("#f0b429"),
-  /** Fuente serif del tema. */
-  font: z.enum(["playfair", "dmserif", "lora", "abril"]).default("playfair"),
+  /** Fuente serif del tema (las últimas 5 son VARIABLES y respiran por frame). */
+  font: z
+    .enum(["playfair", "dmserif", "lora", "abril", "fraunces", "bodoni", "robotoserif", "bricolage", "newsreader"])
+    .default("playfair"),
   /** Fondo del lienzo: oscuro clásico, tinta azulada, o crema claro (texto invertido). */
   background: z.enum(["dark", "ink", "cream"]).default("dark"),
   /** ESCENAS del panel de video: cambia de tamaño/lugar a lo largo del video
@@ -485,6 +501,75 @@ export const EditorialCardLayer: React.FC<{
   // Titular con la palabra acento en dorado-itálica (match por inclusión, sin caso).
   const accentLc = (card.accent ?? "").toLowerCase();
   const words = (card.title ?? "").split(/\s+/).filter(Boolean);
+  // Fuente variable: el titular "respira" por frame (undefined si no es variable).
+  const titleVar = titleVariation(layout.font, now);
+  // Anotación a mano alzada sobre la palabra acento (seed determinista por tarjeta).
+  const inkSeed = 1 + Math.abs(Math.round((card.at ?? 0) * 37) + index * 11);
+  const inkProgress = clamp01((t - 0.55) / 0.6);
+
+  // ── PULL-QUOTE: cita serif palabra-por-palabra al ritmo de la voz. ──
+  if (card.quote && (card.quoteWords?.length ?? 0) > 0) {
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none", opacity: fadeOut, transform: weave }}>
+        <div style={{ ...zoneStyle, justifyContent: "center" }}>
+          {/* comillas gigantes al 12% detrás */}
+          <div
+            style={{
+              position: "absolute",
+              top: textBelow ? "-0.05em" : "8%",
+              [textOnLeft ? "left" : "right"]: 0,
+              fontFamily: FONT_N,
+              fontWeight: 900,
+              fontSize: titleSize * 3.4,
+              lineHeight: 1,
+              color: GOLD,
+              opacity: 0.13,
+            }}
+          >
+            “
+          </div>
+          {card.kicker ? (
+            <Reveal t={t} delay={0.05}>
+              <div style={{ fontFamily: "Arial, sans-serif", fontSize: height * 0.0165, letterSpacing: "0.5em", textTransform: "uppercase", color: MUTED }}>
+                {card.kicker}
+              </div>
+            </Reveal>
+          ) : null}
+          <div
+            style={{
+              fontFamily: FONT_I,
+              fontStyle: "italic",
+              fontWeight: 700,
+              fontSize: titleSize * 0.82,
+              lineHeight: 1.28,
+              color: TEXT,
+              maxWidth: zoneWidth * 0.94,
+              fontVariationSettings: titleVar,
+            }}
+          >
+            {card.quoteWords.map((qw, i) => {
+              // Cada palabra entra EXACTAMENTE cuando se dice (timestamp Whisper).
+              const wp = clamp01((now - qw.at) / 0.22);
+              if (wp <= 0) return null;
+              return (
+                <span
+                  key={i}
+                  style={{
+                    display: "inline-block",
+                    clipPath: `inset(${(1 - wp) * 100}% 0 0 0)`,
+                    transform: `translateY(${(1 - wp) * 14}%)`,
+                    marginRight: "0.28em",
+                  }}
+                >
+                  {qw.w}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </AbsoluteFill>
+    );
+  }
 
   // ── TARJETA VISUAL: ilustración GRANDE centrada + kicker + frase corta. ──
   if (isVisual) {
@@ -579,9 +664,12 @@ export const EditorialCardLayer: React.FC<{
                   fontWeight: 900,
                   fontSize: titleSize * 1.5,
                   color: TEXT,
+                  // tabular-nums: el contador no "baila" mientras sube.
+                  fontVariantNumeric: "tabular-nums",
+                  fontVariationSettings: titleVar,
                 }}
               >
-                {card.statValue}
+                {animatedStatText(card.statValue, Math.max(0, t - 0.18))}
               </span>
               {card.statUnit ? (
                 <span
@@ -606,25 +694,38 @@ export const EditorialCardLayer: React.FC<{
             <div
               style={{
                 fontFamily: FONT_N,
-                fontWeight: 900,
+                fontWeight: titleVar ? undefined : 900,
                 fontSize: titleSize,
                 lineHeight: 1.06,
                 color: TEXT,
+                // Fuente variable: el titular respira (wght/SOFT/GRAD por frame).
+                fontVariationSettings: titleVar,
               }}
             >
               {words.map((w, i) => {
                 const isAccent =
                   accentLc.length > 1 &&
                   w.toLowerCase().replace(/[.,;:!?¿¡]/g, "").includes(accentLc);
+                if (isAccent) {
+                  // Palabra acento: dorada itálica + anotación a MANO ALZADA
+                  // (subrayado/círculo/caja rough) que se dibuja con la voz.
+                  return (
+                    <span key={i}>
+                      <span style={{ position: "relative", display: "inline-block" }}>
+                        <span style={{ fontFamily: FONT_I, fontStyle: "italic", color: GOLD }}>{w}</span>
+                        <InkAnnotation
+                          kind={inkKindFor(index)}
+                          progress={inkProgress}
+                          color={GOLD}
+                          seed={inkSeed}
+                        />
+                      </span>
+                      {i < words.length - 1 ? " " : ""}
+                    </span>
+                  );
+                }
                 return (
-                  <span
-                    key={i}
-                    style={
-                      isAccent
-                        ? { fontFamily: FONT_I, fontStyle: "italic", color: GOLD }
-                        : undefined
-                    }
-                  >
+                  <span key={i}>
                     {w}
                     {i < words.length - 1 ? " " : ""}
                   </span>
