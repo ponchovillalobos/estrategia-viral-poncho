@@ -2,6 +2,7 @@ import { AbsoluteFill } from "remotion";
 import { z } from "zod";
 import { loadFont as loadPlayfair } from "@remotion/google-fonts/PlayfairDisplay";
 import { LineArtIcon, LineArtLucide, LINE_ART_KINDS, type LineArtKind } from "./line-art-icons";
+import { stepTime, gateWeave } from "./editorial-texture";
 
 /**
  * EDITORIAL — Tarjetas tipográficas estilo revista/documental (referencia: los
@@ -87,6 +88,15 @@ export const editorialLayoutSchema = z.object({
       })
     )
     .default([]),
+  // ─── Motor de look (Ola 1, opt-in: un proyecto viejo renderiza idéntico) ───
+  /** Textura procedural del lienzo. */
+  texture: z.enum(["none", "paper"]).default("none"),
+  /** Capas gráficas a 12 fps (look documental "hecho a mano", firma Vox). */
+  fps12: z.boolean().default(false),
+  /** Capa de cohesión: grano vivo + viñeta + aberración sutil + gate weave. */
+  cohesion: z.boolean().default(false),
+  /** Duotono del panel de video 0..1 (0 = off). Look Economist. */
+  duotone: z.number().default(0),
 });
 export type EditorialLayout = z.infer<typeof editorialLayoutSchema>;
 
@@ -314,7 +324,8 @@ export const EditorialAmbient: React.FC<{
 }> = ({ layout, currentTime, width, height }) => {
   const GOLD = layout.accent ?? "#f0b429";
   const theme = EDITORIAL_BG[layout.background ?? "dark"] ?? EDITORIAL_BG.dark;
-  const t = currentTime;
+  // 12 fps en lo gráfico (firma Vox) — el video del panel sigue a fps completos.
+  const t = stepTime(currentTime, layout.fps12);
   const intro = clamp01(t / 1.2);
   const W = width;
   const H = height;
@@ -326,7 +337,13 @@ export const EditorialAmbient: React.FC<{
     { x: 0.5, y: 0.07, s: 0.6, ph: 3.4 },
   ];
   return (
-    <AbsoluteFill style={{ pointerEvents: "none", opacity: intro }}>
+    <AbsoluteFill
+      style={{
+        pointerEvents: "none",
+        opacity: intro,
+        transform: gateWeave(t, layout.cohesion) || undefined,
+      }}
+    >
       {/* grilla de puntos sutil en todo el lienzo */}
       <AbsoluteFill
         style={{
@@ -404,10 +421,13 @@ export const EditorialCardLayer: React.FC<{
   const theme = EDITORIAL_BG[layout.background ?? "dark"] ?? EDITORIAL_BG.dark;
   const TEXT = theme.text;
   const MUTED = theme.muted;
-  const t = currentTime - card.at;
-  const remaining = card.at + (card.duration ?? 5) - currentTime;
+  // Reloj gráfico a 12 fps (las tarjetas entran/animan en pasos — look editorial).
+  const now = stepTime(currentTime, layout.fps12);
+  const t = now - card.at;
+  const remaining = card.at + (card.duration ?? 5) - now;
   if (t < 0 || remaining < 0) return null;
   const fadeOut = clamp01(remaining / 0.35);
+  const weave = gateWeave(now, layout.cohesion) || undefined;
 
   const textOnLeft =
     (panel?.textSide ?? ((layout.panel ?? "right") === "right" ? "left" : "right")) === "left";
@@ -469,7 +489,7 @@ export const EditorialCardLayer: React.FC<{
   // ── TARJETA VISUAL: ilustración GRANDE centrada + kicker + frase corta. ──
   if (isVisual) {
     return (
-      <AbsoluteFill style={{ pointerEvents: "none", opacity: fadeOut }}>
+      <AbsoluteFill style={{ pointerEvents: "none", opacity: fadeOut, transform: weave }}>
         <div style={{ ...zoneStyle, alignItems: "center", justifyContent: "center", gap: height * 0.022 }}>
           {card.kicker ? (
             <Reveal t={t} delay={0.05}>
@@ -516,7 +536,7 @@ export const EditorialCardLayer: React.FC<{
   }
 
   return (
-    <AbsoluteFill style={{ pointerEvents: "none", opacity: fadeOut }}>
+    <AbsoluteFill style={{ pointerEvents: "none", opacity: fadeOut, transform: weave }}>
       <div style={zoneStyle}>
         {card.kicker ? (
           <Reveal t={t} delay={0.05}>

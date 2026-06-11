@@ -965,6 +965,12 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
           panelWidth: (ctx.width ?? 1080) > (ctx.height ?? 1920) ? 0.34 : 0.46,
           // El color del wizard pinta TODO el tema: acentos, capítulos, line-art.
           accent: ctx.accentColor,
+          // Motor de look (Ola 1): papel procedural + gráficos a 12 fps + capa
+          // de cohesión (grano/viñeta). Proyectos viejos sin estos campos
+          // renderizan idéntico (defaults off en el schema).
+          texture: "paper" as const,
+          fps12: true,
+          cohesion: true,
         },
       },
       ctx,

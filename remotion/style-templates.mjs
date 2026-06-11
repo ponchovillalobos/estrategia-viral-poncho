@@ -700,6 +700,10 @@ export function buildProjectForStyle(ctx, styleId) {
           panelWidth: ctx.width > ctx.height ? 0.34 : 0.46,
           // El color del wizard pinta TODO el tema: acentos, capítulos, line-art.
           accent: ctx.accentColor,
+          // Motor de look (Ola 1) — paridad con shorts.
+          texture: "paper",
+          fps12: true,
+          cohesion: true,
         },
       },
       ctx,

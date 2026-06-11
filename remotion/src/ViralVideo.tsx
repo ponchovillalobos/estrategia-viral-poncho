@@ -58,6 +58,12 @@ import {
   editorialPanelAt,
   EDITORIAL_BG,
 } from "./layers/editorial-layer";
+import {
+  EditorialPaper,
+  EditorialFinish,
+  EditorialDuotone,
+  DUOTONE_COLORS,
+} from "./layers/editorial-texture";
 
 const { fontFamily: BEBAS } = loadBebas();
 const { fontFamily: ANTON } = loadAnton();
@@ -542,6 +548,14 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           : "#000",
       }}
     >
+      {/* EDITORIAL — textura de papel procedural detrás de TODO (Ola 1). */}
+      {editorialLayout && (editorialLayout.texture ?? "none") === "paper" && (
+        <EditorialPaper
+          width={compWidth}
+          height={compHeight}
+          darkCanvas={(editorialLayout.background ?? "dark") !== "cream"}
+        />
+      )}
       {/* EDITORIAL — decoración ambiental SIEMPRE visible detrás de todo:
           el lienzo nunca queda vacío entre tarjetas ni en escenas big/full. */}
       {editorialLayout && (
@@ -590,6 +604,15 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           )
         )}
       </AbsoluteFill>
+      {/* EDITORIAL — duotono del panel (look Economist): desatura el video y
+          mapea sombras→tinta, luces→papel. Solo monta si el tema lo pide. */}
+      {editorialLayout && (editorialLayout.duotone ?? 0) > 0 && (
+        <EditorialDuotone
+          strength={editorialLayout.duotone}
+          shadow={(DUOTONE_COLORS[editorialLayout.background ?? "dark"] ?? DUOTONE_COLORS.dark).shadow}
+          highlight={(DUOTONE_COLORS[editorialLayout.background ?? "dark"] ?? DUOTONE_COLORS.dark).highlight}
+        />
+      )}
       </div>
 
       {/* A4 — Speed ramps: ventanas donde se overlay-ea el source a rate < 1 (slow-mo)
@@ -765,6 +788,17 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
               index={i}
             />
           ))}
+
+      {/* EDITORIAL — capa de cohesión final: grano vivo + viñeta + aberración
+          sutil. Unifica todo el render "como filmado" (Ola 1). */}
+      {editorialLayout && editorialLayout.cohesion && (
+        <EditorialFinish
+          width={compWidth}
+          height={compHeight}
+          t={currentTime}
+          darkCanvas={(editorialLayout.background ?? "dark") !== "cream"}
+        />
+      )}
 
       {floatingEmojis
         .filter(
