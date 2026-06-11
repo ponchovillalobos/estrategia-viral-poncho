@@ -185,9 +185,14 @@ export async function sweepShortOrphans(): Promise<{ deleted: number; orphans: s
     await del(PROJECTS_DIR, f);
   }
 
-  // renders/* → huérfano si ningún raw es prefijo del id del render.
+  // renders/* → huérfano si ningún raw es prefijo del id del render, PERO sólo se
+  // auto-borran los de naming de máquina `{videoStem}_{styleId}`. Los renders ya
+  // publicados se renombran a título legible ("Empatía Ambos Editorial.mp4") y no
+  // tienen prefijo de raw — esos NUNCA se tocan (sólo el usuario los borra a mano).
+  const MACHINE_RENDER = /_(silent|punch|hype|hype_max|hype_max_sfx|supreme|cinematic_pro|broll_full|broll_pip|text_behind|graphics_pro|graphics_max|motion_pro|motion_beat|motion_grid|editorial)(\.__rendering(_[a-z]+)?)?$/;
   for (const f of await listSafe(RENDERS_DIR)) {
     const id = path.basename(f, path.extname(f));
+    if (!MACHINE_RENDER.test(id)) continue;
     if (ownerByPrefix(id)) continue;
     orphanOwners.add(id);
     await del(RENDERS_DIR, f);
