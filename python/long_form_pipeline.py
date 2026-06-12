@@ -4,6 +4,9 @@ Uso:
   python long_form_pipeline.py <video_id>           # busca raw en long_form/raw/{video_id}.mp4
   python long_form_pipeline.py <video_id> --skip-transcribe   # si ya hay transcript
   python long_form_pipeline.py <video_id> --render             # también renderiza cada clip (largo!)
+  python long_form_pipeline.py <video_id> --analyze-only       # SOLO análisis: escribe proposals y termina
+  python long_form_pipeline.py <video_id> --from-proposals --clips 0,2,5 --render
+      # salta el análisis: lee el proposals existente y SOLO extrae+genera esas posiciones
 
 Pasos:
   1. transcribir (long_form/transcripts/{id}.json)
@@ -349,6 +352,7 @@ def step_extract(
     video_id: str,
     aspect_ratio: str = "9:16",
     face_tracking: str = "off",
+    clips: str | None = None,
 ) -> list[dict]:
     cmd = [
         str(VENV_PYTHON),
@@ -359,6 +363,9 @@ def step_extract(
         "--face-tracking",
         face_tracking,
     ]
+    # Subset aprobado (flujo REVISAR): posiciones 0-based separadas por coma.
+    if clips:
+        cmd.extend(["--clips", clips])
     output = run_capture(cmd)
     # extract_clips imprime al final un JSON con la lista
     last_line = output.strip().split("\n")[-1]
@@ -676,6 +683,32 @@ def main() -> int:
         help="Skipear Ollama y usar clips uniformes (modo rápido, sin curaduría de IA)",
     )
     parser.add_argument(
+        "--analyze-only",
+        action="store_true",
+        help=(
+            "Flujo REVISAR (acto 1): corre solo hasta escribir el proposals JSON "
+            "(transcripción + análisis + score + whyViral) y termina SIN extraer ni "
+            "generar clips. Después el usuario aprueba/ajusta y se corre --from-proposals."
+        ),
+    )
+    parser.add_argument(
+        "--from-proposals",
+        action="store_true",
+        help=(
+            "Flujo REVISAR (acto 2): salta el análisis, lee el proposals existente "
+            "(con los ajustes del usuario) y SOLO extrae+genera. Combinar con --clips "
+            "para limitar a los aprobados."
+        ),
+    )
+    parser.add_argument(
+        "--clips",
+        default=None,
+        help=(
+            "Posiciones 0-based en el proposals JSON, separadas por coma (ej. '0,2,5'). "
+            "Solo tiene sentido con --from-proposals. Sin flag = todos."
+        ),
+    )
+    parser.add_argument(
         "--graphics",
         action="store_true",
         help="Modo Gráficos & Motion: genera charts + titulares poderosos por clip (auto desde el transcript)",
@@ -727,6 +760,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.analyze_only and args.from_proposals:
+        print("[error] --analyze-only y --from-proposals son excluyentes", file=sys.stderr)
+        return 1
+
     ensure_long_form_dirs()
 
     raw_path = LF_RAW / f"{args.video_id}.mp4"
@@ -744,7 +781,24 @@ def main() -> int:
     t_total = time.time()
     clean_path = None  # se setea solo en el modo completo (no en clips rápidos)
 
-    if args.use_heuristic:
+    if args.from_proposals:
+        # ── MODO GENERAR APROBADOS (flujo REVISAR, acto 2) ────────────────────
+        # El análisis ya corrió antes (--analyze-only) y el usuario revisó/ajustó
+        # los momentos en el wizard. NO se transcribe, NO se analiza, NO se re-scorea
+        # (re-scorear reordenaría los clips y rompería las posiciones aprobadas):
+        # se lee el proposals tal cual quedó y se va directo a extraer + generar.
+        print("\n========== MODO GENERAR APROBADOS: usando los momentos ya revisados ==========", file=sys.stderr)
+        proposals_path = LF_PROPOSALS / f"{args.video_id}.json"
+        if not proposals_path.exists():
+            print(
+                f"[error] no hay momentos analizados para {args.video_id} — "
+                "corre primero el análisis (--analyze-only)",
+                file=sys.stderr,
+            )
+            return 1
+        if args.clips:
+            print(f"[approved] solo posiciones: {args.clips}", file=sys.stderr)
+    elif args.use_heuristic:
         # ── MODO CLIPS RÁPIDOS ────────────────────────────────────────────────
         # No transcribimos NI recortamos silencios del video entero (en un video de
         # 80 min, transcribir+alinear de una sola vez revienta la memoria). En cambio:
@@ -752,9 +806,15 @@ def main() -> int:
         # transcribe CADA clip por separado (30-60s = liviano y seguro) en extract_clips.
         # Marcamos los pasos 1-5 como saltados para que la UI no quede en "pending".
         print("\n========== STEP 1-5 (modo clips rápidos): bloques por duración ==========", file=sys.stderr)
-        for _skip in ("transcribe", "detect_silences", "cut_silences",
-                      "re-transcribe", "analyze_clips"):
+        skip_steps = ["transcribe", "detect_silences", "cut_silences", "re-transcribe"]
+        if not args.analyze_only:
+            skip_steps.append("analyze_clips")
+        for _skip in skip_steps:
             print(f"[skip] {_skip} (modo clips rápidos)", file=sys.stderr)
+        if args.analyze_only:
+            # En análisis-solo el corte en bloques ES el análisis: header real para
+            # que la barra de progreso muestre el paso "analyze" corriendo (no skipped).
+            print("\n========== STEP 5: analyze (bloques por duración) ==========", file=sys.stderr)
         duration = _ffprobe_duration(raw_path)
         if duration <= 0:
             print("[error] no pude leer la duración del video (¿corrupto?)", file=sys.stderr)
@@ -818,21 +878,44 @@ def main() -> int:
         print(f"[ERROR ANALYZE] no pude leer {proposals_path}: {e}", file=sys.stderr)
         return 1
 
-    # Virality Score (0-100) por clip — reordena de más a menos viral.
-    print("\n========== Virality Score ==========", file=sys.stderr)
-    step_score_virality(args.video_id, proposals_path)
+    # Virality Score + whyViral SOLO si el proposals es nuevo. En --from-proposals
+    # NO se re-scorea: el score reordena los clips y eso rompería las posiciones
+    # que el usuario ya aprobó/ajustó en el paso de revisión.
+    if not args.from_proposals:
+        # Virality Score (0-100) por clip — reordena de más a menos viral.
+        print("\n========== Virality Score ==========", file=sys.stderr)
+        step_score_virality(args.video_id, proposals_path)
 
-    # "¿Por qué este clip?" — explicación corta con IA local (solo modo inteligente,
-    # top 15 por score; si Ollama no está, sigue sin el campo y sin error).
-    if not args.use_heuristic:
-        step_explain_virality(args.video_id, proposals_path, model=args.model)
+        # "¿Por qué este clip?" — explicación corta con IA local (solo modo inteligente,
+        # top 15 por score; si Ollama no está, sigue sin el campo y sin error).
+        if not args.use_heuristic:
+            step_explain_virality(args.video_id, proposals_path, model=args.model)
 
-    # Step 6: extract clips (con aspect ratio + face tracking opcional)
+    # ── ANÁLISIS-SOLO (flujo REVISAR, acto 1): aquí termina. El proposals quedó
+    # escrito con score + whyViral; el wizard lo muestra para aprobar/ajustar y
+    # después dispara --from-proposals con los índices aprobados.
+    if args.analyze_only:
+        elapsed = time.time() - t_total
+        print(f"\n========== ANÁLISIS LISTO en {elapsed/60:.1f} min ==========", file=sys.stderr)
+        print(json.dumps({
+            "ok": True,
+            "video_id": args.video_id,
+            "mode": "analyze",
+            "clean": None,
+            # "clips" = momentos PROPUESTOS (la ruta lo surfacea como contador).
+            "clips": clip_count,
+            "elapsed_min": round(elapsed / 60, 2),
+        }))
+        return 0
+
+    # Step 6: extract clips (con aspect ratio + face tracking opcional;
+    # --clips limita al subset aprobado en el flujo REVISAR)
     print("\n========== STEP 6: extract clips ==========", file=sys.stderr)
     clips_info = step_extract(
         args.video_id,
         aspect_ratio=args.aspect_ratio,
         face_tracking=args.face_tracking,
+        clips=args.clips,
     )
     print(f"\n[ok] {len(clips_info)} clips extraídos", file=sys.stderr)
     for c in clips_info:

@@ -7,6 +7,7 @@ import {
   PYTHON_EXE,
   PYTHON_DIR,
 } from "@/lib/paths";
+import { LF_PROPOSALS } from "@/lib/paths-long-form";
 import {
   appendLongFormLog,
   createLongFormJob,
@@ -15,6 +16,7 @@ import {
   setLongFormClipsCount,
   unregisterLongFormPid,
   updateLongFormStep,
+  type LongFormRunMode,
   type LongFormStepKey,
 } from "@/lib/long-form-job-store";
 import { enqueue } from "@/lib/job-queue";
@@ -57,6 +59,15 @@ interface ProcessBody {
    * "per-frame": preciso (~5-10s/clip).
    */
   faceTracking?: "off" | "single" | "per-frame";
+  /**
+   * Flujo REVISAR antes de generar:
+   *   "full" (default)  → comportamiento clásico intacto (analiza+extrae+genera).
+   *   "analyze"         → solo hasta el proposals JSON (--analyze-only).
+   *   "render-approved" → salta el análisis y genera solo los aprobados (--from-proposals).
+   */
+  mode?: LongFormRunMode;
+  /** Solo con mode "render-approved": posiciones 0-based de los clips aprobados. */
+  clips?: number[];
 }
 
 /**
@@ -101,12 +112,21 @@ async function processJob(
   videoId: string,
   body: ProcessBody
 ): Promise<void> {
+  const mode: LongFormRunMode = body.mode ?? "full";
   const args = [path.join(PYTHON_DIR, "long_form_pipeline.py"), videoId];
   if (body.model) args.push("--model", body.model);
-  if (body.render) args.push("--render");
+  // En "analyze" nunca se genera nada (el render llega después, ya aprobados).
+  if (body.render && mode !== "analyze") args.push("--render");
   if (body.maxClips != null) args.push("--max-clips", String(body.maxClips));
   if (body.skipTranscribe) args.push("--skip-transcribe");
   if (body.useHeuristic) args.push("--use-heuristic");
+  if (mode === "analyze") args.push("--analyze-only");
+  if (mode === "render-approved") {
+    args.push("--from-proposals");
+    if (body.clips && body.clips.length > 0) {
+      args.push("--clips", body.clips.join(","));
+    }
+  }
   if (body.graphicsMode) args.push("--graphics");
   if (body.styles && body.styles.length > 0) {
     args.push("--styles", body.styles.join(","));
@@ -139,6 +159,12 @@ async function processJob(
   let currentStep: LongFormStepKey | null = null;
   // Último frame de Remotion reportado, para throttlear las actualizaciones de progreso.
   let lastRenderedFrame = -100;
+
+  // Step donde reportar un fallo si el proceso muere ANTES de imprimir un header.
+  // Antes era "transcribe" fijo, pero en "render-approved" ese step no existe (la
+  // corrida arranca en extract_clips) y el job quedaría "running" para siempre.
+  const fallbackStep = (): LongFormStepKey =>
+    currentStep ?? getLongFormJob(jobId)?.steps[0]?.key ?? "transcribe";
 
   return new Promise<void>((resolve) => {
     const proc = spawn(PYTHON_EXE, args, {
@@ -204,13 +230,16 @@ async function processJob(
           return;
         }
       }
-      // Detectar skips
+      // Detectar skips. El motivo viene entre paréntesis: "existe <ruta>" (cache),
+      // "modo clips rápidos", "modo inteligente: …". Las rutas C:\ no se muestran.
       for (const p of SKIP_PATTERNS) {
         if (p.regex.test(line)) {
-          updateLongFormStep(jobId, p.key, {
-            status: "skipped",
-            message: "ya existía, no se regeneró",
-          });
+          const reason = line.match(/\(([^)]+)\)/)?.[1];
+          const message =
+            reason && !/existe/i.test(reason)
+              ? `no aplica (${reason})`
+              : "ya existía, no se regeneró";
+          updateLongFormStep(jobId, p.key, { status: "skipped", message });
           return;
         }
       }
@@ -256,7 +285,7 @@ async function processJob(
       }
 
       if (timedOut) {
-        const step = currentStep ?? "transcribe";
+        const step = fallbackStep();
         updateLongFormStep(jobId, step, {
           status: "fail",
           message: "El proceso dejó de responder por 20 minutos y se detuvo. Inténtalo de nuevo.",
@@ -273,7 +302,7 @@ async function processJob(
         // (los largos generan muchos clips de un jalón; 1 por corrida es lo justo
         // para la prueba). Solo si se pidió render: una corrida de puro análisis
         // no genera videos. Con licencia activa no descuenta nada.
-        if (body.render) registerRender();
+        if (body.render && mode !== "analyze") registerRender();
         try {
           // Match sobre la ÚLTIMA línea JSON del stdout completo (la del resumen final).
           const jsonLine = fullStdout
@@ -294,7 +323,7 @@ async function processJob(
             message: `El proceso se detuvo inesperadamente (código ${code}).`,
           });
         } else {
-          updateLongFormStep(jobId, "transcribe", {
+          updateLongFormStep(jobId, fallbackStep(), {
             status: "fail",
             message: `El proceso se detuvo antes de empezar (código ${code}).`,
           });
@@ -306,12 +335,10 @@ async function processJob(
     proc.on("error", (err) => {
       clearTimeout(idleTimer);
       unregisterLongFormPid(jobId);
-      if (currentStep) {
-        updateLongFormStep(jobId, currentStep, {
-          status: "fail",
-          message: `No se pudo iniciar el proceso: ${err.message}`,
-        });
-      }
+      updateLongFormStep(jobId, fallbackStep(), {
+        status: "fail",
+        message: `No se pudo iniciar el proceso: ${err.message}`,
+      });
       resolve();
     });
   });
@@ -328,6 +355,37 @@ export async function POST(req: NextRequest) {
 
     const body = (await req.json()) as ProcessBody;
 
+    // ── Flujo REVISAR: normalizar/validar el modo ANTES de encolar nada ──
+    const mode: LongFormRunMode = body.mode ?? "full";
+    if (!["full", "analyze", "render-approved"].includes(mode)) {
+      return NextResponse.json(
+        { error: "Modo de proceso no reconocido. Recarga la pantalla e intenta de nuevo." },
+        { status: 400 }
+      );
+    }
+    if (mode === "analyze") {
+      // Una corrida de puro análisis nunca genera videos.
+      body.render = false;
+    }
+    if (body.clips != null) {
+      if (
+        mode !== "render-approved" ||
+        !Array.isArray(body.clips) ||
+        body.clips.some((n) => !Number.isInteger(n) || n < 0)
+      ) {
+        return NextResponse.json(
+          { error: "La lista de clips aprobados no es válida. Vuelve a revisar los momentos." },
+          { status: 400 }
+        );
+      }
+      if (body.clips.length === 0) {
+        return NextResponse.json(
+          { error: "Aprueba al menos un momento antes de generar." },
+          { status: 400 }
+        );
+      }
+    }
+
     // Normalizar a array: si vino videoIds[] usar ese; si no, fallback a videoId singular
     const videoIdList: string[] = (body.videoIds && body.videoIds.length > 0)
       ? body.videoIds
@@ -335,6 +393,22 @@ export async function POST(req: NextRequest) {
 
     if (videoIdList.length === 0) {
       return NextResponse.json({ error: "videoId (o videoIds[]) requerido" }, { status: 400 });
+    }
+
+    // render-approved necesita el proposals JSON ya escrito (el análisis previo).
+    if (mode === "render-approved") {
+      for (const vid of videoIdList) {
+        try {
+          await fs.access(path.join(LF_PROPOSALS, `${vid}.json`));
+        } catch {
+          return NextResponse.json(
+            {
+              error: `Todavía no hay momentos analizados para «${vid}». Corre primero «Encontrar los mejores momentos».`,
+            },
+            { status: 409 }
+          );
+        }
+      }
     }
 
     // Validar que cada raw existe ANTES de empezar a encolar
@@ -361,6 +435,8 @@ export async function POST(req: NextRequest) {
         maxClips: body.maxClips,
         skipTranscribe: body.skipTranscribe,
         useHeuristic: body.useHeuristic,
+        styles: body.styles,
+        mode,
       });
       enqueue("long_form", job.id, async () => {
         await processJob(job.id, videoId, body);

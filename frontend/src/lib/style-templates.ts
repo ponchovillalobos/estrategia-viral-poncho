@@ -690,7 +690,7 @@ function buildSupremeStyle(ctx: BuildContext, styleId: StyleId) {
  * Hoy Pixabay descontinuó la API de música (404), así que el sistema queda
  * sin música hasta que el user suba archivos manualmente. Sin música = render OK.
  */
-function pickRandomMusicTrack(seed: string, mood?: string): string | null {
+export function pickRandomMusicTrack(seed: string, mood?: string): string | null {
   // Sync check: ¿hay archivos en MUSIC_DIR? Lectura síncrona OK porque
   // commonBase corre en el server al momento de buildear project.
   try {

@@ -146,6 +146,8 @@ interface JobState {
     styles?: string[];
     accentColor?: string;
     platforms?: string[];
+    /** Tipo de corrida: "analyze" = solo encontrar momentos; "render-approved" = generar aprobados. */
+    mode?: "full" | "analyze" | "render-approved";
   };
   startedAt: number;
   finishedAt?: number;
@@ -177,6 +179,8 @@ interface ProposalClip {
   factors?: Record<string, number>;
   /** Explicación corta de la IA local: por qué puede pegar + título sugerido. */
   whyViral?: string;
+  /** Flujo REVISAR: false = descartado por el usuario (no se genera). Ausente = aprobado. */
+  approved?: boolean;
 }
 
 interface ProposalsResponse {
@@ -259,6 +263,13 @@ function fmtTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/** Como fmtTime pero con décimas — para los steppers de ajuste fino (±0.5 s). */
+function fmtTimeFine(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds - m * 60;
+  return `${m}:${s.toFixed(1).padStart(4, "0")}`;
+}
+
 function fmtElapsed(ms: number): string {
   const sec = Math.floor(ms / 1000);
   const m = Math.floor(sec / 60);
@@ -287,6 +298,9 @@ export function LongFormWizard() {
   // Semáforo de la IA local (modo inteligente): null = todavía no se chequeó.
   const [iaStatus, setIaStatus] = useState<IaLocalStatus | null>(null);
   const [checkingIa, setCheckingIa] = useState(false);
+  // Flujo REVISAR: video cuyos momentos ya analizados se están revisando SIN job activo
+  // (entrada directa desde el paso 5 cuando el análisis se hizo antes).
+  const [reviewVideoId, setReviewVideoId] = useState<string | null>(null);
 
   // ─── State del wizard (6 pasos) ─────────────────────────────────────────
   const [step, setStep] = useState(1);
@@ -500,17 +514,24 @@ export function LongFormWizard() {
     setSelectedStyles((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   }
 
-  async function startPipeline() {
+  /**
+   * Arranca el pipeline.
+   *   "analyze" → SOLO encuentra los momentos (flujo REVISAR, acto 1); al terminar
+   *               se muestra el paso de revisión para aprobar/descartar/ajustar.
+   *   "full"    → modo clásico de un jalón (fallback): analiza+recorta+genera todo.
+   */
+  async function startPipeline(runMode: "analyze" | "full" = "full") {
     if (selectedIds.size === 0) {
       toast.error("Elige al menos un video primero");
       return;
     }
-    if (doRender && selectedStyles.length === 0) {
+    if (runMode === "full" && doRender && selectedStyles.length === 0) {
       toast.error("Elige al menos un estilo para generar los videos");
       return;
     }
     setSubmitting(true);
     setProposals(null);
+    setReviewVideoId(null);
     const videoIds = Array.from(selectedIds);
     try {
       // Modo inteligente: verificar la IA local ANTES de arrancar. Mejor bloquear
@@ -527,7 +548,9 @@ export function LongFormWizard() {
       }
       const body: Record<string, unknown> = {
         videoIds,
-        render: doRender,
+        mode: runMode,
+        // En análisis no se genera nada: el render llega después, ya aprobados.
+        render: runMode === "analyze" ? false : doRender,
         skipTranscribe,
         useHeuristic,
         graphicsMode,
@@ -563,6 +586,8 @@ export function LongFormWizard() {
       if (jobIds.length === 0) throw new Error("no se encoló ningún proceso");
       if (jobIds.length > 1) {
         toast.success(`${jobIds.length} videos en fila — se procesan de uno en uno`);
+      } else if (runMode === "analyze") {
+        toast.success("Buscando los mejores momentos — al terminar los revisas antes de generar");
       } else {
         toast.success("Procesamiento iniciado — puedes seguir el avance aquí abajo");
       }
@@ -574,6 +599,92 @@ export function LongFormWizard() {
       toastError(err, "No se pudo iniciar el procesamiento");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  /**
+   * Flujo REVISAR (acto 2): genera SOLO los momentos aprobados. `indices` son las
+   * posiciones 0-based en el proposals JSON (estables: el backend no re-ordena).
+   */
+  async function startRenderApproved(videoId: string, indices: number[]) {
+    if (indices.length === 0) {
+      toast.error("Aprueba al menos un momento para generar");
+      return;
+    }
+    if (doRender && selectedStyles.length === 0) {
+      toast.error("Elige al menos un estilo para generar los videos");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const body: Record<string, unknown> = {
+        videoId,
+        mode: "render-approved",
+        clips: indices,
+        render: doRender,
+        useHeuristic,
+        graphicsMode,
+        styles: selectedStyles,
+        accentColor: accent,
+        subtitleFont,
+        subtitleColor,
+        platforms: selectedPlatforms,
+        aspectRatio,
+        faceTracking,
+      };
+      if (ollamaModel.trim()) body.model = ollamaModel.trim();
+      if (selectedStyles.includes("editorial")) {
+        const t = EDITORIAL_THEMES.find((x) => x.id === editorialTheme);
+        if (t) body.editorialTheme = { font: t.font, background: t.background, theme: t.theme || undefined };
+      }
+      const r = await fetch("/api/long_form/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        toast.error("No se pudo iniciar la generación", {
+          description: typeof data.error === "string" ? data.error : undefined,
+        });
+        return;
+      }
+      const jobIds: string[] = data.jobIds ?? (data.jobId ? [data.jobId] : []);
+      if (jobIds.length === 0) throw new Error("no se encoló ningún proceso");
+      toast.success(
+        `Generando ${indices.length} clip${indices.length === 1 ? "" : "s"} aprobado${indices.length === 1 ? "" : "s"}`
+      );
+      setReviewVideoId(null);
+      setProposals(null);
+      const jobRes = await fetch(`/api/long_form/progress?jobId=${jobIds[0]}`);
+      const jobData = (await jobRes.json()) as JobState;
+      setActiveJob(jobData);
+    } catch (err) {
+      toastError(err, "No se pudo iniciar la generación");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /** Abre la revisión de momentos YA analizados antes (sin volver a correr nada). */
+  async function openExistingReview(videoId: string) {
+    try {
+      const r = await fetch(`/api/long_form/proposals/${encodeURIComponent(videoId)}`);
+      if (!r.ok) {
+        toast.error("Todavía no hay momentos analizados para este video", {
+          description: "Usa «Encontrar los mejores momentos» primero.",
+        });
+        return;
+      }
+      const data = (await r.json()) as ProposalsResponse;
+      if (!data.clips || data.clips.length === 0) {
+        toast.error("El análisis anterior no encontró momentos — vuelve a analizarlo");
+        return;
+      }
+      setProposals(data);
+      setReviewVideoId(videoId);
+    } catch (err) {
+      toastError(err, "No se pudieron cargar los momentos analizados");
     }
   }
 
@@ -603,6 +714,7 @@ export function LongFormWizard() {
   function cancelView() {
     setActiveJob(null);
     setProposals(null);
+    setReviewVideoId(null);
     setStep(1);
     refreshList();
   }
@@ -619,16 +731,57 @@ export function LongFormWizard() {
 
   // ─── Render: si hay job activo, mostrar JobView (panel dedicado) ────────
   if (activeJob) {
+    // Flujo REVISAR: cuando un análisis termina, en vez del panel "completado" se
+    // muestra el paso de revisión (aprobar/descartar/ajustar antes de generar).
+    const reviewClips =
+      activeJob.status === "done" &&
+      activeJob.options?.mode === "analyze" &&
+      proposals?.clips &&
+      proposals.clips.length > 0
+        ? proposals.clips
+        : null;
     return (
       <div className="space-y-6">
         <WizardHeader />
-        <JobView
-          job={activeJob}
-          now={now}
-          proposals={proposals}
+        {reviewClips ? (
+          <ReviewView
+            key={activeJob.id}
+            videoId={activeJob.videoId}
+            initialClips={reviewClips}
+            fallbackHeuristic={!!proposals?.fallback_heuristic}
+            willRender={doRender}
+            generating={submitting}
+            onGenerate={(indices) => startRenderApproved(activeJob.videoId, indices)}
+            onClose={cancelView}
+          />
+        ) : (
+          <JobView
+            job={activeJob}
+            now={now}
+            proposals={proposals}
+            onClose={cancelView}
+            onCancel={cancelActiveJob}
+            cancelling={cancelling}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ─── Render: revisión de momentos ya analizados (sin job corriendo) ──────
+  if (reviewVideoId && proposals?.clips && proposals.clips.length > 0) {
+    return (
+      <div className="space-y-6">
+        <WizardHeader />
+        <ReviewView
+          key={`review_${reviewVideoId}`}
+          videoId={reviewVideoId}
+          initialClips={proposals.clips}
+          fallbackHeuristic={!!proposals.fallback_heuristic}
+          willRender={doRender}
+          generating={submitting}
+          onGenerate={(indices) => startRenderApproved(reviewVideoId, indices)}
           onClose={cancelView}
-          onCancel={cancelActiveJob}
-          cancelling={cancelling}
         />
       </div>
     );
@@ -937,6 +1090,12 @@ export function LongFormWizard() {
                 ) : null}
               </div>
             </button>
+
+            {/* Semáforo en rojo → reparación automática con un clic (despierta/instala
+                la IA local y baja el modelo, con barra de progreso). */}
+            {!useHeuristic && iaStatus && !iaStatus.running && (
+              <IaFixPanel onReady={checkIaLocal} />
+            )}
           </div>
 
           {!useHeuristic && (
@@ -1434,17 +1593,17 @@ export function LongFormWizard() {
               <li className="text-amber-400">
                 {useHeuristic ? (
                   <>
-                    Estimado: el corte en bloques tarda unos minutos
-                    {doRender && <> + ~2-3 min por cada clip generado</>} (depende de tu compu).
-                    Puedes cerrar esta pantalla, sigue solo.
+                    Estimado: encontrar los momentos tarda unos minutos. Después los revisas
+                    {doRender && <> y cada clip que apruebes tarda ~2-3 min en generarse</>}{" "}
+                    (depende de tu compu). Puedes cerrar esta pantalla, sigue solo.
                   </>
                 ) : (
                   <>
                     Estimado: análisis ~30-50 min para un video de 1 hora (puedes cerrar esta
-                    pantalla, sigue solo)
+                    pantalla, sigue solo). Después revisas los momentos
                     {doRender && (
                       <>
-                        {" "}+ ~2-3 min por cada clip (
+                        {" "}y cada clip que apruebes tarda ~2-3 min (propone{" "}
                         {maxClips.trim() ? `hasta ${maxClips.trim()}` : "mínimo 15"})
                       </>
                     )}
@@ -1455,22 +1614,51 @@ export function LongFormWizard() {
             </ul>
           </div>
 
+          {/* Acto 1 del flujo REVISAR: primero solo el análisis; al terminar se
+              muestran los momentos para aprobar/descartar/ajustar antes de generar. */}
           <Button
-            onClick={startPipeline}
-            disabled={
-              submitting ||
-              selectedIds.size === 0 ||
-              (doRender && selectedStyles.length === 0)
-            }
+            onClick={() => startPipeline("analyze")}
+            disabled={submitting || selectedIds.size === 0}
             className="mt-4 w-full bg-violet-500 hover:bg-violet-400 text-white"
           >
             {submitting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <Sparkles className="mr-2 h-4 w-4" />
+              <span className="mr-2">🔍</span>
             )}
-            {submitting ? "Arrancando…" : "Generar clips"}
+            {submitting ? "Arrancando…" : "Encontrar los mejores momentos"}
           </Button>
+          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            Primero el análisis. Al terminar revisas los momentos propuestos y eliges
+            cuáles generar — nada se genera sin tu visto bueno.
+          </p>
+
+          {/* Entrada directa a la revisión si este video ya se analizó antes. */}
+          {selectedIds.size === 1 && selectedList[0]?.hasProposals && (
+            <Button
+              variant="outline"
+              onClick={() => openExistingReview(selectedList[0].videoId)}
+              disabled={submitting}
+              className="mt-3 w-full"
+            >
+              🔁 Revisar los momentos ya encontrados (sin volver a analizar)
+            </Button>
+          )}
+
+          {/* Fallback: el modo clásico de un jalón (analiza + recorta + genera todo). */}
+          <button
+            type="button"
+            onClick={() => startPipeline("full")}
+            disabled={
+              submitting ||
+              selectedIds.size === 0 ||
+              (doRender && selectedStyles.length === 0)
+            }
+            className="mt-3 w-full rounded-md border border-border py-2 text-xs text-muted-foreground transition hover:border-foreground/30 hover:text-foreground disabled:opacity-50"
+          >
+            <Sparkles className="mr-1.5 inline h-3.5 w-3.5" />
+            Hacer todo de una vez sin revisar (modo clásico)
+          </button>
         </Card>
       )}
 
@@ -1587,6 +1775,13 @@ function JobView({
   const isLive = job.status === "running" || job.status === "queued";
   // Confirmación propia del botón Cancelar (dos pasos, sin window.confirm).
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // Flujo REVISAR: en una corrida de aprobados solo se generaron los clips con
+  // approved !== false — el panel final no muestra los descartados.
+  const doneClips = proposals?.clips
+    ? job.options?.mode === "render-approved"
+      ? proposals.clips.filter((c) => c.approved !== false)
+      : proposals.clips
+    : null;
 
   return (
     <Card className="border-border bg-card p-5">
@@ -1747,12 +1942,12 @@ function JobView({
         )}
       </details>
 
-      {job.status === "done" && proposals && proposals.clips && (
+      {job.status === "done" && proposals && doneClips && (
         <div className="mt-5 space-y-3">
           <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
             <p className="flex items-center gap-2 text-sm font-medium text-emerald-200">
               <CheckCircle2 className="h-4 w-4" />
-              {proposals.clips.length} clips generados
+              {doneClips.length} clips generados
               {job.clipsCount != null && ` (${job.clipsCount} recortados bien)`}
               {proposals.fallback_heuristic && (
                 <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 font-mono-tab text-[9px] text-amber-300">
@@ -1768,7 +1963,7 @@ function JobView({
           </div>
 
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {proposals.clips.slice(0, 12).map((c, i) => (
+            {doneClips.slice(0, 12).map((c, i) => (
               <ProposalClipCard key={c.index ?? i + 1} clip={c} idx={c.index ?? i + 1} videoId={job.videoId} />
             ))}
           </div>
@@ -1812,6 +2007,349 @@ function JobView({
   );
 }
 
+// ─── Paso "Revisa los momentos" (flujo REVISAR antes de generar) ──────────
+// Grid de tarjetas con los momentos propuestos: todas aprobadas por default,
+// toggle aprobar/descartar, ajuste fino inicio/fin (±0.5 s) que persiste con
+// PATCH, y el botón que genera SOLO los aprobados.
+
+function ReviewView({
+  videoId,
+  initialClips,
+  fallbackHeuristic,
+  willRender,
+  generating,
+  onGenerate,
+  onClose,
+}: {
+  videoId: string;
+  initialClips: ProposalClip[];
+  fallbackHeuristic: boolean;
+  /** false = solo se recortan los clips, sin generar el video editado. */
+  willRender: boolean;
+  generating: boolean;
+  onGenerate: (indices: number[]) => void;
+  onClose: () => void;
+}) {
+  // Copia de trabajo: todas aprobadas por default (approved ausente = aprobado).
+  const [clips, setClips] = useState<ProposalClip[]>(() =>
+    initialClips.map((c) => ({ ...c, approved: c.approved !== false }))
+  );
+  // Solo una tarjeta con el panel de ajuste abierto a la vez.
+  const [adjustingIdx, setAdjustingIdx] = useState<number | null>(null);
+  // Ajustes pendientes de persistir (debounce: PATCH "al soltar" los steppers).
+  const pendingPatch = useRef<Map<number, { start: number; end: number }>>(new Map());
+  const patchTimer = useRef<number | null>(null);
+
+  const sendPatch = useCallback(
+    async (items: { index: number; approved?: boolean; start?: number; end?: number }[]) => {
+      try {
+        const r = await fetch(`/api/long_form/proposals/${encodeURIComponent(videoId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clips: items }),
+        });
+        if (!r.ok) {
+          const d = (await r.json().catch(() => ({}))) as { error?: string };
+          throw new Error(d.error ?? `HTTP ${r.status}`);
+        }
+      } catch (err) {
+        toastError(err, "No se pudo guardar el cambio del clip");
+      }
+    },
+    [videoId]
+  );
+
+  const flushPatch = useCallback(() => {
+    if (patchTimer.current != null) {
+      window.clearTimeout(patchTimer.current);
+      patchTimer.current = null;
+    }
+    if (pendingPatch.current.size === 0) return;
+    const items = Array.from(pendingPatch.current.entries()).map(([index, v]) => ({
+      index,
+      start: v.start,
+      end: v.end,
+    }));
+    pendingPatch.current.clear();
+    void sendPatch(items);
+  }, [sendPatch]);
+
+  // Al desmontar (p.ej. arranca la generación) no se pierde ningún ajuste pendiente.
+  useEffect(() => flushPatch, [flushPatch]);
+
+  function toggleApproved(i: number) {
+    const cur = clips[i];
+    const newApproved = cur.approved === false; // descartado → aprobar; aprobado → descartar
+    const next = [...clips];
+    next[i] = { ...cur, approved: newApproved };
+    setClips(next);
+    void sendPatch([{ index: i, approved: newApproved }]);
+  }
+
+  function adjustClip(i: number, which: "start" | "end", delta: number) {
+    const c = clips[i];
+    let start = c.start;
+    let end = c.end;
+    if (which === "start") start = Math.max(0, Math.round((start + delta) * 2) / 2);
+    else end = Math.round((end + delta) * 2) / 2;
+    const dur = end - start;
+    // Mismos límites que el backend: inicio antes del fin, duración 5-180 s.
+    if (start >= end || dur < 5 || dur > 180) return;
+    const next = [...clips];
+    next[i] = { ...c, start, end, duration: dur };
+    setClips(next);
+    pendingPatch.current.set(i, { start, end });
+    if (patchTimer.current != null) window.clearTimeout(patchTimer.current);
+    patchTimer.current = window.setTimeout(flushPatch, 600);
+  }
+
+  const approvedIndices = clips
+    .map((c, i) => (c.approved !== false ? i : -1))
+    .filter((i) => i >= 0);
+  const n = approvedIndices.length;
+
+  return (
+    <Card className="border-border bg-card p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-medium">
+            Revisa los momentos de <span className="font-mono-tab text-violet-400">{videoId}</span>
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Todos vienen aprobados. Descarta los que no te gusten o ajusta dónde empieza y
+            termina cada uno — nada se genera hasta que tú lo apruebes.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {fallbackHeuristic && (
+            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 font-mono-tab text-[9px] text-amber-300">
+              modo rápido
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            Cerrar y volver
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        {clips.map((c, i) => (
+          <ProposalClipCard
+            key={`${videoId}_${i}`}
+            clip={c}
+            idx={c.index ?? i + 1}
+            videoId={videoId}
+            review={{
+              approved: c.approved !== false,
+              onToggle: () => toggleApproved(i),
+              adjusting: adjustingIdx === i,
+              onToggleAdjust: () => {
+                if (adjustingIdx === i) {
+                  // Al cerrar el panel se persiste lo pendiente (PATCH al cerrar).
+                  flushPatch();
+                  setAdjustingIdx(null);
+                } else {
+                  flushPatch();
+                  setAdjustingIdx(i);
+                }
+              },
+              onAdjust: (which, delta) => adjustClip(i, which, delta),
+            }}
+          />
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-violet-500/25 bg-violet-500/5 p-3">
+        <p className="text-sm">
+          Se generar{n === 1 ? "á" : "án"}{" "}
+          <span className="font-semibold text-violet-300">{n}</span> clip{n === 1 ? "" : "s"}
+          {willRender && n > 0 && (
+            <span className="text-muted-foreground"> · ~{n * 2}-{n * 3} min</span>
+          )}
+          {!willRender && (
+            <span className="text-muted-foreground"> (solo recorte, sin video editado)</span>
+          )}
+        </p>
+        <Button
+          onClick={() => {
+            flushPatch();
+            onGenerate(approvedIndices);
+          }}
+          disabled={generating || n === 0}
+          className="bg-violet-500 text-white hover:bg-violet-400"
+        >
+          {generating ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Sparkles className="mr-2 h-4 w-4" />
+          )}
+          {generating ? "Arrancando…" : `✨ Generar los ${n} aprobados`}
+        </Button>
+      </div>
+      {n === 0 && (
+        <p className="mt-2 text-center text-[11px] text-amber-300">
+          Descartaste todos los momentos — aprueba al menos uno para poder generar.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+// ─── Semáforo IA: reparación automática con un clic ───────────────────────
+// Cablea el contrato POST/GET /api/ollama/setup (lo construye otro flujo):
+//   POST {action:"auto"} arranca en background (despertar exe → instalar → bajar modelo)
+//   GET → {phase, pct?, detail?} con phase idle|starting|installing|downloading_model|ready|error
+// Mientras esas rutas no existan (404), se muestra la instrucción manual.
+
+const FIX_PHASE_LABELS: Record<string, string> = {
+  idle: "Preparando…",
+  starting: "Despertando la IA local…",
+  installing: "Instalando la IA local…",
+  downloading_model: "Descargando el modelo de IA (puede tardar varios minutos)…",
+};
+
+function IaFixPanel({ onReady }: { onReady: () => void }) {
+  const [working, setWorking] = useState(false);
+  const [phase, setPhase] = useState<string | null>(null);
+  const [pct, setPct] = useState<number | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
+  // true = la reparación automática no está disponible o falló → instrucción manual.
+  const [failed, setFailed] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (timerRef.current != null) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  // Limpieza al desmontar (cambiar de paso/modo no deja el polling vivo).
+  useEffect(() => stopPolling, [stopPolling]);
+
+  const poll = useCallback(async () => {
+    try {
+      const r = await fetch("/api/ollama/setup");
+      if (r.status === 404) {
+        // La ruta todavía no existe: caer al camino manual sin romper nada.
+        stopPolling();
+        setWorking(false);
+        setFailed(true);
+        return;
+      }
+      if (!r.ok) return; // error pasajero: se reintenta en el siguiente tick
+      const d = (await r.json()) as { phase?: string; pct?: number; detail?: string };
+      setPhase(d.phase ?? null);
+      setPct(typeof d.pct === "number" ? d.pct : null);
+      setDetail(typeof d.detail === "string" ? d.detail : null);
+      if (d.phase === "ready") {
+        stopPolling();
+        setWorking(false);
+        toast.success("La IA local quedó lista ✓");
+        onReady();
+      } else if (d.phase === "error") {
+        stopPolling();
+        setWorking(false);
+        setFailed(true);
+      }
+    } catch {
+      // red caída momentánea: el siguiente tick reintenta
+    }
+  }, [onReady, stopPolling]);
+
+  async function startFix() {
+    setFailed(false);
+    setPhase(null);
+    setPct(null);
+    setDetail(null);
+    setWorking(true);
+    try {
+      const r = await fetch("/api/ollama/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "auto" }),
+      });
+      if (r.status === 404) {
+        // Reparación automática no disponible todavía → instrucción manual.
+        setWorking(false);
+        setFailed(true);
+        return;
+      }
+      if (!r.ok) {
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
+        throw new Error(d.error ?? `HTTP ${r.status}`);
+      }
+      // Polling cada 2 s hasta ready/error.
+      stopPolling();
+      timerRef.current = window.setInterval(() => void poll(), 2000);
+      void poll();
+    } catch (err) {
+      setWorking(false);
+      setFailed(true);
+      toastError(err, "No se pudo arrancar la reparación de la IA local");
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-red-500/25 bg-red-500/5 p-3">
+      {!working && !failed && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            ¿No quieres lidiar con esto? Se puede arreglar solo: despierta la IA local,
+            la instala si falta y descarga el modelo.
+          </p>
+          <Button size="sm" onClick={startFix} className="shrink-0 bg-red-500/80 text-white hover:bg-red-400">
+            🛠️ Arreglarlo por mí
+          </Button>
+        </div>
+      )}
+
+      {working && (
+        <div className="space-y-1.5">
+          <p className="flex items-center gap-1.5 text-xs text-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {FIX_PHASE_LABELS[phase ?? "idle"] ?? "Trabajando…"}
+            {pct != null && <span className="font-mono-tab text-muted-foreground">{Math.round(pct)}%</span>}
+          </p>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn(
+                "h-full bg-emerald-500 transition-all duration-700",
+                pct == null && "w-1/3 animate-pulse"
+              )}
+              style={pct != null ? { width: `${Math.max(2, Math.min(100, pct))}%` } : undefined}
+            />
+          </div>
+          {detail && <p className="font-mono-tab text-[10px] text-muted-foreground">{detail}</p>}
+        </div>
+      )}
+
+      {failed && (
+        <p className="text-xs text-red-200">
+          No se pudo arreglar en automático{detail ? ` (${detail})` : ""}. Hazlo a mano:
+          descarga e instala la app desde{" "}
+          <a
+            href="https://ollama.com/download"
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium underline hover:text-red-100"
+          >
+            ollama.com/download
+          </a>
+          , ábrela y vuelve a intentar.{" "}
+          <button type="button" onClick={startFix} className="underline hover:text-red-100">
+            Reintentar
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
+
 // Etiquetas humanas (mexicano) de los factores del score viral — espejo de
 // python/virality.py: hook/emotion/data/pace/length/cta.
 const FACTOR_LABELS: { key: string; label: string }[] = [
@@ -1823,14 +2361,28 @@ const FACTOR_LABELS: { key: string; label: string }[] = [
   { key: "cta", label: "Llamado a la acción" },
 ];
 
+/** Controles extra cuando la tarjeta está en el paso "Revisa los momentos". */
+interface ReviewControls {
+  approved: boolean;
+  onToggle: () => void;
+  /** ¿Está abierto el panel de ajuste fino (steppers inicio/fin)? */
+  adjusting: boolean;
+  onToggleAdjust: () => void;
+  /** Mueve inicio o fin en ±0.5 s (el padre valida límites y persiste con PATCH). */
+  onAdjust: (which: "start" | "end", delta: number) => void;
+}
+
 function ProposalClipCard({
   clip: c,
   idx,
   videoId,
+  review,
 }: {
   clip: ProposalClip;
   idx: number;
   videoId: string;
+  /** Presente solo en el paso de revisión: aprobar/descartar + ajustar inicio/fin. */
+  review?: ReviewControls;
 }) {
   // "¿Por qué este clip?" — el badge 🔥 se expande solo si el proposal trae el
   // desglose de factores (los viejos no lo tienen y el badge queda como antes).
@@ -1848,14 +2400,28 @@ function ProposalClipCard({
         }
       : undefined;
 
+  // En revisión la miniatura usa t con resolución de medio segundo para que el src
+  // cambie con cada clic del stepper (el server cachea por segundo redondeado, así
+  // que el frame visible se refresca al cruzar cada segundo).
+  const thumbT = review
+    ? Math.max(0, Math.round(c.start * 2) / 2)
+    : Math.max(0, Math.round(c.start));
+  const duration = c.end - c.start;
+
   return (
-    <div className="rounded-md border border-border bg-muted/30 p-3">
+    <div
+      className={cn(
+        "rounded-md border border-border bg-muted/30 p-3 transition-opacity",
+        review && !review.approved && "opacity-45"
+      )}
+    >
       <div className="flex items-start gap-2">
         {/* Miniatura del momento exacto donde arranca el clip (frame en t=inicio). */}
         <div className="relative h-16 w-10 shrink-0 overflow-hidden rounded border border-border bg-muted/40">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`/api/videos/${encodeURIComponent(videoId)}/thumbnail?source=long_form&t=${Math.max(0, Math.round(c.start))}`}
+            key={thumbT}
+            src={`/api/videos/${encodeURIComponent(videoId)}/thumbnail?source=long_form&t=${thumbT}`}
             alt=""
             loading="lazy"
             className="h-full w-full object-cover"
@@ -1944,6 +2510,111 @@ function ProposalClipCard({
           )}
         </div>
       )}
+
+      {/* ── Controles de revisión: aprobar/descartar + ajuste fino inicio/fin ── */}
+      {review && (
+        <div className="mt-2 flex items-center gap-2 border-t border-border pt-2">
+          <button
+            type="button"
+            onClick={review.onToggle}
+            className={cn(
+              "flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-medium transition-colors",
+              review.approved
+                ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                : "bg-muted text-muted-foreground hover:bg-muted/70"
+            )}
+            title={review.approved ? "Este clip SÍ se genera — clic para descartarlo" : "Descartado — clic para volver a incluirlo"}
+          >
+            {review.approved ? (
+              <>
+                <CheckCircle2 className="h-3 w-3" /> Se genera
+              </>
+            ) : (
+              <>
+                <XCircle className="h-3 w-3" /> Descartado
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={review.onToggleAdjust}
+            className={cn(
+              "ml-auto flex items-center gap-1 rounded border px-2 py-1 text-[11px] transition-colors",
+              review.adjusting
+                ? "border-violet-400/50 bg-violet-500/10 text-violet-300"
+                : "border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Scissors className="h-3 w-3" />
+            Ajustar
+            <ChevronDown className={cn("h-2.5 w-2.5 transition-transform", review.adjusting && "rotate-180")} />
+          </button>
+        </div>
+      )}
+
+      {review?.adjusting && (
+        <div className="mt-2 space-y-2 rounded-md border border-violet-500/25 bg-violet-500/5 p-2.5">
+          <TimeStepper
+            label="Inicio"
+            value={c.start}
+            onStep={(d) => review.onAdjust("start", d)}
+            disableMinus={c.start <= 0 || duration + 0.5 > 180}
+            disablePlus={duration - 0.5 < 5}
+          />
+          <TimeStepper
+            label="Fin"
+            value={c.end}
+            onStep={(d) => review.onAdjust("end", d)}
+            disableMinus={duration - 0.5 < 5}
+            disablePlus={duration + 0.5 > 180}
+          />
+          <p className="text-center font-mono-tab text-[10px] text-muted-foreground">
+            Duración resultante:{" "}
+            <span className="font-semibold text-foreground">{(Math.round(duration * 10) / 10).toFixed(1)} s</span>
+            {" "}(entre 5 y 180 s)
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Stepper ±0.5 s para ajustar inicio/fin de un momento en la revisión. */
+function TimeStepper({
+  label,
+  value,
+  onStep,
+  disableMinus,
+  disablePlus,
+}: {
+  label: string;
+  value: number;
+  onStep: (delta: number) => void;
+  disableMinus?: boolean;
+  disablePlus?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-10 shrink-0 text-[11px] text-muted-foreground">{label}</span>
+      <button
+        type="button"
+        onClick={() => onStep(-0.5)}
+        disabled={disableMinus}
+        className="rounded border border-border px-2 py-0.5 font-mono-tab text-[11px] text-foreground hover:bg-muted disabled:opacity-30"
+        title={`Mover el ${label.toLowerCase()} 0.5 s hacia atrás`}
+      >
+        −0.5 s
+      </button>
+      <span className="flex-1 text-center font-mono-tab text-xs text-foreground">{fmtTimeFine(value)}</span>
+      <button
+        type="button"
+        onClick={() => onStep(0.5)}
+        disabled={disablePlus}
+        className="rounded border border-border px-2 py-0.5 font-mono-tab text-[11px] text-foreground hover:bg-muted disabled:opacity-30"
+        title={`Mover el ${label.toLowerCase()} 0.5 s hacia adelante`}
+      >
+        +0.5 s
+      </button>
     </div>
   );
 }

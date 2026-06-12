@@ -2,6 +2,7 @@
 
 Uso:
   python extract_clips.py <video_id>
+  python extract_clips.py <video_id> --clips 0,2,5   # solo esas posiciones (0-based)
 
 Para cada clip en long_form/proposals/{video_id}.json:
   - Recorta [start, end] del long_form/clean/{video_id}_clean.mp4
@@ -297,7 +298,28 @@ def main() -> int:
             "per-frame=sample cada 5 frames (preciso, ~5-10s/clip)."
         ),
     )
+    parser.add_argument(
+        "--clips",
+        default=None,
+        help=(
+            "Índices de clips a extraer, separados por coma (posición 0-based en el "
+            "proposals JSON, ej. '0,2,5'). Sin este flag se extraen TODOS (retrocompatible). "
+            "Los clip_id conservan su número de posición completo (cNN), se pida el "
+            "subset que se pida."
+        ),
+    )
     args = parser.parse_args()
+
+    # Subset opcional de clips aprobados (flujo REVISAR antes de generar).
+    selected: set[int] | None = None
+    if args.clips is not None and args.clips.strip():
+        try:
+            selected = {int(x) for x in args.clips.split(",") if x.strip()}
+        except ValueError:
+            print(f"[error] --clips inválido: {args.clips!r} (espero '0,2,5')", file=sys.stderr)
+            return 1
+        if not selected:
+            selected = None
 
     ensure_long_form_dirs()
 
@@ -351,7 +373,25 @@ def main() -> int:
     # proceso al final (--batch) — antes se spawneaba un python NUEVO por clip,
     # recargando torch + el modelo Whisper 15+ veces por video (minutos perdidos).
     pending_transcriptions: list[tuple[Path, int]] = []  # (out_transcript, idx en results)
+    if selected is not None:
+        valid = {i for i in selected if 0 <= i < len(clips)}
+        if not valid:
+            print(
+                f"[error] ninguno de los índices {sorted(selected)} existe "
+                f"(hay {len(clips)} clips propuestos)",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"[extract] solo los aprobados: {len(valid)} de {len(clips)} clips "
+            f"(posiciones {sorted(valid)})",
+            file=sys.stderr,
+        )
+
     for i, clip in enumerate(clips, start=1):
+        # Subset aprobado: i es 1-based, las posiciones llegan 0-based.
+        if selected is not None and (i - 1) not in selected:
+            continue
         slug = clip.get("slug") or f"clip-{i:02d}"
         clip_id = f"{args.video_id}_c{i:02d}_{slug}"
         out_mp4 = LF_CLIPS / f"{clip_id}.mp4"

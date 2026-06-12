@@ -38,6 +38,14 @@ export interface LongFormStep {
   finishedAt?: number;
 }
 
+/**
+ * Tipo de corrida (flujo REVISAR antes de generar):
+ *   "full"            → comportamiento clásico: analiza + extrae + genera todo de un jalón.
+ *   "analyze"         → solo hasta el proposals JSON (el usuario revisa los momentos).
+ *   "render-approved" → salta el análisis y solo extrae + genera los clips aprobados.
+ */
+export type LongFormRunMode = "full" | "analyze" | "render-approved";
+
 export interface LongFormJob {
   id: string;
   videoId: string;
@@ -51,6 +59,8 @@ export interface LongFormJob {
     styles?: string[];
     accentColor?: string;
     platforms?: string[];
+    /** Tipo de corrida; undefined = "full" (jobs viejos persistidos siguen funcionando). */
+    mode?: LongFormRunMode;
   };
   startedAt: number;
   finishedAt?: number;
@@ -82,6 +92,28 @@ const DEFAULT_STEPS: { key: LongFormStepKey; label: string }[] = [
   { key: "extract_clips", label: "Recortar los clips (30-60 s cada uno)" },
   { key: "render", label: "Generar los videos finales con tu estilo" },
 ];
+
+/**
+ * Steps por tipo de corrida: la barra de progreso solo muestra los pasos que de
+ * verdad corren en ese modo (antes el subset dejaba pasos "pending" eternos o
+ * mostraba pasos que nunca iban a correr).
+ *
+ *  - "analyze": el pipeline corre transcribe (smart; en rápido lo salta y lo marca
+ *    skipped) + analyze (incluye score + whyViral) y termina.
+ *  - "render-approved": el pipeline arranca directo en extract (STEP 6) + render (STEP 7).
+ *  - "full" (default): los 7 pasos clásicos, intactos.
+ */
+const STEPS_BY_MODE: Record<LongFormRunMode, { key: LongFormStepKey; label: string }[]> = {
+  full: DEFAULT_STEPS,
+  analyze: [
+    { key: "transcribe", label: "Convertir a texto lo que se dice en el video" },
+    { key: "analyze", label: "Analizar con IA → elegir los mejores momentos" },
+  ],
+  "render-approved": [
+    { key: "extract_clips", label: "Recortar los clips aprobados" },
+    { key: "render", label: "Generar los videos finales con tu estilo" },
+  ],
+};
 
 declare global {
    
@@ -129,6 +161,8 @@ export function createLongFormJob(
   options: LongFormJob["options"]
 ): LongFormJob {
   const id = `lfjob_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // Pasos según el tipo de corrida (mode ausente o desconocido → los 7 clásicos).
+  const stepDefs = STEPS_BY_MODE[options.mode ?? "full"] ?? DEFAULT_STEPS;
   const job: LongFormJob = {
     id,
     videoId,
@@ -137,7 +171,7 @@ export function createLongFormJob(
     startedAt: Date.now(),
     status: "running",
     overallProgress: 0,
-    steps: DEFAULT_STEPS.map((s) => ({
+    steps: stepDefs.map((s) => ({
       key: s.key,
       label: s.label,
       status: "pending",
@@ -145,7 +179,7 @@ export function createLongFormJob(
     log: [],
   };
   if (!options.render) {
-    // El step de render se marca skipped desde el arranque
+    // El step de render se marca skipped desde el arranque (si esta corrida lo tiene)
     const renderStep = job.steps.find((s) => s.key === "render");
     if (renderStep) renderStep.status = "skipped";
   }

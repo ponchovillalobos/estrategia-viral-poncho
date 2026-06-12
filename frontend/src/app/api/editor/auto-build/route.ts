@@ -16,6 +16,7 @@ import { canRender, registerRender } from "@/lib/license";
 import { applyWizardOverrides } from "@/lib/apply-wizard-overrides";
 import {
   buildProjectForStyle,
+  pickRandomMusicTrack,
   type BuildContext,
 } from "@/lib/style-templates";
 import { createJob, updateStep, setCurrentStyle, type Job } from "@/lib/job-store";
@@ -245,6 +246,35 @@ async function processJob(job: Job, body: AutoBuildRequest) {
           ? { subtitleColor: body.subtitleColor }
           : {}),
       };
+
+      // 🎵 Música elegida en el wizard. Se aplica AQUÍ (auto-build) y NO en
+      // apply-wizard-overrides porque: (1) la música no aplica a la vista previa
+      // (stills/clips mudos — style-preview ya fuerza musicTrack:null), así que
+      // compartirla en el helper no aporta nada; y (2) pickRandomMusicTrack tiene
+      // efectos en disco (escribe music-rotation.json) que NO deben dispararse
+      // desde el helper compartido con previews. Va ANTES de applyBeatSync para
+      // que el beat-sync detecte los beats de la pista realmente elegida.
+      //   "auto"/undefined → comportamiento de siempre (el estilo elige y rota).
+      //   "none"           → sin música.
+      //   {mood}           → pista de ese mood, SOLO si el estilo lleva música.
+      {
+        const music = (body as AutoBuildRequest & {
+          music?: "auto" | "none" | { mood?: string };
+        }).music;
+        if (music === "none") {
+          project.musicTrack = null;
+        } else if (
+          music &&
+          typeof music === "object" &&
+          music.mood &&
+          project.musicTrack
+        ) {
+          // Seed con el mood: si el user re-crea el mismo video con otro mood,
+          // la asignación persistida del seed anterior no pisa la elección nueva.
+          const track = pickRandomMusicTrack(`${videoId}:${music.mood}`, music.mood);
+          if (track) project.musicTrack = track;
+        }
+      }
 
       await applyBeatSync(project, transcript.duration);
 

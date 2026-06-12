@@ -204,6 +204,30 @@ const SUBTITLE_FONTS: { id: string; name: string }[] = [
 const MOTION_STYLES: StyleId[] = ["motion_pro", "motion_beat", "motion_grid"];
 const HYPE_STYLES: StyleId[] = ["hype", "hype_max", "hype_max_sfx", "supreme"];
 
+// Estilos que LLEVAN música de fondo (los que setean musicTrack en
+// style-templates.ts: broll_*, motion_* y editorial — cinematic_pro también,
+// pero no vive en este wizard). Para ellos aparece el submenú "🎵 Música".
+const MUSIC_STYLES: StyleId[] = [
+  "broll_full",
+  "broll_pip",
+  "motion_pro",
+  "motion_beat",
+  "motion_grid",
+  "editorial",
+];
+
+// Elección de música del wizard. "auto" = el sistema elige y rota (lo de siempre).
+type MusicChoice = "auto" | "none" | { mood: string };
+
+// Moods REALES de la biblioteca local (los nombres de archivo los codifican:
+// "chosic-calm-…", "incompetech-epic-…"). Solo se ofrecen los que tienen pistas.
+const MUSIC_MOODS: { id: string; name: string; emoji: string; hint: string }[] = [
+  { id: "calm", name: "Tranquila", emoji: "🌿", hint: "Suave, no compite con tu voz" },
+  { id: "epic", name: "Épica", emoji: "🎬", hint: "Cinemática, se siente grande" },
+  { id: "energetic", name: "Enérgica", emoji: "⚡", hint: "Ritmo arriba, con empuje" },
+  { id: "funny", name: "Divertida", emoji: "🤪", hint: "Ligera y juguetona" },
+];
+
 // Fondos animados de los estilos Motion (mismo "kind" que animatedBackground en
 // style-templates). El preview es CSS puro — se VE cómo es cada fondo sin leer.
 const MOTION_BACKGROUNDS: { id: string; name: string; hint: string; preview: CSSProperties }[] = [
@@ -295,6 +319,17 @@ export function WizardClient() {
   const [showAllThemes, setShowAllThemes] = useState(false);
   // Fondo animado (estilos motion_*). "auto" = el fondo propio de cada estilo.
   const [motionBackground, setMotionBackground] = useState<string>("auto");
+  // 🎵 Música de fondo (estilos broll_*/motion_*/editorial). "auto" = el sistema
+  // elige y rota como siempre; "none" = sin música; {mood} = pista de ese mood.
+  const [music, setMusic] = useState<MusicChoice>("auto");
+  // Pistas reales de /api/music/list para los botones ▶ Escuchar.
+  const [musicTracks, setMusicTracks] = useState<{ filename: string; url: string }[]>([]);
+  // Mood que está sonando ahora (un solo <audio> compartido para todo el panel).
+  const [playingMood, setPlayingMood] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Miniaturas de temas editoriales que no cargaron (404/falta el PNG): esos
+  // temas caen al mini-preview CSS de siempre.
+  const [thumbErrors, setThumbErrors] = useState<Set<string>>(new Set());
   // Intensidad de FX (estilos hype*/supreme). "normal" = el estilo tal cual.
   const [fxIntensity, setFxIntensity] = useState<string>("normal");
   // true cuando el usuario eligió un color A MANO en el paso 3: a partir de ahí,
@@ -322,7 +357,7 @@ export function WizardClient() {
   // Aspect ratio del output. 9:16 vertical (TikTok/Reels) default, 16:9 horizontal (LinkedIn/YouTube).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
   // Plantillas guardables: combos favoritos (estilo+color+fuente+plataformas).
-  type Template = { id: string; name: string; styles: string[]; accentColor: string; subtitleFont: string; subtitleColor?: string; platforms: string[]; aspectRatio: "9:16" | "16:9" };
+  type Template = { id: string; name: string; styles: string[]; accentColor: string; subtitleFont: string; subtitleColor?: string; platforms: string[]; aspectRatio: "9:16" | "16:9"; music?: MusicChoice };
   const [templates, setTemplates] = useState<Template[]>([]);
   const [caption, setCaption] = useState<string>("");
   const [captionMeta, setCaptionMeta] = useState<CaptionMeta | null>(null);
@@ -474,6 +509,56 @@ export function WizardClient() {
     loadTemplates();
   }, []);
 
+  // 🎵 Cargar la lista real de pistas una vez (para los botones ▶ Escuchar).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/music/list")
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled || !Array.isArray(d.tracks)) return;
+        setMusicTracks(
+          d.tracks
+            .filter((t: { filename?: string; url?: string }) => t.filename && t.url)
+            .map((t: { filename: string; url: string }) => ({ filename: t.filename, url: t.url }))
+        );
+      })
+      .catch(() => {
+        /* sin lista — los botones Escuchar avisan al hacer click */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Al cambiar de paso, parar cualquier pista que esté sonando.
+  useEffect(() => {
+    audioRef.current?.pause();
+  }, [step]);
+
+  // ▶ Escuchar ~10s de una pista del mood en UN solo <audio> compartido.
+  // Segundo click sobre el mismo mood = pausa; otro mood = cambia la pista.
+  function toggleMusicPreview(mood: string) {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playingMood === mood) {
+      audio.pause(); // onPause limpia playingMood
+      return;
+    }
+    const token = `-${mood}-`;
+    const pool = musicTracks.filter((t) => t.filename.toLowerCase().includes(token));
+    if (pool.length === 0) {
+      toast.error("No encontré pistas de este mood en tu biblioteca de música");
+      return;
+    }
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    audio.src = pick.url;
+    audio.currentTime = 0;
+    audio
+      .play()
+      .then(() => setPlayingMood(mood))
+      .catch(() => toast.error("No se pudo reproducir la pista — intenta de nuevo"));
+  }
+
   // La descripción se genera SOLA al llegar al paso final (sin tocar botones).
   // El botón "Regenerar" queda para pedir otra versión.
   useEffect(() => {
@@ -492,6 +577,8 @@ export function WizardClient() {
     setSubtitleFont(t.subtitleFont || "auto");
     setSubtitleColor(t.subtitleColor || "auto");
     setAspectRatio(t.aspectRatio === "16:9" ? "16:9" : "9:16");
+    // Plantillas viejas sin `music` → "auto" (comportamiento de siempre).
+    setMusic(t.music ?? "auto");
     toast.success(`Plantilla "${t.name}" aplicada`);
   }
 
@@ -516,6 +603,7 @@ export function WizardClient() {
           subtitleColor,
           platforms: selectedPlatforms,
           aspectRatio,
+          music,
         }),
       });
       if (!r.ok) throw new Error((await r.json()).error ?? "no se pudo guardar");
@@ -710,6 +798,9 @@ export function WizardClient() {
       // Submenús opcionales: solo viajan si el user cambió el default —
       // "auto"/"normal" = undefined = el render sale como siempre.
       ...overridesPayload(),
+      // 🎵 Música: viaja SOLO a auto-build (no va en overridesPayload porque ese
+      // payload también alimenta style-preview, y los stills no llevan audio).
+      ...(music !== "auto" ? { music } : {}),
       platforms: selectedPlatforms,
       aspectRatio,
       caption: caption || undefined,
@@ -978,16 +1069,34 @@ export function WizardClient() {
                 : "border-border hover:border-foreground/30"
             }`}
           >
-            {/* mini-preview del tema: fondo + serif + SU acento (el propio
-                del tema si lo tiene — miniatura fiel, no el accent global) */}
-            <div className="flex h-14 flex-col justify-center overflow-hidden px-2" style={{ background: t.bg }}>
-              <span className="truncate text-[7px] uppercase tracking-[0.3em]" style={{ color: t.text, opacity: 0.5 }}>
-                La verdad
-              </span>
-              <span className="truncate text-sm font-bold leading-tight" style={{ color: t.text, fontFamily: t.demoFont }}>
-                Título <em style={{ color: ("accent" in t && t.accent) || accent }}>clave.</em>
-              </span>
-            </div>
+            {/* Miniatura REAL del tema: un frame renderizado con Remotion sobre un
+                video de verdad (generado dev-time por remotion/generate-theme-thumbs.mjs
+                → /theme-thumbs/{id}.png). Si el PNG no existe, cae al mini-preview
+                CSS de siempre (fondo + serif + SU acento). */}
+            {thumbErrors.has(t.id) ? (
+              <div className="flex h-14 flex-col justify-center overflow-hidden px-2" style={{ background: t.bg }}>
+                <span className="truncate text-[7px] uppercase tracking-[0.3em]" style={{ color: t.text, opacity: 0.5 }}>
+                  La verdad
+                </span>
+                <span className="truncate text-sm font-bold leading-tight" style={{ color: t.text, fontFamily: t.demoFont }}>
+                  Título <em style={{ color: ("accent" in t && t.accent) || accent }}>clave.</em>
+                </span>
+              </div>
+            ) : (
+              <img
+                src={`/theme-thumbs/${t.id}.png`}
+                alt={`Tema ${t.name}`}
+                loading="lazy"
+                className="aspect-[9/16] w-full rounded-t-lg object-cover"
+                onError={() =>
+                  setThumbErrors((prev) => {
+                    const next = new Set(prev);
+                    next.add(t.id);
+                    return next;
+                  })
+                }
+              />
+            )}
             <div className="px-2 py-1">
               <p className="truncate text-[10px] font-medium">{t.name}</p>
               <p className="truncate text-[9px] text-muted-foreground" title={t.hint}>
@@ -1081,8 +1190,117 @@ export function WizardClient() {
     </div>
   );
 
+  // 🎵 Música de fondo (estilos broll_*/motion_*/editorial — los que llevan
+  // música). "Automática" viene elegida: no tocar nada = el sistema elige y
+  // rota la pista como siempre. Cada mood tiene ▶ Escuchar (~10s de muestra).
+  const isMoodChoice = typeof music === "object";
+  const musicPanel = (
+    <div className="mt-3 rounded-lg border border-pink-500/30 bg-pink-500/5 p-4">
+      <p className="mb-1 text-sm font-medium">🎵 Música de fondo</p>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Opcional: este estilo lleva música. Elige el mood, o déjalo en automático y el
+        sistema escoge una pista distinta para cada video.
+      </p>
+      <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMusic("auto");
+          }}
+          className={`rounded-lg border p-3 text-left transition-all ${
+            music === "auto"
+              ? "border-pink-400 ring-1 ring-pink-400 bg-pink-500/10"
+              : "border-border hover:border-foreground/30"
+          }`}
+        >
+          <p className="text-sm font-medium">✨ Automática</p>
+          <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+            Recomendada — el sistema elige la pista y la va rotando entre videos
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMusic("none");
+          }}
+          className={`rounded-lg border p-3 text-left transition-all ${
+            music === "none"
+              ? "border-pink-400 ring-1 ring-pink-400 bg-pink-500/10"
+              : "border-border hover:border-foreground/30"
+          }`}
+        >
+          <p className="text-sm font-medium">🔇 Sin música</p>
+          <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+            Solo tu voz (y los efectos del estilo, si los tiene)
+          </p>
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {MUSIC_MOODS.map((m) => {
+          const selected = isMoodChoice && music.mood === m.id;
+          const playing = playingMood === m.id;
+          return (
+            <div
+              key={m.id}
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMusic({ mood: m.id });
+              }}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                  e.preventDefault();
+                  setMusic({ mood: m.id });
+                }
+              }}
+              className={`cursor-pointer rounded-lg border p-3 text-left transition-all ${
+                selected
+                  ? "border-pink-400 ring-1 ring-pink-400 bg-pink-500/10"
+                  : "border-border hover:border-foreground/30"
+              }`}
+            >
+              <p className="truncate text-sm font-medium">
+                {m.emoji} {m.name}
+              </p>
+              <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">{m.hint}</p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  // Que escuchar la muestra NO seleccione el mood ni suba el click.
+                  e.stopPropagation();
+                  toggleMusicPreview(m.id);
+                }}
+                className={`mt-2 w-full rounded-md border px-2 py-1 text-[11px] font-medium transition ${
+                  playing
+                    ? "border-pink-400 bg-pink-500/20 text-pink-300"
+                    : "border-border/70 text-muted-foreground hover:border-pink-400/50 hover:text-foreground"
+                }`}
+              >
+                {playing ? "⏸ Pausar" : "▶ Escuchar"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
+      {/* UN solo <audio> compartido para las muestras de música del paso 2:
+          reproducir un mood pausa el anterior, y a los ~10s se detiene solo. */}
+      <audio
+        ref={audioRef}
+        className="hidden"
+        onTimeUpdate={(e) => {
+          if (e.currentTarget.currentTime >= 10) e.currentTarget.pause();
+        }}
+        onPause={() => setPlayingMood(null)}
+        onEnded={() => setPlayingMood(null)}
+      />
       {/* Stepper visual — muestra el recorrido completo para que el usuario sepa dónde está.
           Pasos hechos: check verde, paso actual: bg primary con glow, futuros: gris. */}
       <div className="flex items-start gap-1 text-xs sm:gap-2">
@@ -1430,6 +1648,11 @@ export function WizardClient() {
                   )}
                   {p.id === "animado" && isActive && MOTION_STYLES.includes(variant) && motionBackgroundPanel}
                   {p.id === "revista" && isActive && editorialThemePanel}
+                  {/* 🎵 Música: solo en familias cuya variante activa lleva música
+                      (clips/revista siempre; animado solo en variantes motion_*). */}
+                  {p.id === "animado" && isActive && MOTION_STYLES.includes(variant) && musicPanel}
+                  {p.id === "revista" && isActive && musicPanel}
+                  {p.id === "clips" && isActive && musicPanel}
                 </div>
               );
             })}
@@ -1440,6 +1663,15 @@ export function WizardClient() {
           {selectedStyles.includes("editorial") && activePreset?.id !== "revista" && editorialThemePanel}
           {selectedStyles.some((s) => MOTION_STYLES.includes(s)) && activePreset?.id !== "animado" && motionBackgroundPanel}
           {selectedStyles.some((s) => HYPE_STYLES.includes(s)) && activePreset?.id !== "viral" && fxIntensityPanel}
+          {/* 🎵 Música suelta: hay un estilo con música elegido (modo avanzado /
+              multi-selección) y su tarjeta-familia no lo está mostrando ya. */}
+          {selectedStyles.some((s) => MUSIC_STYLES.includes(s)) &&
+            !(
+              activePreset?.id === "revista" ||
+              activePreset?.id === "clips" ||
+              (activePreset?.id === "animado" && MUSIC_STYLES.includes(selectedStyles[0]))
+            ) &&
+            musicPanel}
 
           {/* La vista previa REAL también vive acá: elegir estilo viendo cómo queda. */}
           {previewPanel}
