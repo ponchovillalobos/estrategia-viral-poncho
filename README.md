@@ -54,6 +54,34 @@
 
 ---
 
+## 📸 Así se ve
+
+![Inicio de Estrategia Viral Studio](docs/img/app-inicio.png)
+
+| Crear un video corto | De un video largo a clips |
+|---|---|
+| ![Crear video](docs/img/app-crear.png) | ![Videos largos](docs/img/app-largos.png) |
+
+### 🎨 Lo que sale: el estilo Editorial y sus temas
+
+| Prensa 1900 | Vogue noir | Zine riso | Clásico |
+|---|---|---|---|
+| ![Prensa 1900](docs/img/estilo-prensa.jpg) | ![Vogue noir](docs/img/estilo-vogue.jpg) | ![Zine riso](docs/img/estilo-riso.jpg) | ![Clásico](docs/img/estilo-clasico.jpg) |
+
+| Tinta a mano | Contador de datos | Collage IA | Globo terráqueo |
+|---|---|---|---|
+| ![Círculo a mano alzada](docs/img/estilo-prensa-tinta.jpg) | ![Contador](docs/img/estilo-contador.jpg) | ![Collage de papel](docs/img/estilo-collage.jpg) | ![Globo](docs/img/estilo-globo.jpg) |
+
+| Gráficas estilo Economist | Gráficas dibujadas a mano |
+|---|---|
+| ![Chart hairline](docs/img/estilo-docu-chart.jpg) | ![Chart sketchy](docs/img/estilo-chart-sketchy.jpg) |
+
+> Todas las imágenes son **renders reales** generados por la app — subrayados que se
+> dibujan al ritmo de tu voz, recortes con IA local, globos que hacen zoom al lugar
+> que mencionás, y 17 temas editoriales con identidad propia.
+
+---
+
 ### ⚠️ Si Windows muestra "Windows protegió su PC" (SmartScreen)
 
 Es normal en apps nuevas sin firma digital paga — **no** significa virus:
