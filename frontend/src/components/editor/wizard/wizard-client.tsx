@@ -357,8 +357,13 @@ export function WizardClient() {
   // Aspect ratio del output. 9:16 vertical (TikTok/Reels) default, 16:9 horizontal (LinkedIn/YouTube).
   const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
   // Plantillas guardables: combos favoritos (estilo+color+fuente+plataformas).
-  type Template = { id: string; name: string; styles: string[]; accentColor: string; subtitleFont: string; subtitleColor?: string; platforms: string[]; aspectRatio: "9:16" | "16:9"; music?: MusicChoice };
+  type Template = { id: string; name: string; styles: string[]; accentColor: string; subtitleFont: string; subtitleColor?: string; platforms: string[]; aspectRatio: "9:16" | "16:9"; music?: MusicChoice; feedId?: string };
   const [templates, setTemplates] = useState<Template[]>([]);
+  // Feed de plantillas vivas: curadas del estudio (GitHub), solo las no instaladas.
+  type FeedPreset = { feedId: string; name: string; description?: string; styles: string[]; accentColor?: string; subtitleFont?: string; music?: MusicChoice; aspectRatio?: "9:16" | "16:9" };
+  const [feedPresets, setFeedPresets] = useState<FeedPreset[]>([]);
+  const [feedFetched, setFeedFetched] = useState(false);
+  const [installingFeedId, setInstallingFeedId] = useState<string | null>(null);
   const [caption, setCaption] = useState<string>("");
   const [captionMeta, setCaptionMeta] = useState<CaptionMeta | null>(null);
   const [transcribing, setTranscribing] = useState(false);
@@ -508,6 +513,53 @@ export function WizardClient() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadTemplates();
   }, []);
+
+  // Feed de plantillas vivas: se consulta EN SILENCIO al llegar al paso 2 (una
+  // sola vez por sesión del wizard). Si falla o viene vacío, no se muestra nada.
+  useEffect(() => {
+    if (step !== 2 || feedFetched) return;
+    setFeedFetched(true);
+    fetch("/api/presets/feed", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.presets)) setFeedPresets(d.presets);
+      })
+      .catch(() => {
+        /* sin feed — no se muestra el banner */
+      });
+  }, [step, feedFetched]);
+
+  // Agregar una plantilla curada del feed a "Mis plantillas" (con su feedId
+  // para que el feed ya no la vuelva a ofrecer). Después refresca ambas listas.
+  async function installFeedPreset(p: FeedPreset) {
+    setInstallingFeedId(p.feedId);
+    try {
+      const r = await fetch("/api/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: p.name,
+          styles: p.styles,
+          accentColor: p.accentColor || "#fb7185",
+          subtitleFont: p.subtitleFont || "auto",
+          music: p.music ?? "auto",
+          platforms: selectedPlatforms,
+          aspectRatio: p.aspectRatio === "16:9" ? "16:9" : "9:16",
+          feedId: p.feedId,
+        }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error ?? "no se pudo agregar");
+      toast.success(`Plantilla «${p.name}» agregada ✓`);
+      setFeedPresets((prev) => prev.filter((x) => x.feedId !== p.feedId));
+      loadTemplates();
+    } catch (e) {
+      toastError(e, "No se pudo agregar la plantilla", {
+        action: { label: "Reintentar", onClick: () => installFeedPreset(p) },
+      });
+    } finally {
+      setInstallingFeedId(null);
+    }
+  }
 
   // 🎵 Cargar la lista real de pistas una vez (para los botones ▶ Escuchar).
   useEffect(() => {
@@ -1733,12 +1785,44 @@ export function WizardClient() {
               guardado y abierto cuando ya tienes plantillas. */}
           <details
             className="mt-5 rounded-lg border border-border bg-muted/20"
-            {...(templates.length > 0 ? { open: true } : {})}
+            {...(templates.length > 0 || feedPresets.length > 0 ? { open: true } : {})}
           >
             <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground">
               💾 Mis plantillas{templates.length > 0 ? ` (${templates.length})` : ""}
             </summary>
             <div className="border-t border-border p-3">
+              {/* Feed de plantillas vivas: combos curados del estudio que aún no
+                  tienes. Se llena en silencio; si no hay nada nuevo, no aparece. */}
+              {feedPresets.length > 0 && (
+                <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 p-2.5">
+                  <p className="mb-2 text-xs font-medium text-foreground">
+                    🎨 {feedPresets.length === 1 ? "1 plantilla nueva" : `${feedPresets.length} plantillas nuevas`} del estudio
+                  </p>
+                  <div className="space-y-1.5">
+                    {feedPresets.map((fp) => (
+                      <div
+                        key={fp.feedId}
+                        className="flex items-center justify-between gap-2 rounded border border-border bg-card px-2.5 py-1.5"
+                      >
+                        <div className="min-w-0">
+                          <span className="text-xs font-medium">{fp.name}</span>
+                          {fp.description && (
+                            <p className="truncate text-[11px] text-muted-foreground">{fp.description}</p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => installFeedPreset(fp)}
+                          disabled={installingFeedId === fp.feedId}
+                          className="shrink-0 rounded border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/20 disabled:opacity-50"
+                        >
+                          {installingFeedId === fp.feedId ? "Agregando…" : "Agregar"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="mb-2 flex items-center justify-between">
                 <p className="font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
                   Tus combos guardados

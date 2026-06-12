@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ProjectCardSkeleton } from "@/components/ui/skeleton";
 import { RefreshCcw, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Play, Calendar, Camera, Trash2, CheckSquare, FolderOpen } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { toastError } from "@/lib/toast-error";
 import { ScheduleDialog } from "@/components/produccion/schedule-dialog";
 import { UploadHelperDialog } from "@/components/produccion/upload-helper-dialog";
@@ -130,6 +131,24 @@ export function ProductionList() {
     } catch (err) {
       toastError(err, "No se pudo abrir la carpeta");
     }
+  }
+
+  // Paquete de publicación: copia la mejor descripción disponible (variante por
+  // red con hashtags si existe; si no, el caption general) Y abre la carpeta del
+  // archivo — todo listo para arrastrar el video a la red y pegar el texto.
+  async function copyPackageAndReveal(p: ProjectExt) {
+    const caption = pickCaptionForPlatform(p, "instagram").trim();
+    if (caption) {
+      try {
+        await navigator.clipboard.writeText(caption);
+        toast.success("Descripción copiada ✓ — arrastra el video a tu red y pega la descripción.");
+      } catch {
+        toast.error("No se pudo copiar la descripción — te abro la carpeta de todas formas.");
+      }
+    } else {
+      toast.info("Este video todavía no tiene descripción (créala con ✨) — te abro la carpeta.");
+    }
+    await revealRender(p);
   }
 
   function toggleSelect(id: string) {
@@ -589,6 +608,14 @@ export function ProductionList() {
                       className="flex items-center gap-1 rounded border border-border bg-card px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground hover:border-emerald-400/50 hover:text-emerald-300"
                     >
                       📂 Abrir carpeta
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyPackageAndReveal(p)}
+                      title="Copiar la descripción Y abrir la carpeta del archivo: arrastra el video a tu red y pega el texto"
+                      className="flex items-center gap-1 rounded border border-sky-500/30 bg-sky-500/5 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-sky-300 hover:bg-sky-500/15"
+                    >
+                      📦 Copiar y abrir
                     </button>
                   </div>
                   {/* Fila 1 — programar (multi-plataforma) + editor + updated */}

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "presets": [
+    {
+      "feedId": "2026-06-lujo",
+      "name": "Lujo editorial",
+      "description": "Negro con dorado de revista de lujo — tu mensaje se ve caro.",
+      "styles": ["editorial"],
+      "accentColor": "#c9a96a",
+      "subtitleFont": "auto",
+      "music": { "mood": "calm" },
+      "editorialTheme": { "font": "bodoni", "background": "dark", "theme": "vogue" },
+      "aspectRatio": "9:16",
+      "addedAt": "2026-06-12"
+    },
+    {
+      "feedId": "2026-06-noticia",
+      "name": "Noticia que pega",
+      "description": "Periódico antiguo con tinta roja — lo que dices suena a titular.",
+      "styles": ["editorial"],
+      "accentColor": "#8e2a1e",
+      "subtitleFont": "auto",
+      "music": { "mood": "epic" },
+      "editorialTheme": { "font": "playfair", "background": "cream", "theme": "prensa" },
+      "aspectRatio": "9:16",
+      "addedAt": "2026-06-12"
+    },
+    {
+      "feedId": "2026-06-energia",
+      "name": "Energía total",
+      "description": "Zooms, efectos de sonido y ritmo arriba — para mensajes con punch.",
+      "styles": ["hype_max_sfx"],
+      "accentColor": "#fb7185",
+      "subtitleFont": "auto",
+      "music": { "mood": "energetic" },
+      "aspectRatio": "9:16",
+      "addedAt": "2026-06-12"
+    }
+  ]
+}

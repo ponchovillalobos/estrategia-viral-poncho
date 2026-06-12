@@ -23,6 +23,8 @@ interface Template {
   platforms: string[];
   aspectRatio: "9:16" | "16:9";
   createdAt: string;
+  /** Si vino del feed de plantillas del estudio, el id curado (para no re-ofrecerla). */
+  feedId?: string;
 }
 
 async function readTemplates(): Promise<Template[]> {
@@ -70,6 +72,7 @@ export async function POST(req: NextRequest) {
     platforms: Array.isArray(body.platforms) ? body.platforms : [],
     aspectRatio: body.aspectRatio === "16:9" ? "16:9" : "9:16",
     createdAt: new Date().toISOString(),
+    feedId: typeof body.feedId === "string" && body.feedId.trim() ? body.feedId.trim().slice(0, 60) : undefined,
   };
 
   const list = await readTemplates();
