@@ -5,7 +5,9 @@ la raíz del repo en PowerShell, salvo que se indique otra cosa.
 
 ## 0. Antes de empezar
 
-- [ ] Subí la versión en `frontend/src/lib/app-version.ts` (y donde aplique en `desktop/`).
+- [ ] Sube la versión en LOS TRES lugares (deben coincidir): `frontend/src/lib/app-version.ts`,
+  `desktop/src-tauri/tauri.conf.json` y `desktop/installer/instalador.nsi` (APP_VERSION —
+  el ZIP_NAME se deriva de ahí y DEBE coincidir con el nombre del zip que subas).
 - [ ] Working tree limpio (`git status`) y cambios pusheados a `main`.
 
 ## 1. Build del frontend (server de producción)
@@ -35,8 +37,8 @@ powershell -ExecutionPolicy Bypass -File desktop\bundle.ps1
 # → desktop\src-tauri\target\release\  (desktop.exe + payload\ + SHA256SUMS.txt)
 ```
 
-- [ ] **Probá el exe** en frío: `desktop\src-tauri\target\release\desktop.exe`
-  (abrí la app, generá una vista previa). No publiques sin esto.
+- [ ] **Prueba el exe** en frío: `desktop\src-tauri\target\release\desktop.exe`
+  (abre la app, genera una vista previa). No publiques sin esto.
 
 ## 4. Zip del paquete
 
@@ -52,7 +54,7 @@ tar -a -c -f "EstrategiaViralStudio-$v.zip" desktop.exe payload SHA256SUMS.txt
 Get-FileHash "EstrategiaViralStudio-$v.zip" -Algorithm SHA256 |
   ForEach-Object { "$($_.Hash)  EstrategiaViralStudio-$v.zip" } |
   Add-Content SHA256SUMS.txt
-Get-Content SHA256SUMS.txt   # verificá que estén exe + zip
+Get-Content SHA256SUMS.txt   # verifica que estén exe + zip
 ```
 
 ## 6. Publicar el release
@@ -60,19 +62,25 @@ Get-Content SHA256SUMS.txt   # verificá que estén exe + zip
 ```powershell
 gh release create $v `
   "EstrategiaViralStudio-$v.zip" `
+  "EstrategiaViralStudio-Setup.exe" `
   SHA256SUMS.txt `
   --title "Estrategia Viral Studio $v" `
   --notes "Qué hay de nuevo: ..."
-# Si existe instalador (Setup.exe de NSIS/tauri bundle), agregalo a la lista.
+```
+
+## 6.5 Instalador NSIS (entre el zip y el release)
+
+```powershell
+& desktop\build-installer.ps1
+# → desktop\installer\EstrategiaViralStudio-Setup.exe
+# Agrega su hash a SHA256SUMS.txt antes de publicar.
 ```
 
 ## 7. Después de publicar
 
-- [ ] Abrí [Releases → latest](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest)
-  y verificá que el zip se baje y el nombre/versión sean correctos.
-- [ ] Arrancá una versión vieja de la app y confirmá que el aviso de
+- [ ] Abre [Releases → latest](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest)
+  y verifica que el zip se baje y el nombre/versión sean correctos (el Setup
+  descarga `EstrategiaViralStudio-v{APP_VERSION}.zip` de latest — si el nombre
+  no coincide, el instalador de esa versión muere).
+- [ ] Arranca una versión vieja de la app y confirma que el aviso de
   "hay versión nueva" aparece (update-check).
-
-> Nota: hoy no existe `build-installer.ps1`; el paquete oficial es el `.zip`
-> portable. Si se agrega un instalador NSIS, corrélo entre los pasos 3 y 4 y
-> subí también el `Setup.exe` + su hash en `SHA256SUMS.txt`.
