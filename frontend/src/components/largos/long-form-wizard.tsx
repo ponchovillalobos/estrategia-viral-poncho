@@ -282,6 +282,8 @@ export function LongFormWizard() {
   const [subtitleColor, setSubtitleColor] = useState<string>("auto");
   // Tema del estilo Editorial (fuente serif + fondo). Solo aplica si elegís 📰.
   const [editorialTheme, setEditorialTheme] = useState<string>("clasico");
+  // 17 temas abruman: se muestran 8 y "Ver todos" despliega el resto (paridad shorts).
+  const [showAllThemes, setShowAllThemes] = useState(false);
   // Redes fijas: los captions por red se generan SOLOS (visibles en /produccion).
   // Ya no hay botones de redes en el wizard.
   const selectedPlatforms: PlatformId[] = ["instagram", "linkedin"];
@@ -1043,11 +1045,10 @@ export function LongFormWizard() {
           {hasEditorial && (
             <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
               <p className="mb-2 text-sm font-medium">📰 Tema del estilo Editorial</p>
-              {/* 17 temas: chips compactos (hasta 6 columnas) + tope de alto con
-                  scroll suave para que el submenú nunca se coma la pantalla. */}
-              <div className="max-h-[340px] overflow-y-auto scroll-smooth pr-1">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-                {EDITORIAL_THEMES.map((t) => (
+              {/* 17 temas sin abrumar: primero los 8 favoritos, el resto detrás de
+                  "Ver todos" (paridad con el wizard de shorts). */}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(showAllThemes ? EDITORIAL_THEMES : EDITORIAL_THEMES.slice(0, 8)).map((t) => (
                   <button
                     key={t.id}
                     type="button"
@@ -1076,7 +1077,15 @@ export function LongFormWizard() {
                   </button>
                 ))}
               </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowAllThemes((v) => !v)}
+                className="mt-2 w-full rounded-md border border-border/60 py-1.5 text-xs text-muted-foreground transition hover:border-amber-400/50 hover:text-foreground"
+              >
+                {showAllThemes
+                  ? "▲ Ver menos temas"
+                  : `▼ Ver todos los temas (${EDITORIAL_THEMES.length})`}
+              </button>
             </div>
           )}
 
