@@ -199,6 +199,8 @@ export function WizardClient() {
     { id: "ft", name: "FT salmón", theme: "ft", accent: "#0d7680", font: "lora", background: "cream", bg: "#fff1e5", text: "#33302e", demoFont: "'Franklin Gothic Medium', sans-serif" },
   ] as const;
   const [editorialTheme, setEditorialTheme] = useState<string>("clasico");
+  // 17 temas abruman: se muestran 8 y "Ver todos" despliega el resto.
+  const [showAllThemes, setShowAllThemes] = useState(false);
   // Fondo animado (estilos motion_*). "auto" = el fondo propio de cada estilo.
   const [motionBackground, setMotionBackground] = useState<string>("auto");
   // Intensidad de FX (estilos hype*/supreme). "normal" = el estilo tal cual.
@@ -598,6 +600,52 @@ export function WizardClient() {
     }
   }
 
+  // F4 — Vista previa REAL, compartida entre el paso 2 (estilo) y el paso 3 (color):
+  // ver cómo queda TU video es lo que más confianza da; debe estar al frente.
+  const previewPanel = (
+    <div className="mt-5 rounded-lg border-2 border-emerald-500/30 bg-emerald-500/5 p-4 text-center">
+      <p className="mb-2 text-sm font-medium">👁️ Mirá cómo queda TU video antes de generarlo</p>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <button
+          type="button"
+          onClick={() => generateStylePreview(false)}
+          disabled={previewLoading || selectedStyles.length === 0 || selectedVideos.size === 0}
+          className="rounded-md bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-300 ring-1 ring-emerald-500/40 transition hover:bg-emerald-500/25 disabled:opacity-50"
+        >
+          {previewLoading ? "Generando…" : "🎬 Foto (~30s)"}
+        </button>
+        <button
+          type="button"
+          onClick={() => generateStylePreview(true)}
+          disabled={previewLoading || selectedStyles.length === 0 || selectedVideos.size === 0}
+          className="rounded-md bg-violet-500/15 px-4 py-2 text-sm font-medium text-violet-300 ring-1 ring-violet-500/40 transition hover:bg-violet-500/25 disabled:opacity-50"
+        >
+          {previewLoading ? "Generando…" : "▶ En movimiento (3s, ~1-2 min)"}
+        </button>
+      </div>
+      <p className="mt-1 text-[10px] text-muted-foreground">
+        Tu video con el estilo &quot;{STYLES.find((s) => s.id === selectedStyles[0])?.name ?? "—"}&quot; y lo que hayas elegido. La segunda vez es instantánea (caché).
+      </p>
+      {previewUrl && previewIsVideo && (
+        <video
+          src={previewUrl}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="mx-auto mt-3 max-h-[420px] rounded-lg border border-border shadow-lg"
+        />
+      )}
+      {previewUrl && !previewIsVideo && (
+        <img
+          src={previewUrl}
+          alt="Vista previa del estilo sobre tu video"
+          className="mx-auto mt-3 max-h-[420px] rounded-lg border border-border shadow-lg"
+        />
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* Stepper visual — muestra el recorrido completo para que el usuario sepa dónde está.
@@ -900,11 +948,10 @@ export function WizardClient() {
           {selectedStyles.includes("editorial") && (
             <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
               <p className="mb-2 text-sm font-medium">📰 Tema del estilo Editorial</p>
-              {/* 17 temas: chips compactos (hasta 6 columnas) + tope de alto con
-                  scroll suave para que el submenú nunca se coma la pantalla. */}
-              <div className="max-h-[340px] overflow-y-auto scroll-smooth pr-1">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-                {EDITORIAL_THEMES.map((t) => (
+              {/* 17 temas sin abrumar: primero los 8 favoritos, el resto detrás de
+                  "Ver todos" (un niño elige entre pocos; el curioso despliega). */}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(showAllThemes ? EDITORIAL_THEMES : EDITORIAL_THEMES.slice(0, 8)).map((t) => (
                   <button
                     key={t.id}
                     type="button"
@@ -933,7 +980,15 @@ export function WizardClient() {
                   </button>
                 ))}
               </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowAllThemes((v) => !v)}
+                className="mt-2 w-full rounded-md border border-border/60 py-1.5 text-xs text-muted-foreground transition hover:border-amber-400/50 hover:text-foreground"
+              >
+                {showAllThemes
+                  ? "▲ Ver menos temas"
+                  : `▼ Ver todos los temas (${EDITORIAL_THEMES.length})`}
+              </button>
             </div>
           )}
 
@@ -977,7 +1032,7 @@ export function WizardClient() {
                 Opcional: cuánta energía llevan los zooms y efectos de los estilos Viral y Premium.
               </p>
               <div className="grid grid-cols-3 gap-2">
-                {FX_INTENSITIES.map((f) => (
+                {FX_INTENSITIES.map((f, fi) => (
                   <button
                     key={f.id}
                     type="button"
@@ -988,6 +1043,18 @@ export function WizardClient() {
                         : "border-border hover:border-foreground/30"
                     }`}
                   >
+                    {/* mini-preview: 1/2/3 rayos latiendo a la velocidad del nivel */}
+                    <div className="mb-1.5 flex h-7 items-center justify-center gap-1 rounded bg-black/40">
+                      {Array.from({ length: fi + 1 }).map((_, j) => (
+                        <span
+                          key={j}
+                          className="animate-pulse text-base"
+                          style={{ animationDuration: `${1.6 - fi * 0.5}s`, animationDelay: `${j * 0.15}s` }}
+                        >
+                          ⚡
+                        </span>
+                      ))}
+                    </div>
                     <p className="truncate text-sm font-medium">
                       {f.emoji} {f.name}
                     </p>
@@ -997,6 +1064,9 @@ export function WizardClient() {
               </div>
             </div>
           )}
+
+          {/* La vista previa REAL también vive acá: elegir estilo viendo cómo queda. */}
+          {previewPanel}
 
           <p className="mt-4 text-xs text-muted-foreground">
             {selectedStyles.length === 0
@@ -1107,47 +1177,8 @@ export function WizardClient() {
             </>
           )}
 
-          {/* F4 — Vista previa REAL: un frame de TU video con el estilo + color + fuente. */}
-          <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3 text-center">
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => generateStylePreview(false)}
-                disabled={previewLoading || selectedStyles.length === 0}
-                className="rounded-md bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-300 ring-1 ring-emerald-500/40 transition hover:bg-emerald-500/25 disabled:opacity-50"
-              >
-                {previewLoading ? "Generando…" : "🎬 Vista previa REAL (foto, ~30s)"}
-              </button>
-              <button
-                type="button"
-                onClick={() => generateStylePreview(true)}
-                disabled={previewLoading || selectedStyles.length === 0}
-                className="rounded-md bg-violet-500/15 px-4 py-2 text-sm font-medium text-violet-300 ring-1 ring-violet-500/40 transition hover:bg-violet-500/25 disabled:opacity-50"
-              >
-                {previewLoading ? "Generando…" : "▶ En MOVIMIENTO (3s, ~1-2 min)"}
-              </button>
-            </div>
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              Tu video con el estilo &quot;{STYLES.find((s) => s.id === selectedStyles[0])?.name ?? "—"}&quot;, el color y la fuente elegidos. La segunda vez es instantánea (caché).
-            </p>
-            {previewUrl && previewIsVideo && (
-              <video
-                src={previewUrl}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="mx-auto mt-3 max-h-[420px] rounded-lg border border-border shadow-lg"
-              />
-            )}
-            {previewUrl && !previewIsVideo && (
-              <img
-                src={previewUrl}
-                alt="Vista previa del estilo sobre tu video"
-                className="mx-auto mt-3 max-h-[420px] rounded-lg border border-border shadow-lg"
-              />
-            )}
-          </div>
+          {/* F4 — Vista previa REAL (compartida con el paso 2). */}
+          {previewPanel}
 
           {!editorialOnly && (
             <>
@@ -1189,46 +1220,51 @@ export function WizardClient() {
         <Card className="border-border bg-card p-6">
           <h2 className="mb-4 text-lg font-medium">4. Revisá y generá tu video</h2>
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-1.5">
-                  Descripción para tus redes
-                  <HelpHint label="Qué es la descripción">
-                    Es el texto que acompaña al video cuando lo publicás (lo que la gente lee
-                    arriba del video, con hashtags). Se genera sola con IA a partir de lo que
-                    decís — podés editarla o pedir otra versión.
-                  </HelpHint>
-                </Label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={generateCaptionAI}
-                  disabled={generatingCaption || selectedVideos.size === 0}
-                  title="Genera otra versión de la descripción con IA."
-                >
-                  {generatingCaption ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  {generatingCaption ? "Generando sola…" : "↻ Otra versión"}
-                </Button>
-              </div>
-              <textarea
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                rows={6}
-                className="w-full rounded-md border border-border bg-muted/30 p-2 text-sm"
-                placeholder="Generando la descripción con IA a partir de tu video… También podés escribirla a mano."
-              />
-              {captionMeta?._provider && (
-                <p className="font-mono-tab text-[10px] text-muted-foreground">
-                  generado por {captionMeta._provider}
-                  {captionMeta._model ? ` · ${captionMeta._model}` : ""}
-                </p>
+            {/* La descripción se genera SOLA en segundo plano (no aporta verla acá:
+                en Producción están los copys por red listos). Queda plegada por si
+                alguien quiere leerla o retocarla a mano. */}
+            <div className="flex items-center gap-2 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-sm text-muted-foreground">
+              {generatingCaption ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+              ) : (
+                <Sparkles className="h-4 w-4 shrink-0 text-emerald-400" />
               )}
+              <span>
+                ✨ La descripción para tus redes <strong>se genera sola</strong> — la vas a
+                encontrar lista junto al video en <strong>Mis videos</strong>.
+              </span>
             </div>
+            <details className="rounded-md border border-border/60 px-3 py-2">
+              <summary className="cursor-pointer text-xs text-muted-foreground">
+                ✍️ Ver o editar la descripción (opcional)
+              </summary>
+              <div className="mt-2 space-y-1.5">
+                <textarea
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  rows={5}
+                  className="w-full rounded-md border border-border bg-muted/30 p-2 text-sm"
+                  placeholder="Generando la descripción con IA a partir de tu video…"
+                />
+                <div className="flex items-center justify-between">
+                  {captionMeta?._provider ? (
+                    <p className="font-mono-tab text-[10px] text-muted-foreground">
+                      generado por {captionMeta._provider}
+                      {captionMeta._model ? ` · ${captionMeta._model}` : ""}
+                    </p>
+                  ) : <span />}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={generateCaptionAI}
+                    disabled={generatingCaption || selectedVideos.size === 0}
+                  >
+                    {generatingCaption ? "Generando…" : "↻ Otra versión"}
+                  </Button>
+                </div>
+              </div>
+            </details>
           </div>
 
           {/* Modo cinematográfico = opción avanzada. Plegada por defecto para no abrumar
