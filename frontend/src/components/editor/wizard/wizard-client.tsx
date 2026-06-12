@@ -1048,14 +1048,14 @@ export function WizardClient() {
   // F4 — Vista previa REAL, compartida entre el paso 2 (estilo) y el paso 3 (color):
   // ver cómo queda TU video es lo que más confianza da; debe estar al frente.
   const previewPanel = (
-    <div className="mt-5 rounded-lg border-2 border-emerald-500/30 bg-emerald-500/5 p-4 text-center">
+    <div className="mt-5 rounded-lg border-2 border-brand-pink/30 bg-brand-pink/5 p-4 text-center">
       <p className="mb-2 text-sm font-medium">👁️ Mira cómo queda TU video antes de crearlo</p>
       <div className="flex flex-wrap items-center justify-center gap-2">
         <button
           type="button"
           onClick={() => generateStylePreview(false)}
           disabled={previewLoading || selectedStyles.length === 0 || selectedVideos.size === 0}
-          className="rounded-md bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-300 ring-1 ring-emerald-500/40 transition hover:bg-emerald-500/25 disabled:opacity-50"
+          className="rounded-md bg-brand-pink/15 px-4 py-2 text-sm font-medium text-brand-pink ring-1 ring-brand-pink/40 transition hover:bg-brand-pink/25 disabled:opacity-50"
         >
           {previewLoading ? "Generando…" : "🎬 Foto (~30s)"}
         </button>
@@ -1406,7 +1406,7 @@ export function WizardClient() {
               <span className="font-mono-tab text-[10px] text-muted-foreground">
                 {selectedVideos.size} de {videos.length} seleccionado{selectedVideos.size === 1 ? "" : "s"}
               </span>
-              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-brand-pink/40 bg-brand-pink/10 px-2.5 py-1 text-xs font-medium text-brand-pink hover:bg-brand-pink/20">
                 {importing ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
@@ -1471,12 +1471,12 @@ export function WizardClient() {
                         onClick={() => toggleVideo(v.id)}
                         className={`group relative flex flex-col overflow-hidden rounded border bg-card text-left transition-all ${
                           sel
-                            ? "border-emerald-400 ring-1 ring-emerald-400"
+                            ? "border-brand-pink ring-1 ring-brand-pink"
                             : "border-border hover:border-foreground/30"
                         }`}
                       >
                         {sel && (
-                          <div className="absolute right-1 top-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-black shadow">
+                          <div className="absolute right-1 top-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-brand-pink text-white shadow">
                             <CheckCircle2 className="h-2.5 w-2.5" />
                           </div>
                         )}
@@ -1573,7 +1573,7 @@ export function WizardClient() {
               onClick={() => setAspectRatio("9:16")}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-all ${
                 aspectRatio === "9:16"
-                  ? "border-emerald-400 bg-emerald-500/10 font-medium text-emerald-300 ring-1 ring-emerald-400"
+                  ? "border-brand-pink bg-brand-pink/10 font-medium text-brand-pink ring-1 ring-brand-pink"
                   : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
               }`}
             >
@@ -1585,7 +1585,7 @@ export function WizardClient() {
               onClick={() => setAspectRatio("16:9")}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-all ${
                 aspectRatio === "16:9"
-                  ? "border-emerald-400 bg-emerald-500/10 font-medium text-emerald-300 ring-1 ring-emerald-400"
+                  ? "border-brand-pink bg-brand-pink/10 font-medium text-brand-pink ring-1 ring-brand-pink"
                   : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
               }`}
             >
@@ -2033,11 +2033,11 @@ export function WizardClient() {
             {/* La descripción se genera SOLA en segundo plano (no aporta verla acá:
                 en Producción están los copys por red listos). Queda plegada por si
                 alguien quiere leerla o retocarla a mano. */}
-            <div className="flex items-center gap-2 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-md border border-brand-pink/25 bg-brand-pink/5 px-3 py-2 text-sm text-muted-foreground">
               {generatingCaption ? (
-                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-pink" />
               ) : (
-                <Sparkles className="h-4 w-4 shrink-0 text-emerald-400" />
+                <Sparkles className="h-4 w-4 shrink-0 text-brand-pink" />
               )}
               <span>
                 ✨ La descripción para tus redes <strong>se genera sola</strong> — la vas a
@@ -2192,7 +2192,7 @@ export function WizardClient() {
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full bg-gradient-to-r from-primary via-emerald-400 to-cyan-400 shadow-[0_0_18px_rgba(52,211,153,0.55)] transition-all duration-500"
+                    className="h-full bg-brand-gradient shadow-[0_0_18px_rgba(250,60,141,0.55)] transition-all duration-500"
                     style={{ width: `${jobProgress.overallProgress}%` }}
                   />
                 </div>
@@ -2209,7 +2209,7 @@ export function WizardClient() {
                         ) : step.status === "fail" ? (
                           <span className="h-3.5 w-3.5 text-red-400">✗</span>
                         ) : step.status === "rendering" || step.status === "building" ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-pink" />
                         ) : (
                           <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground" />
                         )}
@@ -2237,7 +2237,7 @@ export function WizardClient() {
                             ? "bg-emerald-400"
                             : step.status === "fail"
                               ? "bg-red-400"
-                              : "bg-emerald-400/60"
+                              : "bg-brand-pink/60"
                         }`}
                         style={{ width: `${step.progress}%` }}
                       />

@@ -148,7 +148,7 @@ export function CookiesPanel() {
                   href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-emerald-300 underline hover:text-emerald-200"
+                  className="text-brand-pink underline hover:text-brand-pink/80"
                 >
                   Get cookies.txt LOCALLY
                 </a>{" "}

@@ -93,7 +93,7 @@ export function BrollPicker({ clips, onChange, currentTime }: Props) {
             >
               <img src={v.image} alt="" className="h-full w-full object-cover" />
               <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity group-hover:bg-black/60 group-hover:opacity-100">
-                <Plus className="h-6 w-6 text-emerald-400" />
+                <Plus className="h-6 w-6 text-brand-pink" />
               </div>
               <span className="absolute right-1 bottom-1 rounded bg-black/70 px-1 font-mono-tab text-[9px]">
                 {v.duration}s

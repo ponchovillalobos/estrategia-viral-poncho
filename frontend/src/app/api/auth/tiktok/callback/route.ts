@@ -86,8 +86,8 @@ function makeSuccessPage(username: string) {
     .check { width: 64px; height: 64px; border-radius: 50%; background: #10b98122; color: #10b981; font-size: 32px; display: grid; place-items: center; margin: 0 auto 20px; }
     h1 { margin: 0 0 8px; font-size: 20px; }
     p { margin: 8px 0; color: #aaa; font-size: 14px; }
-    .acc { color: #ec4899; font-family: ui-monospace, monospace; }
-    a { display: inline-block; margin-top: 16px; padding: 8px 16px; background: #10b981; color: #000; text-decoration: none; border-radius: 8px; font-weight: 500; }
+    .acc { color: #fa3c8d; font-family: ui-monospace, monospace; }
+    a { display: inline-block; margin-top: 16px; padding: 8px 16px; background: linear-gradient(135deg, #fa3c8d, #ad23ee); color: #fff; text-decoration: none; border-radius: 8px; font-weight: 500; }
   </style>
 </head>
 <body>

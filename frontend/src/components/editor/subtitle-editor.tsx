@@ -94,7 +94,7 @@ export function SubtitleEditor({
                 key={i}
                 ref={active ? activeRef : null}
                 className={`grid grid-cols-[60px_1fr_40px] items-center gap-2 rounded px-2 py-1 text-xs ${
-                  active ? "bg-emerald-500/15" : ""
+                  active ? "bg-brand-pink/15" : ""
                 }`}
               >
                 <span className="font-mono-tab text-[10px] text-muted-foreground">

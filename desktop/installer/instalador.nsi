@@ -23,7 +23,7 @@ SetCompressor /SOLID lzma
 ; ----------------------------------------------------------------------------
 !define APP_NAME      "Viralito"
 !define APP_ID        "EstrategiaViralStudio"
-!define APP_VERSION   "0.3.0"
+!define APP_VERSION   "0.3.1"
 !define APP_PUBLISHER "Poncho Robles"
 !define APP_URL       "https://github.com/ponchovillalobos/viralito"
 !define APP_EXE       "desktop.exe"
@@ -73,6 +73,15 @@ ${StrTrimNewLines}   ; declara StrTrimNewLines (instalador)
 ; ----------------------------------------------------------------------------
 !define MUI_ICON   "..\src-tauri\icons\icon.ico"
 !define MUI_UNICON "..\src-tauri\icons\icon.ico"
+
+; Imagenes de marca Viralito (las genera C:\hermes-data\brand\make-installer-art.py
+; desde el icono maestro): banner lateral en Bienvenida/Final + header en el resto.
+!define MUI_WELCOMEFINISHPAGE_BITMAP   "assets\welcome.bmp"
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP "assets\welcome.bmp"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP   "assets\header.bmp"
+!define MUI_HEADERIMAGE_UNBITMAP "assets\header.bmp"
+
 !define MUI_ABORTWARNING
 !define MUI_ABORTWARNING_TEXT "La instalación todavía no terminó.$\r$\n$\r$\n¿Seguro que quieres salir?"
 !define MUI_UNABORTWARNING

@@ -116,7 +116,7 @@ export function MusicPicker({ selected, volume, onSelect, onVolumeChange }: Prop
                       <span>{t.name}</span>
                     </div>
                   </button>
-                  {isSelected && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                  {isSelected && <Check className="h-3.5 w-3.5 text-brand-pink" />}
                 </li>
               );
             })}

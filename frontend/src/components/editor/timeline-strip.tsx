@@ -130,7 +130,7 @@ export function TimelineStrip({
 
           {/* Playhead */}
           <div
-            className="pointer-events-none absolute bottom-0 top-0 w-[2px] rounded bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]"
+            className="pointer-events-none absolute bottom-0 top-0 w-[2px] rounded bg-brand-pink shadow-[0_0_8px_rgba(250,60,141,0.9)]"
             style={{ left: pct(currentTime) }}
           />
         </div>

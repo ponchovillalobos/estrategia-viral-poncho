@@ -58,7 +58,7 @@ function CopyableRow({ label, value, multiline }: CopyableRowProps) {
             setTimeout(() => setCopied(false), 1500);
             toast.success(`${label} copiado`);
           }}
-          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-emerald-400"
+          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand-pink"
           title={`Copiar ${label}`}
         >
           {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -253,7 +253,7 @@ export function LinkedInSetupClient() {
             </div>
             <Link
               href="/produccion"
-              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-emerald-500 px-4 text-sm font-medium text-black hover:bg-emerald-400"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand-pink px-4 text-sm font-medium text-white hover:bg-brand-pink/90"
             >
               Ir a Producción <ArrowRight className="h-3.5 w-3.5" />
             </Link>

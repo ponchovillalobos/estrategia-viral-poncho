@@ -469,7 +469,7 @@ function ActiveCaption({ words, time }: { words: Word[]; time: number }) {
   return (
     <p className="text-sm leading-relaxed">
       {active && (
-        <span className="rounded bg-emerald-500/20 px-1 text-emerald-400">{active.word}</span>
+        <span className="rounded bg-brand-pink/20 px-1 text-brand-pink">{active.word}</span>
       )}
       {active && " "}
       <span className="text-muted-foreground">

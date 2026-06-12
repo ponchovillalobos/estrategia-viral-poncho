@@ -170,7 +170,7 @@ export function AdaptDialog({
                   type="button"
                   onClick={copyAdapted}
                   disabled={!adapted.trim()}
-                  className="flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-emerald-400 disabled:opacity-40"
+                  className="flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-brand-pink disabled:opacity-40"
                 >
                   {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
                   copiar
@@ -244,7 +244,7 @@ export function AdaptDialog({
                 onOpenChange(false);
               }}
               disabled={!adapted.trim()}
-              className={cn("border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10")}
+              className={cn("border-brand-pink/40 text-brand-pink hover:bg-brand-pink/10")}
             >
               <Mic className="mr-1.5 h-3.5 w-3.5" />
               Marcar listo para grabar

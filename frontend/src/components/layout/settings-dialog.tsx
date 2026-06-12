@@ -16,7 +16,6 @@ import {
   Camera,
   Briefcase,
   ThumbsUp,
-  Settings as SettingsIcon,
   Loader2,
   CheckCircle2,
   Key,
@@ -218,7 +217,9 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <SettingsIcon className="h-4 w-4" /> Configuración
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/viralito-64.png" alt="Viralito" className="h-6 w-6 rounded-md" />
+            Configuración
           </DialogTitle>
           <DialogDescription>
             Configura tu marca y revisa que todo esté instalado. Lo básico funciona sin
@@ -324,7 +325,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                     href="https://developers.tiktok.com/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-emerald-400 hover:underline"
+                    className="text-brand-pink hover:underline"
                   >
                     developers.tiktok.com
                   </a>

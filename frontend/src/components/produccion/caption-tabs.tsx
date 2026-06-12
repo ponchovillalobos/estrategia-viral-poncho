@@ -93,7 +93,7 @@ export function CaptionTabs({ project }: { project: ProjectExt }) {
         <button
           type="button"
           onClick={copy}
-          className="flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-emerald-400"
+          className="flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-brand-pink"
         >
           {copied === active ? (
             <Check className="h-3 w-3 animate-in zoom-in-50 duration-200 text-primary" />

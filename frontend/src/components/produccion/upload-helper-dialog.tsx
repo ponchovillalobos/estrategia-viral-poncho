@@ -274,7 +274,7 @@ export function UploadHelperDialog({
             </p>
             <div className="flex items-center gap-2">
               <span className="font-mono-tab text-foreground/70">1</span>
-              <FolderOpen className="h-3.5 w-3.5 text-emerald-400" />
+              <FolderOpen className="h-3.5 w-3.5 text-brand-violet" />
               <span>Explorer abre y el video queda &quot;seleccionado&quot; (resaltado)</span>
             </div>
             <div className="flex items-center gap-2">

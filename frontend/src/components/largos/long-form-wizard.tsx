@@ -1056,15 +1056,15 @@ export function LongFormWizard() {
               className={cn(
                 "rounded-lg border p-4 text-left transition-all",
                 !useHeuristic
-                  ? "border-emerald-500/40 bg-emerald-500/5 ring-1 ring-emerald-400/40"
+                  ? "border-brand-violet/40 bg-brand-violet/5 ring-1 ring-brand-violet/40"
                   : "border-border hover:border-foreground/30"
               )}
             >
               <div className="flex items-center gap-2">
                 <span className="text-2xl">🧠</span>
                 <span className="font-medium">Modo inteligente — encuentra lo más viral</span>
-                <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-medium text-emerald-300">RECOMENDADO</span>
-                {!useHeuristic && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+                <span className="rounded bg-brand-violet/20 px-1.5 py-0.5 text-[9px] font-medium text-brand-violet">RECOMENDADO</span>
+                {!useHeuristic && <CheckCircle2 className="h-4 w-4 text-brand-violet" />}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 Transcribe el video en trozos (sin colgarse, aunque dure 90 min) y la IA local lee TODO
@@ -1378,7 +1378,7 @@ export function LongFormWizard() {
               type="checkbox"
               checked={doRender}
               onChange={(e) => setDoRender(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-border bg-muted accent-emerald-500"
+              className="mt-0.5 h-4 w-4 rounded border-border bg-muted accent-brand-violet"
             />
             <div className="flex-1">
               <p className="text-sm font-medium">Generar los videos al terminar de recortar</p>
@@ -1747,7 +1747,7 @@ function CopyableText({ label, value }: { label: string; value: string }) {
             navigator.clipboard.writeText(value);
             toast.success(`${label} copiado`);
           }}
-          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-emerald-400"
+          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand-violet"
         >
           <FolderOpen className="h-3.5 w-3.5" />
         </button>
@@ -1970,7 +1970,7 @@ function JobView({
 
           <Link
             href="/produccion"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-emerald-500 px-4 text-sm font-medium text-black hover:bg-emerald-400"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand-gradient px-4 text-sm font-medium text-white hover:opacity-90"
           >
             <Play className="h-3.5 w-3.5" />
             Abrir Mis videos para ver y publicar
@@ -2318,7 +2318,7 @@ function IaFixPanel({ onReady }: { onReady: () => void }) {
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div
               className={cn(
-                "h-full bg-emerald-500 transition-all duration-700",
+                "h-full bg-brand-violet transition-all duration-700",
                 pct == null && "w-1/3 animate-pulse"
               )}
               style={pct != null ? { width: `${Math.max(2, Math.min(100, pct))}%` } : undefined}
@@ -2520,7 +2520,7 @@ function ProposalClipCard({
             className={cn(
               "flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-medium transition-colors",
               review.approved
-                ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                ? "bg-brand-violet/20 text-brand-violet hover:bg-brand-violet/30"
                 : "bg-muted text-muted-foreground hover:bg-muted/70"
             )}
             title={review.approved ? "Este clip SÍ se genera — clic para descartarlo" : "Descartado — clic para volver a incluirlo"}

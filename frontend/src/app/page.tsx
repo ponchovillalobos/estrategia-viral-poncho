@@ -62,7 +62,7 @@ export default function Home() {
         </h1>
         <p className="max-w-2xl text-lg text-muted-foreground">
           Convierte tus videos en{" "}
-          <strong className="bg-gradient-to-r from-primary via-emerald-300 to-cyan-300 bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(52,211,153,0.35)]">
+          <strong className="text-brand-gradient drop-shadow-[0_0_18px_rgba(250,60,141,0.35)]">
             shorts virales
           </strong>{" "}
           y publícalos en tus redes — sin saber editar. Elige una opción para empezar.

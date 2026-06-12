@@ -396,7 +396,7 @@ export function ProductionList() {
       {projects.length === 0 && !loading && (
         <EmptyState
           icon={Sparkles}
-          tone="emerald"
+          tone="brand"
           title="Todavía no tienes videos generados"
           description="Aquí van a aparecer tus videos ya editados, listos para subir a tus redes. Crea el primero eligiendo un video y un estilo."
           cta={{ label: "Crear mi primer video", href: "/editor" }}
@@ -547,7 +547,7 @@ export function ProductionList() {
                       <button
                         type="button"
                         onClick={() => copyCaption(p)}
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-emerald-400"
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand-pink"
                         title="Copiar la descripción completa"
                       >
                         {copiedId === p.id ? (
@@ -581,7 +581,7 @@ export function ProductionList() {
                           type="button"
                           onClick={() => copyCaptionForNetwork(p, net)}
                           title={`Copiar el texto adaptado a ${net === "tiktok" ? "TikTok" : net === "instagram" ? "Instagram" : "LinkedIn"} (con sus hashtags)`}
-                          className="rounded border border-border bg-card px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground transition hover:border-emerald-400/50 hover:text-emerald-300"
+                          className="rounded border border-border bg-card px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground transition hover:border-brand-pink/50 hover:text-brand-pink"
                         >
                           {copiedNetwork === `${p.id}:${net}` ? "✓ copiado" : net === "tiktok" ? "TikTok" : net === "instagram" ? "Instagram" : "LinkedIn"}
                         </button>
@@ -597,7 +597,7 @@ export function ProductionList() {
                       href={`/api/videos/${encodeURIComponent(p.id)}/stream?source=render&download=1`}
                       download
                       title="Descargar el MP4 a tu compu"
-                      className="flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/5 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/15"
+                      className="flex items-center gap-1 rounded border border-brand-pink/30 bg-brand-pink/5 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-brand-pink hover:bg-brand-pink/15"
                     >
                       💾 Guardar video
                     </a>
@@ -605,7 +605,7 @@ export function ProductionList() {
                       type="button"
                       onClick={() => revealRender(p)}
                       title="Abrir la carpeta donde está el archivo del video"
-                      className="flex items-center gap-1 rounded border border-border bg-card px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground hover:border-emerald-400/50 hover:text-emerald-300"
+                      className="flex items-center gap-1 rounded border border-border bg-card px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground hover:border-brand-pink/50 hover:text-brand-pink"
                     >
                       📂 Abrir carpeta
                     </button>
@@ -623,7 +623,7 @@ export function ProductionList() {
                     <div className="flex items-center gap-3">
                       <Link
                         href={`/editor/${encodeURIComponent(p.videoId)}`}
-                        className="flex items-center gap-1 hover:text-emerald-400"
+                        className="flex items-center gap-1 hover:text-brand-pink"
                       >
                         <ExternalLink className="h-3 w-3" /> Editor
                       </Link>
@@ -637,7 +637,7 @@ export function ProductionList() {
                               ? "Genera una descripción primero con ✨"
                               : "Programar publicación en una o varias redes"
                           }
-                          className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono-tab uppercase tracking-wider hover:bg-muted hover:text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono-tab uppercase tracking-wider hover:bg-muted hover:text-brand-pink disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Calendar className="h-3 w-3" />
                           programar

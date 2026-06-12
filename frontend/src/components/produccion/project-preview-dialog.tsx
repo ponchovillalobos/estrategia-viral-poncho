@@ -96,7 +96,7 @@ export function ProjectPreviewDialog({
                     href={`/api/videos/${encodeURIComponent(project.id)}/stream?source=render&download=1`}
                     download
                     title="Descargar el MP4 a tu compu"
-                    className="flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/5 px-2 py-1 font-mono-tab text-[10px] uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/15"
+                    className="flex items-center gap-1 rounded border border-brand-pink/30 bg-brand-pink/5 px-2 py-1 font-mono-tab text-[10px] uppercase tracking-wider text-brand-pink hover:bg-brand-pink/15"
                   >
                     💾 Guardar video
                   </a>
@@ -104,7 +104,7 @@ export function ProjectPreviewDialog({
                     type="button"
                     onClick={() => revealRender(project)}
                     title="Abrir la carpeta donde está el archivo del video"
-                    className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground hover:border-emerald-400/50 hover:text-emerald-300"
+                    className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground hover:border-brand-pink/50 hover:text-brand-pink"
                   >
                     📂 Abrir carpeta
                   </button>
@@ -123,11 +123,11 @@ export function ProjectPreviewDialog({
                   <button
                     type="button"
                     onClick={() => onCopyTranscript(project.videoId)}
-                    className="flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-emerald-400"
+                    className="flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-brand-pink"
                     title="Copiar transcripción al portapapeles"
                   >
                     {transcriptCopied ? (
-                      <Check className="h-3 w-3 text-emerald-400" />
+                      <Check className="h-3 w-3 text-primary" />
                     ) : (
                       <Copy className="h-3 w-3" />
                     )}

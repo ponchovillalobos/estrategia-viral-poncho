@@ -309,7 +309,7 @@ export function MetricsInsights() {
                           <span className="font-mono-tab text-[10px]">{c.platform}</span>
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-right font-mono-tab text-emerald-400">
+                      <td className="px-3 py-2 text-right font-mono-tab text-brand-pink">
                         {fmtPct(c.viralRatio, 2)}
                       </td>
                       <td className="px-3 py-2 text-right font-mono-tab">{fmtNum(c.views)}</td>

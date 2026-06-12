@@ -53,7 +53,7 @@ export default function PrivacyPage() {
         Para borrar todos tus datos: elimina la carpeta <code>{baseDir}</code>{" "}
         y la carpeta del proyecto. Para revocar acceso de TikTok: desconecta desde
         Settings o revoca la app en{" "}
-        <a href="https://www.tiktok.com/setting/connected-apps" className="text-emerald-400">
+        <a href="https://www.tiktok.com/setting/connected-apps" className="text-brand-pink">
           tiktok.com/setting/connected-apps
         </a>
         .

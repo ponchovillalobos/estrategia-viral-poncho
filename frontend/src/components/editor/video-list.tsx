@@ -288,7 +288,7 @@ export function VideoList() {
                         e.preventDefault();
                         unarchive(v);
                       }}
-                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-emerald-400"
+                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand-pink"
                       title="Restaurar"
                     >
                       <ArchiveRestore className="h-3 w-3" />

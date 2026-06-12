@@ -218,8 +218,14 @@ export function OnboardingModal() {
         {/* ---------- Pantalla 1: Bienvenida ---------- */}
         {step === 0 && (
           <div className="space-y-5 text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/viralito-192.png"
+              alt="Viralito"
+              className="mx-auto h-16 w-16 rounded-2xl shadow-[0_0_30px_rgba(250,60,141,0.35)]"
+            />
             <h2 id="onboarding-title" className="text-2xl font-semibold tracking-tight">
-              Bienvenido 👋
+              Bienvenido a <span className="text-brand-gradient">Viralito</span> 👋
             </h2>
             <p className="text-muted-foreground">
               Esta app convierte tus videos en shorts virales. Tú subes, ella edita.
@@ -231,8 +237,8 @@ export function OnboardingModal() {
                 delay="0s"
               />
               <MiniShortCard
-                gradient="from-emerald-600/80 to-teal-900/90"
-                accent="bg-emerald-300"
+                gradient="from-sky-600/80 to-blue-900/90"
+                accent="bg-[#fa3c8d]"
                 delay="0.3s"
               />
               <MiniShortCard

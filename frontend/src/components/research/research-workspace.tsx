@@ -436,7 +436,7 @@ function ScriptsKanban({
     {
       key: "ready_to_record",
       title: "🎙 Listo para grabar",
-      color: "border-emerald-500/30 bg-emerald-500/5",
+      color: "border-brand-pink/30 bg-brand-pink/5",
       filter: (it) => it.userMarked === "ready_to_record",
     },
     {
@@ -534,7 +534,7 @@ function ScriptCard({
           <button
             type="button"
             onClick={onMarkReady}
-            className="rounded border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono-tab text-[10px] text-emerald-300 hover:bg-emerald-500/15"
+            className="rounded border border-brand-pink/30 bg-brand-pink/5 px-2 py-0.5 font-mono-tab text-[10px] text-brand-pink hover:bg-brand-pink/15"
           >
             <Mic className="mr-0.5 inline h-2.5 w-2.5" />
             listo
@@ -696,8 +696,8 @@ function ResearchCard({
             className={cn(
               "rounded p-1 transition-colors",
               item.userMarked === "ready_to_record"
-                ? "bg-emerald-500/20 text-emerald-400"
-                : "text-muted-foreground hover:bg-muted hover:text-emerald-400"
+                ? "bg-brand-pink/20 text-brand-pink"
+                : "text-muted-foreground hover:bg-muted hover:text-brand-pink"
             )}
             title="Listo para grabar"
           >
@@ -854,7 +854,7 @@ function ResearchDetailDialog({
                   else if (tab === "caption") copyText("Descripción", item.metadata?.caption ?? "");
                   else if (tab === "hashtags") copyText("Hashtags", hashtagsText);
                 }}
-                className="ml-auto flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-emerald-400"
+                className="ml-auto flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-brand-pink"
               >
                 {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
                 copiar
@@ -936,7 +936,7 @@ function ResearchDetailDialog({
                 className={cn(
                   "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium",
                   item.userMarked === "ready_to_record"
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                    ? "bg-brand-pink/20 text-brand-pink border border-brand-pink/40"
                     : "border border-border bg-muted/30 hover:bg-muted text-foreground"
                 )}
               >

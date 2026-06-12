@@ -4,8 +4,8 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 /**
- * Empty state reusable y "preciosa": tarjeta con borde sutil + radial-halo emerald
- * detrás del icono, mensaje y CTA opcional. Ideal para "no hay X todavía", el
+ * Empty state reusable y "preciosa": tarjeta con borde sutil + radial-halo de marca
+ * (rosa Viralito) detrás del icono, mensaje y CTA opcional. Ideal para "no hay X todavía", el
  * primer onboarding al entrar a una sección vacía.
  *
  * Si pasas `cta`, puedes especificar `href` (Link) o `onClick` (button); prefiere
@@ -17,19 +17,21 @@ export function EmptyState({
   description,
   cta,
   className,
-  tone = "emerald",
+  tone = "brand",
 }: {
   icon: LucideIcon;
   title: string;
   description?: string;
   cta?: { label: string; href?: string; onClick?: () => void };
   className?: string;
-  /** Color del halo y del CTA. Default emerald. */
-  tone?: "emerald" | "amber" | "sky" | "violet" | "muted";
+  /** Color del halo y del CTA. Default brand (rosa Viralito); emerald queda para éxito semántico. */
+  tone?: "brand" | "emerald" | "amber" | "sky" | "violet" | "muted";
 }) {
   // Halo radial detrás del icono. Usamos arbitrary value para no depender de
   // un plugin de gradient-radial; el rgba lo da el color del tone.
   const haloByTone: Record<string, string> = {
+    brand:
+      "bg-[radial-gradient(circle,rgba(250,60,141,0.22)_0%,rgba(173,35,238,0.06)_55%,transparent_80%)]",
     emerald:
       "bg-[radial-gradient(circle,rgba(16,185,129,0.22)_0%,rgba(16,185,129,0.06)_55%,transparent_80%)]",
     amber:
@@ -41,6 +43,7 @@ export function EmptyState({
       "bg-[radial-gradient(circle,rgba(148,163,184,0.18)_0%,rgba(148,163,184,0.05)_55%,transparent_80%)]",
   };
   const iconRingByTone: Record<string, string> = {
+    brand: "ring-brand-pink/25 text-brand-pink",
     emerald: "ring-emerald-500/25 text-emerald-300",
     amber: "ring-amber-500/25 text-amber-300",
     sky: "ring-sky-500/25 text-sky-300",
@@ -48,6 +51,8 @@ export function EmptyState({
     muted: "ring-foreground/15 text-muted-foreground",
   };
   const ctaByTone: Record<string, string> = {
+    brand:
+      "bg-brand-gradient text-white hover:brightness-110 shadow-brand-pink/20",
     emerald:
       "bg-primary text-primary-foreground hover:bg-primary/90 shadow-emerald-500/20",
     amber: "bg-amber-500 text-amber-950 hover:bg-amber-400 shadow-amber-500/20",

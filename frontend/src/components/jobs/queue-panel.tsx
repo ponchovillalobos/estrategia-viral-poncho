@@ -183,7 +183,7 @@ export function QueuePanel() {
             onClick={() => setCollapsed((c) => !c)}
             className="flex items-center gap-2 text-sm font-medium hover:text-foreground/80"
           >
-            <Scissors className="h-3.5 w-3.5 text-emerald-400" />
+            <Scissors className="h-3.5 w-3.5 text-brand-pink" />
             <span>{headerLabel}</span>
             {collapsed ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
@@ -232,7 +232,7 @@ export function QueuePanel() {
             <div className="mt-2 border-t border-border pt-2 text-center">
               <Link
                 href="/produccion"
-                className="font-mono-tab text-[10px] text-muted-foreground hover:text-emerald-400"
+                className="font-mono-tab text-[10px] text-muted-foreground hover:text-brand-pink"
               >
                 Ir a Mis videos →
               </Link>
@@ -246,7 +246,7 @@ export function QueuePanel() {
 
 function QueueRow({ entry, onDismiss }: { entry: QueueEntryView; onDismiss: () => void }) {
   const KindIcon = entry.kind === "long_form" ? Film : Scissors;
-  const kindColor = entry.kind === "long_form" ? "text-violet-400" : "text-emerald-400";
+  const kindColor = entry.kind === "long_form" ? "text-violet-400" : "text-brand-pink";
   const isFinal = entry.status === "done" || entry.status === "failed";
   const [cancelling, setCancelling] = useState(false);
 
@@ -390,7 +390,7 @@ function FinishedRow({ entry, onDismiss }: { entry: QueueEntryView; onDismiss: (
           {ok ? (
             <Link
               href="/produccion"
-              className="rounded border border-emerald-500/30 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:bg-emerald-500/15"
+              className="rounded border border-brand-pink/30 px-1.5 py-0.5 text-[10px] text-brand-pink hover:bg-brand-pink/15"
             >
               Verlo
             </Link>
