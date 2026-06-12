@@ -19,7 +19,7 @@ export async function POST() {
     const token = await getValidLinkedInAccessToken();
     if (!token) {
       return NextResponse.json(
-        { error: "No hay token de LinkedIn válido. Conectá la cuenta en /setup/linkedin." },
+        { error: "No hay token de LinkedIn válido. Conecta la cuenta en /setup/linkedin." },
         { status: 400 }
       );
     }
@@ -30,7 +30,7 @@ export async function POST() {
       return NextResponse.json({
         ok: true,
         synced: 0,
-        message: "No hay posts de LinkedIn registrados todavía. Publicá un video y volvé a sincronizar.",
+        message: "No hay posts de LinkedIn registrados todavía. Publica un video y vuelve a sincronizar.",
       });
     }
 

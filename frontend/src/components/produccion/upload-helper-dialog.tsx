@@ -20,6 +20,7 @@ import {
   Hand,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 
 interface UploadHelperDialogProps {
   open: boolean;
@@ -74,7 +75,7 @@ export function UploadHelperDialog({
       if (!revealRes.ok) throw new Error(revealData.error ?? `HTTP ${revealRes.status}`);
       setRenderPath(revealData.path ?? "");
 
-      // También copiamos el archivo al portapapeles (sirve como fallback si querés
+      // También copiamos el archivo al portapapeles (sirve como fallback si quieres
       // pegar en el cuadro de "abrir archivo" de Windows)
       await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/copy-file-to-clipboard`,
@@ -86,9 +87,9 @@ export function UploadHelperDialog({
       );
 
       setStep1Done(true);
-      toast.success("Explorer abierto con el video. Arrastralo a TikTok →");
+      toast.success("Explorer abierto con el video. Arrástralo a TikTok →");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo preparar el video");
     } finally {
       setBusy(null);
     }
@@ -104,9 +105,9 @@ export function UploadHelperDialog({
     setBusy("copyPath");
     try {
       await navigator.clipboard.writeText(renderPath);
-      toast.success("Ruta copiada (Ctrl+V en el campo &quot;Nombre&quot; del file picker)");
+      toast.success("Ruta copiada (Ctrl+V en el campo «Nombre» del selector de archivos)");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo copiar la ruta");
     } finally {
       setBusy(null);
     }
@@ -117,9 +118,9 @@ export function UploadHelperDialog({
     try {
       await navigator.clipboard.writeText(caption);
       setStep2Done(true);
-      toast.success("Caption en el portapapeles. Pegalo en TikTok (Ctrl+V).");
+      toast.success("Descripción en el portapapeles. Pégala en TikTok (Ctrl+V).");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo copiar la descripción");
     } finally {
       setBusy(null);
     }
@@ -212,7 +213,7 @@ export function UploadHelperDialog({
                   ) : (
                     <Copy className="h-3 w-3" />
                   )}
-                  copiar ruta (fallback si no podés arrastrar)
+                  copiar ruta (fallback si no puedes arrastrar)
                 </button>
               </div>
             )}
@@ -252,16 +253,16 @@ export function UploadHelperDialog({
               ) : (
                 <Copy className="mr-1.5 h-3.5 w-3.5" />
               )}
-              {step2Done ? "Volver a copiar caption" : "Copiar caption viral"}
+              {step2Done ? "Volver a copiar descripción" : "Copiar descripción viral"}
             </Button>
 
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Cuando termine de cargar el video en TikTok, tocá este botón y pegá
+              Cuando termine de cargar el video en TikTok, da clic en este botón y pega
               (<strong>Ctrl+V</strong>) en el campo de descripción.
             </p>
             {!caption && (
               <p className="mt-1 text-[10px] text-amber-400">
-                Este proyecto no tiene caption — generalo con ✨ en la card.
+                Este proyecto no tiene descripción — genérala con ✨ en la tarjeta.
               </p>
             )}
           </div>
@@ -280,19 +281,19 @@ export function UploadHelperDialog({
               <span className="font-mono-tab text-foreground/70">2</span>
               <Hand className="h-3.5 w-3.5 text-amber-400" />
               <span>
-                Click sostenido sobre el video → arrastralo hacia la pestaña de TikTok
+                Clic sostenido sobre el video → arrástralo hacia la pestaña de TikTok
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="font-mono-tab text-foreground/70">3</span>
               <ArrowRight className="h-3.5 w-3.5 text-pink-400" />
-              <span>Soltá el archivo en el área grande de TikTok que dice &quot;Select video&quot;</span>
+              <span>Suelta el archivo en el área grande de TikTok que dice &quot;Select video&quot;</span>
             </div>
           </div>
 
           {step1Done && step2Done && (
             <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[11px] text-emerald-200">
-              ✓ Listo para publicar. Revisá la preview en TikTok y dale a
+              ✓ Listo para publicar. Revisa la vista previa en TikTok y dale a
               &quot;Post&quot; cuando estés conforme.
             </div>
           )}

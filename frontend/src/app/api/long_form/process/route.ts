@@ -10,7 +10,10 @@ import {
 import {
   appendLongFormLog,
   createLongFormJob,
+  getLongFormJob,
+  registerLongFormPid,
   setLongFormClipsCount,
+  unregisterLongFormPid,
   updateLongFormStep,
   type LongFormStepKey,
 } from "@/lib/long-form-job-store";
@@ -142,6 +145,10 @@ async function processJob(
       shell: false,
     });
 
+    // Registrar jobId → pid (globalThis, sobrevive hot-reload) para que
+    // /api/long_form/cancel pueda matar el árbol con taskkill /T /F.
+    if (proc.pid != null) registerLongFormPid(jobId, proc.pid);
+
     // Idle-timeout: el pipeline puede tardar mucho (rendea N clips), así que NO usamos un
     // tope de tiempo total. En cambio matamos el proceso si deja de emitir CUALQUIER salida
     // por 20 min — señal de cuelgue real (no de un render largo, que loguea progreso).
@@ -171,7 +178,7 @@ async function processJob(
           lastRenderedFrame = cur;
           updateLongFormStep(jobId, "render", {
             status: "running",
-            message: `renderizando · frame ${cur}/${tot}`,
+            message: `generando video · ${cur}/${tot}`,
           });
         }
         return;
@@ -236,14 +243,22 @@ async function processJob(
 
     proc.on("close", (code) => {
       clearTimeout(idleTimer);
+      unregisterLongFormPid(jobId);
       if (stdoutBuf.trim()) processLine(stdoutBuf);
       if (stderrBuf.trim()) processLine(stderrBuf);
+
+      // Si el usuario lo canceló (taskkill desde /api/long_form/cancel), el job ya
+      // quedó "cancelled" y el store ignora updates — no marcar nada como fallo.
+      if (getLongFormJob(jobId)?.status === "cancelled") {
+        resolve();
+        return;
+      }
 
       if (timedOut) {
         const step = currentStep ?? "transcribe";
         updateLongFormStep(jobId, step, {
           status: "fail",
-          message: "Pipeline abortado por inactividad (20 min sin salida) — posible cuelgue. Reintentá.",
+          message: "El proceso dejó de responder por 20 minutos y se detuvo. Inténtalo de nuevo.",
         });
         resolve();
         return;
@@ -270,12 +285,12 @@ async function processJob(
         if (currentStep) {
           updateLongFormStep(jobId, currentStep, {
             status: "fail",
-            message: `proceso terminó con código ${code}`,
+            message: `El proceso se detuvo inesperadamente (código ${code}).`,
           });
         } else {
           updateLongFormStep(jobId, "transcribe", {
             status: "fail",
-            message: `proceso terminó con código ${code} antes de empezar`,
+            message: `El proceso se detuvo antes de empezar (código ${code}).`,
           });
         }
       }
@@ -284,10 +299,11 @@ async function processJob(
 
     proc.on("error", (err) => {
       clearTimeout(idleTimer);
+      unregisterLongFormPid(jobId);
       if (currentStep) {
         updateLongFormStep(jobId, currentStep, {
           status: "fail",
-          message: `spawn error: ${err.message}`,
+          message: `No se pudo iniciar el proceso: ${err.message}`,
         });
       }
       resolve();
@@ -313,9 +329,10 @@ export async function POST(req: NextRequest) {
     for (const vid of videoIdList) {
       const rawPath = await findRawFile(vid);
       if (!rawPath) {
+        // Sin rutas C:\ en mensajes visibles: solo el nombre del video.
         return NextResponse.json(
           {
-            error: `No se encontró ${vid}.{mp4,mov,mkv,webm} en ${LF_RAW}. Copiá ese video a la carpeta primero.`,
+            error: `No se encontró el video «${vid}» en la carpeta de videos largos. Súbelo de nuevo desde el paso 1.`,
           },
           { status: 404 }
         );

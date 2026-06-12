@@ -5,12 +5,12 @@ export default function WizardPage() {
     <div className="space-y-6">
       <header className="space-y-2">
         <p className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
-          Editor · wizard
+          Crea tu video
         </p>
-        <h1 className="text-4xl font-semibold tracking-tight">Editar video paso a paso</h1>
+        <h1 className="text-4xl font-semibold tracking-tight">Edita tu video paso a paso</h1>
         <p className="max-w-2xl text-muted-foreground">
-          4 pasos: elegí video, estilo(s), color y caption. El sistema genera el proyecto y renderiza
-          automáticamente. Si elegís 2-3 estilos, te genera todos para que compares.
+          Elige tu video, un estilo y un color — la app crea todo por ti, hasta la
+          descripción para tus redes. Si eliges 2-3 estilos, te crea todos para que compares.
         </p>
       </header>
 

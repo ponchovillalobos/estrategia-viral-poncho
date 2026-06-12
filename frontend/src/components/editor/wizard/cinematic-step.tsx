@@ -29,6 +29,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import { cn } from "@/lib/utils";
 
 export interface CinematicConfig {
@@ -126,11 +127,21 @@ export function CinematicStep({
         if (r.ok) okCount++;
         else failCount++;
       }
-      if (okCount > 0) toast.success(`${okCount} imagen(es) subida(s)`);
-      if (failCount > 0) toast.error(`${failCount} fallaron`);
+      if (okCount > 0) {
+        toast.success(okCount === 1 ? "1 imagen subida" : `${okCount} imágenes subidas`);
+      }
+      if (failCount > 0) {
+        toast.error(
+          failCount === 1
+            ? "1 imagen no se pudo subir"
+            : `${failCount} imágenes no se pudieron subir`
+        );
+      }
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudieron subir tus imágenes", {
+        action: { label: "Reintentar", onClick: () => uploadFiles(files) },
+      });
     } finally {
       setUploading(false);
     }
@@ -150,7 +161,7 @@ export function CinematicStep({
 
   /**
    * Asigna orden manual a un overlay. El agente VFX respeta este orden:
-   * orden=1 aparece antes que orden=2, etc. Si dejás vacío, gana el matching
+   * orden=1 aparece antes que orden=2, etc. Si dejas vacío, gana el matching
    * semántico del transcript.
    */
   async function updateOrder(id: string, orderRaw: string) {
@@ -175,13 +186,13 @@ export function CinematicStep({
       await fetch(`/api/overlays/${encodeURIComponent(id)}`, { method: "DELETE" });
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo borrar la imagen");
     }
   }
 
   async function convokeAssembly() {
     if (!transcriptPath || !videoDurationSec) {
-      toast.error("Primero transcribí el video (paso 1) para poder analizarlo con IA");
+      toast.error("Primero la app necesita escuchar tu video (paso 1) para poder analizarlo con IA");
       return;
     }
     if (overlays.length === 0) {
@@ -203,14 +214,16 @@ export function CinematicStep({
         }),
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "el análisis con IA falló — reintentá");
+      if (!r.ok) throw new Error(d.error ?? "el análisis con IA falló");
       onChange({ ...value, assemblyResult: d });
       toast.success(
         `Análisis IA listo en ${d._elapsed_sec}s · ${overlays.length} imágenes ubicadas`
       );
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "El análisis con IA no se pudo completar", {
+        action: { label: "Reintentar", onClick: convokeAssembly },
+      });
     } finally {
       setAssemblyLoading(false);
     }
@@ -226,7 +239,7 @@ export function CinematicStep({
             Modo cinematográfico
           </h3>
           <p className="mt-1 text-xs text-muted-foreground max-w-xl">
-            Subí imágenes (memes, capturas, fotos) y una asamblea de agentes IA decidirá
+            Sube imágenes (memes, capturas, fotos) y una asamblea de agentes IA decidirá
             cuándo aparecen, con qué efecto (VHS, polaroid, memory flash), camera moves,
             SFX y subtítulos cinematográficos.
           </p>
@@ -258,7 +271,7 @@ export function CinematicStep({
             <div className="text-center">
               <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
               <p className="mb-2 text-sm text-muted-foreground">
-                Arrastrá tus imágenes acá o
+                Arrastra tus imágenes aquí o
               </p>
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-1.5 text-xs hover:bg-muted">
                 <Upload className="h-3 w-3" />
@@ -283,10 +296,10 @@ export function CinematicStep({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {overlays.length} {overlays.length === 1 ? "imagen" : "imágenes"} subida(s)
+                  {overlays.length} {overlays.length === 1 ? "imagen subida" : "imágenes subidas"}
                 </p>
                 <p className="font-mono-tab text-[9px] text-muted-foreground">
-                  ↓ ordená 1,2,3… o dejá vacío y la IA decide
+                  ↓ ordena 1,2,3… o deja vacío y la IA decide
                 </p>
               </div>
 
@@ -295,12 +308,12 @@ export function CinematicStep({
                 <strong>Cómo guiar la IA:</strong>
                 <ul className="ml-4 mt-1 list-disc space-y-0.5 text-sky-200/80">
                   <li>
-                    <strong>Descripción</strong>: escribí palabras clave que estén en el guión hablado
+                    <strong>Descripción</strong>: escribe palabras clave que estén en el guión hablado
                     (ej: «Carnegie», «HubSpot», «vendedor de seguros»). La IA busca esas palabras en
                     el transcript y muestra la imagen ahí.
                   </li>
                   <li>
-                    <strong>Orden (#)</strong>: si querés forzar el orden manual (1, 2, 3…), poné el
+                    <strong>Orden (#)</strong>: si quieres forzar el orden manual (1, 2, 3…), pon el
                     número. La IA respeta ese orden por encima del matching.
                   </li>
                 </ul>
@@ -335,7 +348,7 @@ export function CinematicStep({
                             defaultValue={o.userOrder ?? ""}
                             placeholder="#"
                             className="h-6 w-10 px-1 text-center text-[11px] font-mono-tab"
-                            title="Orden manual (1, 2, 3…). Dejá vacío para auto-match con IA."
+                            title="Orden manual (1, 2, 3…). Deja vacío y la IA decide."
                             onBlur={(e) => updateOrder(o.id, e.target.value)}
                           />
                           <p className="line-clamp-1 text-xs font-medium" title={o.filename}>
@@ -386,7 +399,7 @@ export function CinematicStep({
             </Button>
             {!transcriptPath && (
               <span className="font-mono-tab text-[10px] text-amber-400">
-                ⚠ falta transcript del video
+                ⚠ la app todavía no escuchó este video (hazlo en el paso 1)
               </span>
             )}
           </div>

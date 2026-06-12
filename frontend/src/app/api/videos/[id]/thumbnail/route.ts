@@ -40,7 +40,16 @@ export async function GET(
 ) {
   const { id } = await params;
   await fs.mkdir(THUMB_DIR, { recursive: true });
-  const thumbPath = path.join(THUMB_DIR, `${id}.jpg`);
+
+  // ?t=<segundos> opcional: frame en un instante exacto (ej. el inicio de un clip
+  // propuesto en el wizard de largos). El cache key incluye t (redondeado) para no
+  // pisar la miniatura default ni regenerar en cada hit.
+  const tParam = req.nextUrl.searchParams.get("t");
+  const tParsed = tParam != null ? parseFloat(tParam) : NaN;
+  const tSec: number | null =
+    Number.isFinite(tParsed) && tParsed >= 0 ? Math.round(tParsed) : null;
+  const cacheKey = tSec != null ? `${id}_t${tSec}` : id;
+  const thumbPath = path.join(THUMB_DIR, `${cacheKey}.jpg`);
 
   // Si ya hay cache, devolvela
   try {
@@ -56,7 +65,7 @@ export async function GET(
   // NEGATIVE-CACHE: si este video ya falló (corrupto), no reintentar 8s de
   // ffprobe + 30s de ffmpeg en CADA carga de la galería — 404 instantáneo.
   // El marcador caduca a la hora (por si el archivo se reemplaza).
-  const failedMark = path.join(THUMB_DIR, `${id}.failed`);
+  const failedMark = path.join(THUMB_DIR, `${cacheKey}.failed`);
   try {
     const st = await fs.stat(failedMark);
     if (Date.now() - st.mtimeMs < 60 * 60 * 1000) {
@@ -96,7 +105,8 @@ export async function GET(
 
   // C4 — Auto-thumbnail mejorado: en vez del frame a 1s (suele ser logo/intro), tomar
   // ~35% de la duración (un frame representativo del contenido). Si ffprobe falla, 1s.
-  const seekSec = await new Promise<number>((resolve) => {
+  // Con ?t= explícito se usa ese instante directo y se ahorra el ffprobe.
+  const seekSec = tSec != null ? tSec : await new Promise<number>((resolve) => {
     const proc = spawn(FFPROBE_EXE, [
       "-v", "error",
       "-show_entries", "format=duration",

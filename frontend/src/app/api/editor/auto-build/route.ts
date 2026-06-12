@@ -12,6 +12,7 @@ import {
   FFMPEG_EXE,
 } from "@/lib/paths";
 import { humanizeError } from "@/lib/humanize-error";
+import { applyWizardOverrides } from "@/lib/apply-wizard-overrides";
 import {
   buildProjectForStyle,
   type BuildContext,
@@ -252,15 +253,12 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       await applyRemoveBg(project, videoId);
       await applyVoiceover(project, projectId);
       await applyTextBehind(project, videoId);
-      // Tema editorial elegido en el wizard (fuente serif + fondo del lienzo).
-      if (body.editorialTheme && project.editorialLayout) {
-        Object.assign(project.editorialLayout, body.editorialTheme);
-      }
-      // Fondo animado elegido en el wizard (estilos motion_*): cambia solo el "kind"
-      // del animatedBackground que el estilo ya trae (colores/opacidad/beat intactos).
-      if (body.motionBackground && project.animatedBackground) {
-        project.animatedBackground.kind = body.motionBackground;
-      }
+      // Tema editorial + fondo animado elegidos en el wizard — helper compartido
+      // con style-preview, para que la vista previa muestre lo mismo que el video.
+      applyWizardOverrides(project, {
+        editorialTheme: body.editorialTheme,
+        motionBackground: body.motionBackground,
+      });
 
       await applyTranslate(project);
       await applyGraphics(project, videoId);
@@ -269,39 +267,10 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // F1 — Director emocional: ducking de música + zooms en picos + SFX por arousal.
       await applyEmotionDirector(project, videoId);
 
-      // Intensidad de FX elegida en el wizard (estilos hype*/supreme). Opera sobre los
-      // arrays que el estilo + enriquecedores YA generaron (zooms, stickers, SFX,
-      // stutter): "suave" recorta, "max" acentúa. No inventa FX nuevos en el render.
-      if (
-        body.fxIntensity &&
-        ["hype", "hype_max", "hype_max_sfx", "supreme"].includes(styleId)
-      ) {
-        const halve = (arr: unknown[]) => arr.filter((_, i) => i % 2 === 0);
-        if (body.fxIntensity === "suave") {
-          project.enableJumpCuts = false;
-          if (project.zoomMarks) project.zoomMarks = halve(project.zoomMarks);
-          if (project.reactionZooms?.length) project.reactionZooms = project.reactionZooms.slice(0, 1);
-          if (project.stutterMarks?.length) project.stutterMarks = [];
-          if (project.wordStickers) project.wordStickers = halve(project.wordStickers);
-          if (project.floatingEmojis) project.floatingEmojis = halve(project.floatingEmojis);
-          if (project.sfxMarks) project.sfxMarks = halve(project.sfxMarks);
-          if (project.particleBursts?.length) project.particleBursts = project.particleBursts.slice(0, 1);
-        } else if (body.fxIntensity === "max") {
-          project.enableJumpCuts = true;
-          if (project.zoomMarks) {
-            project.zoomMarks = (project.zoomMarks as { scale?: number }[]).map((z) => ({
-              ...z,
-              scale: Math.min(1.25, (z.scale ?? 1.14) + 0.06),
-            }));
-          }
-          if (project.reactionZooms) {
-            project.reactionZooms = (project.reactionZooms as { intensity?: number }[]).map((r) => ({
-              ...r,
-              intensity: Math.min(1.65, (r.intensity ?? 1.42) + 0.18),
-            }));
-          }
-        }
-      }
+      // Intensidad de FX elegida en el wizard (estilos hype*/supreme) — helper
+      // compartido con style-preview. Va DESPUÉS de los enriquecedores para
+      // recortar/acentuar también los FX que ellos agregaron (mismo orden de siempre).
+      applyWizardOverrides(project, { fxIntensity: body.fxIntensity });
 
       const projectPath = path.join(PROJECTS_DIR, `${projectId}.json`);
       await writeJsonFileAtomic(projectPath, project);

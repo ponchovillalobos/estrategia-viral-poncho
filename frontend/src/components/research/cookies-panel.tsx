@@ -16,6 +16,7 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import { cn } from "@/lib/utils";
 
 type Platform = "instagram" | "tiktok" | "youtube";
@@ -63,7 +64,7 @@ export function CookiesPanel() {
 
   async function save(platform: Platform) {
     if (!cookieContent.trim()) {
-      toast.error("Pegá el contenido de cookies.txt");
+      toast.error("Pega el contenido de cookies.txt");
       return;
     }
     setSaving(true);
@@ -74,13 +75,13 @@ export function CookiesPanel() {
         body: JSON.stringify({ platform, content: cookieContent }),
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "save falló");
+      if (!r.ok) throw new Error(d.error ?? "no se pudo guardar");
       toast.success(`Cookies de ${platform} guardadas`);
       setUploadPlatform(null);
       setCookieContent("");
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudieron guardar las cookies");
     } finally {
       setSaving(false);
     }
@@ -93,7 +94,7 @@ export function CookiesPanel() {
       toast.success("Borradas");
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudieron borrar las cookies");
     }
   }
 
@@ -142,7 +143,7 @@ export function CookiesPanel() {
             <p className="mb-1 font-medium text-sky-200">Pasos (1 vez por plataforma, dura ~30 días):</p>
             <ol className="list-decimal space-y-0.5 pl-5 text-sky-200/80">
               <li>
-                Instalá la extensión{" "}
+                Instala la extensión{" "}
                 <a
                   href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
                   target="_blank"
@@ -153,9 +154,9 @@ export function CookiesPanel() {
                 </a>{" "}
                 en Edge/Chrome (~10 seg).
               </li>
-              <li>Andá a instagram.com (o tiktok.com), logueate normal.</li>
-              <li>Click el ícono de la extensión → &quot;Export As&quot; → &quot;Netscape&quot; → descarga un .txt.</li>
-              <li>Acá abajo, &quot;Subir/pegar&quot; → seleccioná el archivo o pegá su contenido → Guardar.</li>
+              <li>Ve a instagram.com (o tiktok.com) e inicia sesión normal.</li>
+              <li>Da clic en el ícono de la extensión → &quot;Export As&quot; → &quot;Netscape&quot; → descarga un .txt.</li>
+              <li>Aquí abajo, &quot;Subir/pegar&quot; → selecciona el archivo o pega su contenido → Guardar.</li>
               <li>Listo. yt-dlp lo usa automáticamente la próxima vez que pegues una URL.</li>
             </ol>
           </div>
@@ -250,7 +251,7 @@ export function CookiesPanel() {
                   />
                 </label>
                 <span className="font-mono-tab text-[10px] text-muted-foreground">
-                  o pegá el contenido abajo:
+                  o pega el contenido abajo:
                 </span>
               </div>
               <textarea

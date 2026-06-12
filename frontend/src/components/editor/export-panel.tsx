@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Loader2, Wand2, Download } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import type { Project } from "@/components/editor/workspace";
 
 interface Props {
@@ -24,8 +25,11 @@ export function ExportPanel({ project }: Props) {
         videoDurationSec: 30,
         words: project.manualSubtitles,
         bRoll: project.bRoll,
+        // URL RELATIVA a propósito: la app instalada corre en un puerto 3100+,
+        // no en el 3000. El server (render/route.ts) la absolutiza con el host
+        // real (VIRAL_API_HOST) antes de pasársela a Remotion.
         musicUrl: project.musicTrack
-          ? `http://localhost:3000/api/music/stream?file=${encodeURIComponent(project.musicTrack)}`
+          ? `/api/music/stream?file=${encodeURIComponent(project.musicTrack)}`
           : null,
         musicVolume: project.musicVolume,
         subtitleStyle: project.subtitleStyle,
@@ -40,11 +44,13 @@ export function ExportPanel({ project }: Props) {
         body: JSON.stringify({ videoId: project.videoId, props, quality }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "render failed");
+      if (!res.ok) throw new Error(data.error ?? "No se pudo generar el video");
       setOutput(data.streamUrl);
-      toast.success("Video renderizado");
+      toast.success("Video generado");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo generar tu video", {
+        action: { label: "Reintentar", onClick: () => void onRender() },
+      });
     } finally {
       setRendering(false);
     }
@@ -53,7 +59,7 @@ export function ExportPanel({ project }: Props) {
   return (
     <div className="space-y-4">
       <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
-        <p className="font-medium">Checklist antes de renderizar</p>
+        <p className="font-medium">Checklist antes de generar</p>
         <ul className="mt-2 space-y-1 text-muted-foreground">
           <li>· Subtítulos: {project.manualSubtitles.length} palabras</li>
           <li>· B-roll: {project.bRoll.length} clip(s)</li>
@@ -91,12 +97,12 @@ export function ExportPanel({ project }: Props) {
         {rendering ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Renderizando…
+            Generando…
           </>
         ) : (
           <>
             <Wand2 className="mr-2 h-4 w-4" />
-            Renderizar video
+            Generar video
           </>
         )}
       </Button>

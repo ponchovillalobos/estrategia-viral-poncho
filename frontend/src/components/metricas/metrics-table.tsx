@@ -69,7 +69,7 @@ export function MetricsTable() {
 
             {entries.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Sin datos. Agregá una entrada arriba.
+                Sin datos. Agrega una entrada arriba.
               </p>
             ) : (
               <div className="overflow-x-auto">

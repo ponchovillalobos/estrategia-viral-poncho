@@ -15,6 +15,7 @@ import {
   Music2,
   Camera,
   Briefcase,
+  ThumbsUp,
   Settings as SettingsIcon,
   Loader2,
   CheckCircle2,
@@ -23,6 +24,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
+import { PUBLISHING_ENABLED } from "@/lib/app-mode";
 
 interface Handles {
   tiktok: string;
@@ -52,7 +55,7 @@ interface SettingsResponse {
     connectedName: string;
   };
   pixabay: {
-    apiKey: string;
+    hasApiKey: boolean;
   };
 }
 
@@ -74,7 +77,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
   const [clientSecret, setClientSecret] = useState("");
   const [liClientId, setLiClientId] = useState("");
   const [liClientSecret, setLiClientSecret] = useState("");
-  /** API key de Pixabay para descargar SFX/música CC0 al modo cinematográfico */
+  /** API key de Pixabay para descargar SFX/música CC0 al modo cinematográfico.
+   * El server nunca devuelve la key guardada (solo hasApiKey) — vacío = no cambiar. */
   const [pixabayKey, setPixabayKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -112,9 +116,9 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
         setClientSecret("");
         setLiClientId(d.linkedin?.clientId ?? "");
         setLiClientSecret("");
-        setPixabayKey(d.pixabay?.apiKey ?? "");
+        setPixabayKey("");
       })
-      .catch(() => toast.error("No se pudieron cargar settings"))
+      .catch((err) => toastError(err, "No se pudo cargar la configuración"))
       .finally(() => setLoading(false));
   }, [open]);
 
@@ -134,18 +138,20 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
             clientId: liClientId.trim(),
             clientSecret: liClientSecret.trim(),
           },
+          // Vacío = "no cambiar" (el server preserva la key guardada)
           pixabay: { apiKey: pixabayKey.trim() },
         }),
       });
       const result: SettingsResponse = await res.json();
-      if (!res.ok) throw new Error("save falló");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData(result);
       setClientSecret("");
       setLiClientSecret("");
+      setPixabayKey("");
       onSaved?.(result.handles);
       toast.success("Configuración guardada");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo guardar la configuración");
     } finally {
       setSaving(false);
     }
@@ -160,38 +166,41 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
   }
 
   async function disconnect() {
-    if (!confirm("¿Desconectar la cuenta de TikTok? Vas a tener que reautenticar para volver a subir.")) {
+    if (!confirm("¿Desconectar tu cuenta de TikTok?\n\nPara volver a publicar tendrás que conectarla otra vez. Tus videos y tu configuración no se tocan.")) {
       return;
     }
     try {
       const res = await fetch("/api/auth/tiktok/disconnect", { method: "POST" });
-      if (!res.ok) throw new Error("disconnect falló");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result: SettingsResponse = await res.json();
       setData(result);
-      toast.success("Cuenta TikTok desconectada");
+      toast.success("Cuenta de TikTok desconectada");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo desconectar la cuenta");
     }
   }
 
   async function disconnectLinkedIn() {
-    if (!confirm("¿Desconectar la cuenta de LinkedIn? Vas a tener que reautenticar para volver a publicar.")) {
+    if (!confirm("¿Desconectar tu cuenta de LinkedIn?\n\nPara volver a publicar tendrás que conectarla otra vez. Tus videos y tu configuración no se tocan.")) {
       return;
     }
     try {
       const res = await fetch("/api/auth/linkedin/disconnect", { method: "POST" });
-      if (!res.ok) throw new Error("disconnect falló");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result: SettingsResponse = await res.json();
       setData(result);
-      toast.success("Cuenta LinkedIn desconectada");
+      toast.success("Cuenta de LinkedIn desconectada");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo desconectar la cuenta");
     }
   }
 
+  // Orden = prioridad de la firma: se usa el primero que tenga valor.
   const handleFields: { key: keyof Handles; label: string; icon: typeof Music2; color: string; placeholder: string }[] = [
     { key: "instagram", label: "Instagram", icon: Camera, color: "#f59e0b", placeholder: "@tu_usuario" },
     { key: "linkedin", label: "LinkedIn", icon: Briefcase, color: "#38bdf8", placeholder: "@tu_usuario" },
+    { key: "tiktok", label: "TikTok", icon: Music2, color: "#ec4899", placeholder: "@tu_usuario" },
+    { key: "facebook", label: "Facebook", icon: ThumbsUp, color: "#3b82f6", placeholder: "@tu_usuario" },
   ];
 
   const hasAppCreds = Boolean(clientKey && (clientSecret || data?.tiktok.hasClientSecret));
@@ -199,6 +208,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
 
   const hasLiAppCreds = Boolean(liClientId && (liClientSecret || data?.linkedin?.hasClientSecret));
   const liConnected = Boolean(data?.linkedin?.hasAccessToken);
+
+  const hasPixabayKey = Boolean(data?.pixabay?.hasApiKey);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -208,8 +219,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
             <SettingsIcon className="h-4 w-4" /> Configuración
           </DialogTitle>
           <DialogDescription>
-            Las cuentas se usan en la UI. La conexión OAuth de cada plataforma habilita
-            publicación automática desde el dashboard.
+            Configura tu marca y revisa que todo esté instalado. Lo básico funciona sin
+            tocar nada.
           </DialogDescription>
         </DialogHeader>
 
@@ -246,11 +257,15 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
               )}
             </section>
 
-            {/* ── HANDLES ──────────────────────────────── */}
+            {/* ── TU FIRMA (handles) ────────────────────── */}
             <section className="space-y-3">
               <h3 className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
-                Handles de redes sociales
+                Tu firma en los videos
               </h3>
+              <p className="text-[11px] text-muted-foreground">
+                Tu @ aparece como marca de agua y como firma al final de cada video. Si
+                llenas varios, se usa el primero: Instagram → LinkedIn → TikTok → Facebook.
+              </p>
               {handleFields.map((f) => {
                 const Icon = f.icon;
                 return (
@@ -271,8 +286,9 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
               })}
             </section>
 
-            {/* ── AVANZADO (colapsado): credenciales OAuth para publicar.
-                Asustaban a usuarios nuevos — el flujo principal no las necesita. */}
+            {/* ── AVANZADO (colapsado): credenciales para publicar.
+                Solo existe con PUBLISHING_ENABLED — la versión pública es editor puro. */}
+            {PUBLISHING_ENABLED && (
             <details className="rounded-md border border-border bg-muted/20">
               <summary className="cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground">
                 Avanzado: publicar en redes desde la app (opcional)
@@ -291,7 +307,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                   </span>
                 ) : hasAppCreds ? (
                   <span className="flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-amber-400">
-                    <AlertCircle className="h-2.5 w-2.5" /> falta oauth
+                    <AlertCircle className="h-2.5 w-2.5" /> Falta conectar tu cuenta
                   </span>
                 ) : (
                   <span className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground">
@@ -302,7 +318,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
 
               {!hasAppCreds && (
                 <p className="text-[11px] text-muted-foreground">
-                  Para publicar automático necesitás registrar una app en{" "}
+                  Para publicar automático necesitas registrar una app en{" "}
                   <a
                     href="https://developers.tiktok.com/"
                     target="_blank"
@@ -330,7 +346,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                   Client Secret
                   {data?.tiktok.hasClientSecret && (
                     <span className="ml-2 font-mono-tab text-[10px] text-emerald-400">
-                      (guardado · dejá vacío para no cambiar)
+                      (guardado · déjalo vacío para no cambiarlo)
                     </span>
                   )}
                 </Label>
@@ -393,7 +409,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                   </span>
                 ) : hasLiAppCreds ? (
                   <span className="flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-amber-400">
-                    <AlertCircle className="h-2.5 w-2.5" /> falta oauth
+                    <AlertCircle className="h-2.5 w-2.5" /> Falta conectar tu cuenta
                   </span>
                 ) : (
                   <span className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground">
@@ -404,7 +420,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
 
               {!hasLiAppCreds && (
                 <p className="text-[11px] text-muted-foreground">
-                  Registrá una app en{" "}
+                  Registra una app en{" "}
                   <a
                     href="https://www.linkedin.com/developers/apps"
                     target="_blank"
@@ -433,7 +449,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                   Client Secret
                   {data?.linkedin?.hasClientSecret && (
                     <span className="ml-2 font-mono-tab text-[10px] text-emerald-400">
-                      (guardado · dejá vacío para no cambiar)
+                      (guardado · déjalo vacío para no cambiarlo)
                     </span>
                   )}
                 </Label>
@@ -485,6 +501,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
             </section>
               </div>
             </details>
+            )}
 
             {/* ──────── Pixabay API (SFX + música para modo cinematográfico) ──────── */}
             <section className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
@@ -503,18 +520,26 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
               </div>
               <p className="text-[11px] text-amber-200/70">
                 <strong>Opcional</strong> — el sistema ya trae 54 pistas de música y 67
-                sonidos gratis SIN ninguna key. Esto solo suma variedad extra: registrate
-                en Pixabay (gratis), pegá tu API key y el modo cinematográfico descarga
+                sonidos gratis SIN ninguna key. Esto solo suma variedad extra: regístrate
+                en Pixabay (gratis), pega tu API key y el modo cinematográfico descarga
                 ~21 SFX + 7 pistas CC0 adicionales. Uso comercial OK.
               </p>
               <div className="space-y-1.5">
-                <Label className="text-xs">API key</Label>
+                <Label className="text-xs">
+                  API key
+                  {hasPixabayKey && (
+                    <span className="ml-2 font-mono-tab text-[10px] text-emerald-400">
+                      (guardada — déjala vacía para no cambiarla)
+                    </span>
+                  )}
+                </Label>
                 <Input
                   type="password"
-                  placeholder="ej. 12345678-abcdef0123456789abcdef0123456789a"
+                  placeholder={hasPixabayKey ? "••••••••" : "ej. 12345678-abcdef0123456789abcdef0123456789a"}
                   value={pixabayKey}
                   onChange={(e) => setPixabayKey(e.target.value)}
                   className="font-mono-tab text-xs"
+                  autoComplete="new-password"
                 />
                 <p className="font-mono-tab text-[9px] text-muted-foreground">
                   La key aparece en{" "}
@@ -526,10 +551,10 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                   >
                     pixabay.com/api/docs
                   </a>{" "}
-                  después de loguearte. Se guarda solo localmente.
+                  después de iniciar sesión. Se guarda solo en tu compu.
                 </p>
               </div>
-              {pixabayKey && (
+              {(pixabayKey || hasPixabayKey) && (
                 <Button
                   type="button"
                   size="sm"
@@ -544,12 +569,12 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                         body: JSON.stringify({ kind: "both" }),
                       });
                       const d = await r.json();
-                      if (!r.ok || !d.ok) throw new Error(d.error ?? "fail");
+                      if (!r.ok || !d.ok) throw new Error(d.error ?? `HTTP ${r.status}`);
                       toast.success(
                         `✓ ${d.totalDownloaded} archivos descargados (${d.totalFailed} fallaron)`
                       );
                     } catch (err) {
-                      toast.error(err instanceof Error ? err.message : String(err));
+                      toastError(err, "No se pudo descargar el pack de audio");
                     }
                   }}
                 >

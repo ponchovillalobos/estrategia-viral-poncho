@@ -37,7 +37,10 @@ export async function POST(
   try {
     await fs.access(resolved);
   } catch {
-    return NextResponse.json({ error: `Render no existe: ${resolved}` }, { status: 404 });
+    return NextResponse.json(
+      { error: `El video generado ya no existe (${path.basename(resolved)}). Genéralo de nuevo.` },
+      { status: 404 }
+    );
   }
 
   if (process.platform !== "win32") {

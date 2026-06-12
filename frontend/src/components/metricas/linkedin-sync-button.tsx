@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 
 /**
  * Trae métricas reales de LinkedIn (impresiones/reacciones/comentarios/reposts) de los
@@ -27,7 +28,7 @@ export function LinkedInSyncButton() {
         toast.message(data.message ?? "Nada para sincronizar todavía", { id });
       }
     } catch (e) {
-      toast.error(`Sync falló: ${e instanceof Error ? e.message : String(e)}`, { id });
+      toastError(e, "No se pudo sincronizar", { id });
     } finally {
       setSyncing(false);
     }

@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2, Sparkles, RefreshCcw, Copy, Check, X, Mic } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import { cn } from "@/lib/utils";
 
 
@@ -70,7 +71,7 @@ export function AdaptDialog({
       setHashtags(d.suggestedHashtags ?? []);
       toast.success(regenerate ? "Guión regenerado" : "Adaptación lista");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo adaptar el guión");
     } finally {
       setLoading(false);
     }
@@ -92,11 +93,11 @@ export function AdaptDialog({
           suggestedHashtags: hashtags,
         }),
       });
-      if (!r.ok) throw new Error("save falló");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       toast.success("Guión guardado");
       onSaved?.(adapted);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo guardar");
     } finally {
       setSaving(false);
     }
@@ -199,7 +200,7 @@ export function AdaptDialog({
                     value={adapted}
                     onChange={(e) => setAdapted(e.target.value)}
                     rows={14}
-                    placeholder="El guión adaptado va a aparecer aquí. También podés escribirlo a mano si no querés usar Claude."
+                    placeholder="El guión adaptado va a aparecer aquí. También puedes escribirlo a mano si no quieres usar Claude."
                     className="w-full resize-none rounded-md border border-border bg-muted/20 p-3 text-sm leading-relaxed text-foreground/90 focus:border-violet-500/40 focus:outline-none"
                   />
                   {hashtags.length > 0 && (

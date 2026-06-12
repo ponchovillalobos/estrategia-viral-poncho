@@ -9,7 +9,7 @@
  *   - Lock #7271: si el browser está abierto, la DB de cookies está bloqueada
  *
  * El usuario exporta cookies con la extensión "Get cookies.txt LOCALLY" del browser,
- * las pega/sube acá, y research_download.py las usa con `--cookies` (no falla por DPAPI).
+ * las pega/sube aquí, y research_download.py las usa con `--cookies` (no falla por DPAPI).
  *
  * Endpoints:
  *   GET    /api/research/cookies              → status de cada plataforma

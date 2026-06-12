@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   // Buscar el archivo en 3 carpetas hermanas:
   //   .../sfx/github/  → 67 SFX reales descargados de rse/soundfx (CC0/CC-BY)
   //   .../sfx/pixabay/ → si el user descarga del pack Pixabay
-  //   .../sfx/curated/ → 28 SFX sintéticos legacy (SFX_DIR apunta acá)
+  //   .../sfx/curated/ → 28 SFX sintéticos legacy (SFX_DIR apunta aquí)
   const SFX_BASE = path.dirname(SFX_DIR); // .../sfx/
   const candidates = [
     path.join(SFX_BASE, "github", file),

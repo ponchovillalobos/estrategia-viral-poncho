@@ -16,6 +16,7 @@ import {
   Music2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 
 interface CopyableRowProps {
   label: string;
@@ -92,12 +93,12 @@ export function TikTokSetupClient() {
           tiktok: { clientKey: clientKey.trim(), clientSecret: clientSecret.trim() },
         }),
       });
-      if (!res.ok) throw new Error("save falló");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await loadSettings();
       setClientSecret("");
-      toast.success("Credenciales guardadas. Ahora podés conectar tu TikTok.");
+      toast.success("Credenciales guardadas. Ahora puedes conectar tu TikTok.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudieron guardar las credenciales");
     } finally {
       setSaving(false);
     }
@@ -125,8 +126,8 @@ export function TikTokSetupClient() {
         </h1>
         <p className="max-w-2xl text-muted-foreground">
           Una vez registrada y aprobada tu app en TikTok Developer, vas a poder
-          programar publicaciones directo desde el dashboard. Te llevo por cada
-          campo del formulario con los valores exactos a copy-paste.
+          programar publicaciones directo desde la app. Te llevo por cada
+          campo del formulario con los valores exactos para copiar y pegar.
         </p>
       </header>
 
@@ -186,7 +187,7 @@ export function TikTokSetupClient() {
           1. Abrir TikTok for Developers
         </h2>
         <p className="mb-3 text-sm text-muted-foreground">
-          Loguéate con tu cuenta personal de TikTok (la que vas a usar para publicar).
+          Inicia sesión con tu cuenta personal de TikTok (la que vas a usar para publicar).
         </p>
         <a
           href="https://developers.tiktok.com/"
@@ -206,10 +207,10 @@ export function TikTokSetupClient() {
         <ol className="mb-4 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
           <li>Click en <strong>Manage apps</strong> arriba a la derecha.</li>
           <li>Click <strong>Connect a new app</strong>.</li>
-          <li>Aceptá los Developer Terms.</li>
+          <li>Acepta los Developer Terms.</li>
         </ol>
         <p className="text-sm text-muted-foreground">
-          En el formulario que aparece, completá con estos valores exactos (click en
+          En el formulario que aparece, completa con estos valores exactos (clic en
           📋 para copiar cada uno):
         </p>
 
@@ -228,9 +229,9 @@ export function TikTokSetupClient() {
         <div className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">
           <strong>Ojo:</strong> los URLs de Privacy y Terms apuntan a tu localhost.
           TikTok puede aceptarlos en Sandbox, pero durante el audit van a requerir
-          URLs públicas. Cuando llegue ese momento, hosteá las páginas{" "}
+          URLs públicas. Cuando llegue ese momento, publica las páginas{" "}
           <code>/privacy</code> y <code>/terms</code> en GitHub Pages o similar y
-          actualizá los URLs.
+          actualiza los URLs.
         </div>
       </Card>
 
@@ -241,13 +242,13 @@ export function TikTokSetupClient() {
         </h2>
         <ol className="space-y-2 pl-5 list-decimal text-sm text-muted-foreground">
           <li>
-            En la pantalla de tu app, ir a <strong>Add products</strong>.
+            En la pantalla de tu app, ve a <strong>Add products</strong>.
           </li>
           <li>
-            Seleccionar <strong>Login Kit</strong> y <strong>Content Posting API</strong>.
+            Selecciona <strong>Login Kit</strong> y <strong>Content Posting API</strong>.
           </li>
           <li>
-            En <strong>Scopes</strong> activar exactamente estos 3:
+            En <strong>Scopes</strong> activa exactamente estos 3:
             <div className="mt-2 space-y-1.5">
               <code className="block rounded bg-muted/30 px-2 py-1 font-mono-tab text-xs text-foreground">
                 user.info.basic
@@ -261,7 +262,7 @@ export function TikTokSetupClient() {
             </div>
           </li>
           <li>
-            En <strong>Login Kit → Redirect URIs</strong>, agregar:
+            En <strong>Login Kit → Redirect URIs</strong>, agrega:
           </li>
         </ol>
         <div className="mt-3">
@@ -272,13 +273,13 @@ export function TikTokSetupClient() {
       {/* ── Paso 4: copy Client Key + Secret ─── */}
       <Card className="border-border bg-card p-5">
         <h2 className="mb-3 text-base font-medium">
-          4. Pegá tu Client Key y Client Secret
+          4. Pega tu Client Key y Client Secret
         </h2>
         <p className="mb-4 text-sm text-muted-foreground">
           Una vez que TikTok creó la app, te muestra el <strong>Client Key</strong> y{" "}
-          <strong>Client Secret</strong> en el panel. Copialos y pegalos acá. Se guardan
-          localmente en tu PC (en <code>C:\hermes-data\user-settings.json</code>), nunca
-          se envían a ningún server.
+          <strong>Client Secret</strong> en el panel. Cópialos y pégalos aquí. Se guardan
+          localmente en tu compu (en <code>C:\hermes-data\user-settings.json</code>), nunca
+          se envían a ningún servidor.
         </p>
         <div className="space-y-3">
           <div className="space-y-1">
@@ -296,7 +297,7 @@ export function TikTokSetupClient() {
               Client Secret
               {settings?.tiktok.hasClientSecret && (
                 <span className="ml-2 font-mono-tab text-[10px] text-emerald-400">
-                  (guardado · dejá vacío para no cambiar)
+                  (guardado · déjalo vacío para no cambiarlo)
                 </span>
               )}
             </Label>
@@ -321,12 +322,12 @@ export function TikTokSetupClient() {
         <h2 className="mb-3 text-base font-medium">5. Conectar tu cuenta de TikTok</h2>
         <p className="mb-4 text-sm text-muted-foreground">
           Una vez guardadas las credenciales, este botón te redirige a TikTok para que
-          autorices a la app. TikTok te va a pedir confirmar los 3 scopes. Aceptá y volvés
-          acá automáticamente.
+          autorices a la app. TikTok te va a pedir confirmar los 3 scopes. Acepta y vuelves
+          aquí automáticamente.
         </p>
         {!hasCreds ? (
           <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">
-            Guardá primero Client Key + Client Secret en el paso 4.
+            Guarda primero Client Key + Client Secret en el paso 4.
           </p>
         ) : isConnected ? (
           <div className="space-y-3">
@@ -355,9 +356,9 @@ export function TikTokSetupClient() {
         </h2>
         <p className="text-sm text-muted-foreground">
           Hasta que TikTok haga el audit de tu app, todas las publicaciones quedan{" "}
-          <code>SELF_ONLY</code> (privadas — solo las ves vos). Para publicar público,
-          vas a Manage apps → tu app → <strong>Submit for review</strong> y completás el
-          formulario de audit. Tarda 1-3 semanas. Mientras tanto podés testear con SELF_ONLY
+          <code>SELF_ONLY</code> (privadas — solo las ves tú). Para publicar público,
+          ve a Manage apps → tu app → <strong>Submit for review</strong> y completa el
+          formulario de audit. Tarda 1-3 semanas. Mientras tanto puedes probar con SELF_ONLY
           y cambiarlas a público manualmente desde la app de TikTok.
         </p>
       </Card>

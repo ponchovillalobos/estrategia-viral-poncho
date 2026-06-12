@@ -6,7 +6,13 @@ import { toast } from "sonner";
 
 interface Notification {
   id: string;
-  type: "instagram_due" | "tiktok_failed" | "linkedin_failed";
+  type:
+    | "instagram_due"
+    | "tiktok_failed"
+    | "linkedin_failed"
+    // Emitidos por job-store cuando una edición termina (bien o mal).
+    | "render_done"
+    | "render_failed";
   projectId: string;
   scheduleId?: string;
   scheduledAt: number;
@@ -93,12 +99,39 @@ export function NotificationPoller() {
           },
         });
       } else if (n.type === "tiktok_failed") {
-        toast.error(`TikTok falló: ${n.projectId} — ${n.message ?? "ver logs"}`, {
+        toast.error(`No se pudo publicar en TikTok: ${n.projectId}`, {
+          description: n.message ?? "Intenta de nuevo desde Mis videos.",
           duration: 20_000,
         });
       } else if (n.type === "linkedin_failed") {
-        toast.error(`LinkedIn falló: ${n.projectId} — ${n.message ?? "ver logs"}`, {
+        toast.error(`No se pudo publicar en LinkedIn: ${n.projectId}`, {
+          description: n.message ?? "Intenta de nuevo desde Mis videos.",
           duration: 20_000,
+        });
+      } else if (n.type === "render_done") {
+        // n.message trae el título humano del video (o el id si no hay título).
+        toast.success("¡Tu video está listo! 🎉", {
+          description: n.message,
+          duration: 15_000,
+          action: {
+            label: "Verlo",
+            onClick: () => router.push("/produccion"),
+          },
+        });
+      } else if (n.type === "render_failed") {
+        // n.message trae el motivo humano del fallo.
+        const motivo = n.message ?? "Algo salió mal al generar el video. Intenta de nuevo.";
+        toast.error("Tu video no se pudo crear", {
+          duration: 20_000,
+          action: {
+            label: "Ver por qué",
+            onClick: () => {
+              toast.error("Esto fue lo que pasó", {
+                description: motivo,
+                duration: 30_000,
+              });
+            },
+          },
         });
       }
     }

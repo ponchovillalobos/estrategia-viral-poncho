@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import path from "node:path";
 import { promises as fs, createReadStream } from "node:fs";
 import { Readable } from "node:stream";
-import { RAW_DIR, RENDERS_DIR, LF_CLIPS, LF_RENDERS } from "@/lib/paths";
+import { RAW_DIR, RENDERS_DIR, LF_CLIPS, LF_RENDERS, PROJECTS_DIR } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +50,40 @@ async function findVideo(
   return null;
 }
 
+/**
+ * Si viene ?download=1, arma el header Content-Disposition: attachment con un nombre
+ * humano: el título del proyecto si existe, si no el nombre del archivo en disco.
+ * Incluye fallback ASCII + variante UTF-8 (RFC 5987) para que los acentos sobrevivan.
+ */
+async function buildDownloadHeaders(
+  download: boolean,
+  id: string,
+  filePath: string
+): Promise<Record<string, string>> {
+  if (!download) return {};
+  const ext = path.extname(filePath) || ".mp4";
+  let nice = path.basename(filePath, path.extname(filePath));
+  try {
+    const project = JSON.parse(
+      await fs.readFile(path.join(PROJECTS_DIR, `${id}.json`), "utf-8")
+    ) as { title?: string };
+    if (project?.title?.trim()) nice = project.title.trim();
+  } catch {
+    // sin JSON de proyecto (ej. video largo) → nombre del archivo
+  }
+  // Sanitizar: sin caracteres ilegales para nombre de archivo en Windows.
+  nice = nice.replace(/[<>:"/\\|?*]/g, " ").replace(/\s+/g, " ").trim() || "video";
+  const ascii =
+    nice
+      .normalize("NFKD")
+      .replace(/[^ -~]/g, "")
+      .replace(/"/g, "")
+      .trim() || "video";
+  return {
+    "Content-Disposition": `attachment; filename="${ascii}${ext}"; filename*=UTF-8''${encodeURIComponent(nice + ext)}`,
+  };
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -79,6 +113,9 @@ export async function GET(
   const contentType = contentTypeFor(path.extname(filePath));
   const range = req.headers.get("range");
 
+  const download = req.nextUrl.searchParams.get("download") === "1";
+  const downloadHeaders = await buildDownloadHeaders(download, id, filePath);
+
   // HEAD: respondé sin body para que <video> conozca tamaño antes de pedir el primer rango
   if (req.method === "HEAD") {
     return new Response(null, {
@@ -87,6 +124,7 @@ export async function GET(
         "Content-Length": String(fileSize),
         "Accept-Ranges": "bytes",
         "Cache-Control": "private, max-age=3600",
+        ...downloadHeaders,
       },
     });
   }
@@ -98,6 +136,7 @@ export async function GET(
         "Content-Length": String(fileSize),
         "Accept-Ranges": "bytes",
         "Cache-Control": "private, max-age=3600",
+        ...downloadHeaders,
       },
     });
   }
@@ -144,6 +183,7 @@ export async function GET(
       "Content-Range": `bytes ${start}-${end}/${fileSize}`,
       "Accept-Ranges": "bytes",
       "Cache-Control": "private, max-age=3600",
+      ...downloadHeaders,
     },
   });
 }

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar, Loader2, Music2, Briefcase, Camera } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import { cn } from "@/lib/utils";
 
 type PrivacyLevel =
@@ -50,7 +51,7 @@ const PLATFORM_CHOICES: {
 }[] = [
   { key: "tiktok", label: "TikTok", icon: Music2, color: "text-pink-400", hint: "API directa" },
   { key: "linkedin", label: "LinkedIn", icon: Briefcase, color: "text-sky-400", hint: "API directa" },
-  { key: "instagram_bridge", label: "Instagram", icon: Camera, color: "text-amber-400", hint: "te aviso a la hora — subís manual" },
+  { key: "instagram_bridge", label: "Instagram", icon: Camera, color: "text-amber-400", hint: "te aviso a la hora — subes manual" },
 ];
 
 /** Devuelve ISO datetime sin segundos para input type="datetime-local" — en zona local. */
@@ -115,7 +116,7 @@ export function ScheduleDialog({
 
   async function submit(publishNow: boolean) {
     if (selected.size === 0) {
-      toast.error("Elegí al menos una plataforma");
+      toast.error("Elige al menos una plataforma");
       return;
     }
     setSubmitting(true);
@@ -165,14 +166,14 @@ export function ScheduleDialog({
         );
       }
       for (const f of failures) {
-        toast.error(f.reason instanceof Error ? f.reason.message : String(f.reason));
+        toastError(f.reason, "No se pudo programar la publicación");
       }
       if (successes.length > 0) {
         onScheduled?.();
         onOpenChange(false);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo programar la publicación");
     } finally {
       setSubmitting(false);
     }

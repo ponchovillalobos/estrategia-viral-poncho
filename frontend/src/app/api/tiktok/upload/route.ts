@@ -40,7 +40,10 @@ export async function POST(req: NextRequest) {
     try {
       await fs.access(resolved);
     } catch {
-      return NextResponse.json({ error: `Render no existe: ${resolved}` }, { status: 404 });
+      return NextResponse.json(
+        { error: `El video generado ya no existe (${path.basename(resolved)}). Genéralo de nuevo.` },
+        { status: 404 }
+      );
     }
 
     // Tomar caption del proyecto (si no se override)

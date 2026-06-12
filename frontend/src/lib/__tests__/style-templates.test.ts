@@ -4,7 +4,7 @@
  * La auditoría de lanzamiento encontró que las 1.100+ líneas de estilos no
  * tenían NINGÚN test, y la paridad shorts↔largos ya divergió una vez en
  * producción. Estos tests validan los invariantes de los 16 estilos en ambos
- * formatos (9:16 y 16:9) — cualquier regresión estructural rompe acá ANTES
+ * formatos (9:16 y 16:9) — cualquier regresión estructural rompe aquí ANTES
  * de llegar a un render.
  */
 import { describe, it, expect } from "vitest";

@@ -83,7 +83,7 @@ export function TimelineStrip({
       </div>
 
       <div className="relative select-none rounded-md border border-border bg-zinc-950/80 py-1.5 pr-1.5">
-        {/* Zona de tracks (todo lo temporal vive acá, alineado por el gutter) */}
+        {/* Zona de tracks (todo lo temporal vive aquí, alineado por el gutter) */}
         <div
           ref={trackRef}
           onClick={handleClick}

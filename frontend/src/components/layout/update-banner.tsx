@@ -17,6 +17,8 @@ interface UpdateInfo {
   hasUpdate: boolean;
   url: string;
   notes: string;
+  /** Link directo al instalador (.exe); si falta, usamos la página del release. */
+  downloadUrl?: string;
 }
 
 // Clave de localStorage donde recordamos qué versión ya descartó el usuario.
@@ -63,17 +65,22 @@ export function UpdateBanner() {
   return (
     <div className="mx-auto w-full max-w-7xl px-6 pt-4">
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-sky-500/40 bg-sky-500/10 p-3">
-        <p className="flex items-center gap-2 text-sm font-medium text-sky-200">
-          <PartyPopper className="h-4 w-4" />
-          🎉 Hay una versión nueva (v{info.latest}) con mejoras lista para ti
-        </p>
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-medium text-sky-200">
+            <PartyPopper className="h-4 w-4" />
+            🎉 Hay una versión nueva (v{info.latest}) con mejoras lista para ti
+          </p>
+          <p className="mt-0.5 text-xs text-sky-200/70">
+            Tus videos no se tocan — quedan fuera de la app.
+          </p>
+        </div>
         <a
-          href={info.url}
+          href={info.downloadUrl || info.url}
           target="_blank"
           rel="noopener noreferrer"
           className="rounded-md bg-sky-400 px-4 py-1.5 text-sm font-semibold text-black hover:bg-sky-300"
         >
-          Descargar
+          Bajar instalador
         </a>
         <button
           type="button"

@@ -80,7 +80,7 @@ export function MetricsInsights() {
         const json = (await res.json()) as InsightsResponse;
         if (!cancelled) setData(json);
       } catch (err) {
-        console.error("insights load falló:", err);
+        console.error("No se pudieron cargar las métricas:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -112,8 +112,8 @@ export function MetricsInsights() {
     return (
       <Card className="border-dashed border-border bg-card/50 p-6">
         <p className="text-sm text-muted-foreground">
-          Todavía no hay métricas. Cargá entradas abajo para ver KPIs comparativos,
-          ranking de hooks ganadores y captions con mejor viral ratio.
+          Todavía no hay métricas. Carga entradas abajo para ver KPIs comparativos,
+          ranking de hooks ganadores y descripciones con mejor ratio viral.
         </p>
       </Card>
     );

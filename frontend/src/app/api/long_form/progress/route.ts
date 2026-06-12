@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const jobId = req.nextUrl.searchParams.get("jobId");
   if (jobId) {
     const job = getLongFormJob(jobId);
-    if (!job) return NextResponse.json({ error: "job no encontrado" }, { status: 404 });
+    if (!job) return NextResponse.json({ error: "proceso no encontrado" }, { status: 404 });
     return NextResponse.json(job);
   }
   // Sin jobId → lista de todos los jobs activos

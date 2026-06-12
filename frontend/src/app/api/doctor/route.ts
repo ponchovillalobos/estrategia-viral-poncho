@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
     label: "Motor de procesamiento (Python)",
     ok: pythonOk,
     detail: PYTHON_EXE,
-    fix: pythonOk ? undefined : "Reinstalá la app (falta la carpeta python del paquete).",
+    fix: pythonOk ? undefined : "Reinstala la app (falta la carpeta python del paquete).",
   });
 
   // 2. Imports de Python (solo con ?deep=1 — tarda; cacheado 30 min)
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
         label: "Componentes de IA (WhisperX, MediaPipe, librosa)",
         ok: cached.ok,
         detail: cached.detail,
-        fix: cached.ok ? undefined : "Reinstalá la app o corré bootstrap.ps1 para reparar los paquetes.",
+        fix: cached.ok ? undefined : "Reinstala la app o corre bootstrap.ps1 para reparar los paquetes.",
       });
     } else {
       const r = await runProcess(
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
         label: "Componentes de IA (WhisperX, MediaPipe, librosa)",
         ok,
         detail,
-        fix: ok ? undefined : "Reinstalá la app o corré bootstrap.ps1 para reparar los paquetes.",
+        fix: ok ? undefined : "Reinstala la app o corre bootstrap.ps1 para reparar los paquetes.",
       });
     }
   }
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
     label: "Procesador de video (ffmpeg)",
     ok: ffmpegOk && ffprobeOk,
     detail: FFMPEG_EXE,
-    fix: ffmpegOk && ffprobeOk ? undefined : "Reinstalá la app (falta la carpeta tools/ffmpeg del paquete).",
+    fix: ffmpegOk && ffprobeOk ? undefined : "Reinstala la app (falta la carpeta tools/ffmpeg del paquete).",
   });
 
   // 4. Remotion (renderizador)
@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
     id: "remotion",
     label: "Generador de videos (Remotion)",
     ok: remotionOk,
-    fix: remotionOk ? undefined : "Reinstalá la app (la carpeta remotion del paquete está incompleta).",
+    fix: remotionOk ? undefined : "Reinstala la app (la carpeta remotion del paquete está incompleta).",
   });
 
   // 5. Carpeta de datos escribible
@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
     label: "Carpeta de videos",
     ok: dataOk,
     detail: DATA_ROOT,
-    fix: dataOk ? undefined : "Windows no deja escribir en la carpeta de datos. Movela a Documentos o a tu carpeta de usuario.",
+    fix: dataOk ? undefined : "Windows no deja escribir en la carpeta de datos. Muévela a Documentos o a tu carpeta de usuario.",
   });
 
   // 6. Modelo de voz (descarga única ~1.5 GB en el primer uso)
@@ -146,10 +146,36 @@ export async function GET(req: NextRequest) {
     id: "whisper-model",
     label: "Modelo de voz (transcripción)",
     ok: modelReady,
-    fix: modelReady ? undefined : "Tocá «Preparar la app»: descarga el modelo una sola vez (~1.5 GB).",
+    fix: modelReady ? undefined : "Toca «Preparar la app»: descarga el modelo una sola vez (~1.5 GB).",
   });
 
-  const critical = checks.filter((c) => c.id !== "whisper-model" && c.id !== "python-imports");
+  // 7. IA local (Ollama) — SIEMPRE informativo: es opcional y su ausencia jamás
+  // bloquea ni marca la instalación como rota (queda fuera de `critical`).
+  let ollamaOk = false;
+  try {
+    const r = await fetch("http://127.0.0.1:11434/api/tags", {
+      cache: "no-store",
+      signal: AbortSignal.timeout(2_000),
+    });
+    ollamaOk = r.ok;
+  } catch {
+    ollamaOk = false;
+  }
+  checks.push({
+    id: "ollama",
+    label: "IA local (opcional)",
+    ok: ollamaOk,
+    detail: ollamaOk
+      ? "Ollama está activa. Solo se usa para el modo inteligente de videos largos."
+      : "Solo se usa para el modo inteligente de videos largos. Sin ella, todo lo demás funciona.",
+    fix: ollamaOk
+      ? undefined
+      : "Opcional: si quieres el modo inteligente de videos largos, la app te guía para activarla. Todo lo demás funciona sin ella.",
+  });
+
+  const critical = checks.filter(
+    (c) => c.id !== "whisper-model" && c.id !== "python-imports" && c.id !== "ollama"
+  );
   return NextResponse.json({
     ok: critical.every((c) => c.ok),
     modelReady,

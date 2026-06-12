@@ -1,5 +1,5 @@
 // Paleta de colores por sección — match exacto con los colors del TabNav.
-// Single source of truth para que un cambio acá se refleje en nav + headers.
+// Single source of truth para que un cambio aquí se refleje en nav + headers.
 
 export const SECTION_COLORS = {
   inicio: "#34d399",      // emerald

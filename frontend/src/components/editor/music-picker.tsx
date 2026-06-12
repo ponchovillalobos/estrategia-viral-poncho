@@ -66,7 +66,7 @@ export function MusicPicker({ selected, volume, onSelect, onVolumeChange }: Prop
         <Label className="text-xs">Tracks disponibles ({tracks.length})</Label>
         {tracks.length === 0 ? (
           <div className="rounded-md border border-dashed border-border bg-card/50 p-4 text-xs text-muted-foreground">
-            Sin tracks. Pegá MP3 en{" "}
+            Sin tracks. Pega MP3 en{" "}
             <span className="font-mono-tab">C:\viral-data\videos\assets\music\</span>
           </div>
         ) : (

@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Falta Client Key. Andá a Settings (engranaje arriba a la derecha) y completá Client Key + Secret de tu app TikTok.",
+          "Falta Client Key. Ve a Configuración (engranaje arriba a la derecha) y completa Client Key + Secret de tu app TikTok.",
       },
       { status: 400 }
     );

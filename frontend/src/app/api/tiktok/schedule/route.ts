@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       await fs.access(renderPath);
     } catch {
       return NextResponse.json(
-        { error: `Render no existe: ${renderPath}` },
+        { error: `El video generado ya no existe (${path.basename(renderPath)}). Genéralo de nuevo.` },
         { status: 404 }
       );
     }

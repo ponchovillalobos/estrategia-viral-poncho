@@ -30,7 +30,10 @@ export async function POST(req: NextRequest) {
     try {
       await fs.access(renderPath);
     } catch {
-      return NextResponse.json({ error: `Render no existe: ${renderPath}` }, { status: 404 });
+      return NextResponse.json(
+        { error: `El video generado ya no existe (${path.basename(renderPath)}). Genéralo de nuevo.` },
+        { status: 404 }
+      );
     }
 
     // Resolver caption: body > project.captions.instagram > project.caption
@@ -56,7 +59,7 @@ export async function POST(req: NextRequest) {
 
     if (!caption.trim()) {
       return NextResponse.json(
-        { error: "No hay caption para publicar — generá uno con ✨ primero" },
+        { error: "No hay descripción para publicar — genera una con ✨ primero" },
         { status: 400 }
       );
     }

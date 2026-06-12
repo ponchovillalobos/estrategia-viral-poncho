@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Check, ChevronLeft, Loader2, Mic, Pencil, Scissors, Wand2 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import { SubtitleEditor } from "@/components/editor/subtitle-editor";
 import { BrollPicker } from "@/components/editor/broll-picker";
 import { MusicPicker } from "@/components/editor/music-picker";
@@ -102,11 +103,11 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
         body: JSON.stringify({ at: currentTime }),
       });
       const d = await r.json();
-      if (!r.ok || !d.url) throw new Error(d.error ?? "no se pudo generar el preview");
+      if (!r.ok || !d.url) throw new Error(d.error ?? "no se pudo generar la vista previa");
       setFxPreviewUrl(`${d.url}&ts=${Date.now()}`);
-      if (d.cached) toast.success("Preview listo (caché)");
+      if (d.cached) toast.success("Vista previa lista");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toastError(e, "No se pudo generar la vista previa");
     } finally {
       setFxPreviewLoading(false);
     }
@@ -161,7 +162,7 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
       }, SAVED_FLASH_MS);
     } catch (err) {
       setSaveState("error");
-      toast.error("No se pudo guardar: " + (err instanceof Error ? err.message : String(err)));
+      toastError(err, "No se pudo guardar");
     }
   }, [projectId]);
 
@@ -211,7 +212,7 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
       updateProject({ manualSubtitles: data.transcript.words });
       toast.success(`Transcripción lista — ${data.transcript.words.length} palabras`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo transcribir el video");
     } finally {
       setTranscribing(false);
     }
@@ -229,7 +230,7 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
       if (!res.ok) throw new Error(data.error ?? "detect cuts failed");
       toast.success(`${data.cuts.silences.length} silencios detectados`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudieron detectar los silencios");
     } finally {
       setDetectingCuts(false);
     }
@@ -249,7 +250,7 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
         <h1 className="font-mono-tab text-base">{projectId}</h1>
         <span
           className="rounded bg-sky-500/15 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-sky-300"
-          title="Acá ajustás a mano un video ya generado. Para crear uno nuevo desde cero, usá «Crear automático» en la pantalla anterior."
+          title="Aquí ajustas a mano un video ya generado. Para crear uno nuevo desde cero, usa «Crear automático» en la pantalla anterior."
         >
           edición manual
         </span>
@@ -459,7 +460,7 @@ function ActiveCaption({ words, time }: { words: Word[]; time: number }) {
   if (words.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        Aún no hay transcripción. Tocá «Transcribir».
+        Aún no hay transcripción. Da clic en «Transcribir».
       </p>
     );
   }
@@ -525,7 +526,7 @@ function MetaPanel({
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label>Caption</Label>
+        <Label>Descripción</Label>
         <textarea
           value={project.caption ?? ""}
           onChange={(e) => update({ caption: e.target.value })}

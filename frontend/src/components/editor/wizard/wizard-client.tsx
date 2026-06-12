@@ -12,6 +12,16 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { CheckCircle2, Loader2, ChevronLeft, ChevronRight, FileVideo, Mic, Sparkles, Send } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { StyleMiniDemo } from "@/components/editor/wizard/style-mini-demo";
 import { CinematicStep } from "@/components/editor/wizard/cinematic-step";
 import { HelpHint } from "@/components/ui/help-hint";
@@ -71,7 +81,19 @@ interface CaptionMeta {
   _model?: string;
 }
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
+
+// Progreso persistente: si el usuario recarga la página a mitad de la creación,
+// con esta clave se reanuda el paso 4 y el polling (los jobs viven en el server).
+const ACTIVE_JOB_KEY = "wizard.activeJob";
+
+function clearActiveJob() {
+  try {
+    window.localStorage.removeItem(ACTIVE_JOB_KEY);
+  } catch {
+    /* sin almacenamiento — no rompe */
+  }
+}
 
 // Nombres en lenguaje de principiante (no los codenames internos). `recommended` marca
 // el más fácil/rápido para un primer video. Orden: el recomendado primero.
@@ -82,10 +104,10 @@ const STYLES: { id: StyleId; name: string; tagline: string; emoji: string; recom
   { id: "hype_max_sfx", name: "Viral con sonidos", tagline: "Lo más llamativo: agrega efectos de sonido en los momentos clave.", emoji: "🎵" },
   { id: "supreme", name: "Premium", tagline: "Todo activado, la máxima calidad. Tarda un poco más.", emoji: "👑" },
   { id: "silent", name: "Limpio", tagline: "Solo subtítulos, sin efectos. Sobrio y profesional.", emoji: "🤍" },
-  { id: "broll_full", name: "Con videos de apoyo", tagline: "Agrega clips de archivo a pantalla completa según lo que decís.", emoji: "🎞️" },
+  { id: "broll_full", name: "Con videos de apoyo", tagline: "Agrega clips de archivo a pantalla completa según lo que dices.", emoji: "🎞️" },
   { id: "broll_pip", name: "Videos de apoyo (chico)", tagline: "Muestra clips de archivo en pequeño sobre tu video.", emoji: "🖼️" },
-  { id: "text_behind", name: "Texto detrás de vos", tagline: "Efecto CapCut clásico: una palabra grande queda DETRÁS del sujeto.", emoji: "🧍" },
-  { id: "graphics_pro", name: "Gráficos & Motion", tagline: "Suma gráficas animadas y titulares poderosos (de lo que decís) + zooms y transiciones.", emoji: "📊" },
+  { id: "text_behind", name: "Texto detrás de ti", tagline: "Efecto CapCut clásico: una palabra grande queda DETRÁS del sujeto.", emoji: "🧍" },
+  { id: "graphics_pro", name: "Gráficos & Motion", tagline: "Suma gráficas animadas y titulares poderosos (de lo que dices) + zooms y transiciones.", emoji: "📊" },
   { id: "graphics_max", name: "Gráficos Max", tagline: "Gráficos al máximo: cortes rápidos, zooms de reacción y stutter. La más intensa.", emoji: "📈" },
   { id: "motion_pro", name: "Motion Pro", tagline: "Animación pura y LIMPIA: fondo aurora que pulsa con la música, gráficas, sin emojis.", emoji: "✨" },
   { id: "motion_beat", name: "Motion Beat", tagline: "El fondo late al ritmo de la música (gradiente vivo) + zooms al beat. Limpio y con energía.", emoji: "🎧" },
@@ -156,12 +178,12 @@ const PALETTE = [
   { name: "rosa coral", value: "#fb7185", mood: "urgencia" },
   { name: "violeta", value: "#a78bfa", mood: "autoridad" },
   { name: "amarillo", value: "#fbbf24", mood: "claridad" },
-  { name: "emerald", value: "#34d399", mood: "crecimiento" },
-  { name: "cyan", value: "#22d3ee", mood: "tech" },
+  { name: "esmeralda", value: "#34d399", mood: "crecimiento" },
+  { name: "turquesa", value: "#22d3ee", mood: "tech" },
   { name: "magenta", value: "#ec4899", mood: "intensidad" },
   { name: "naranja", value: "#fb923c", mood: "acción" },
-  { name: "lime", value: "#a3e635", mood: "energía" },
-  { name: "indigo", value: "#6366f1", mood: "IA" },
+  { name: "verde limón", value: "#a3e635", mood: "energía" },
+  { name: "azul índigo", value: "#6366f1", mood: "IA" },
   { name: "violeta claro", value: "#c084fc", mood: "elegancia" },
 ];
 
@@ -170,7 +192,7 @@ export function WizardClient() {
   const [rawDir, setRawDir] = useState<string>("");
   const [step, setStep] = useState(1);
   // Multi-select: el wizard procesa N videos a la vez (todos con la misma config).
-  // Si seleccionás 3 videos × 2 estilos, se encolan 3 jobs (cola serial: 1 a la vez).
+  // Si seleccionas 3 videos × 2 estilos, se encolan 3 jobs (cola serial: 1 a la vez).
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
   const [selectedStyles, setSelectedStyles] = useState<StyleId[]>(["hype"]);
   const [accent, setAccent] = useState<string>("#fb7185");
@@ -179,24 +201,26 @@ export function WizardClient() {
   const [subtitleColor, setSubtitleColor] = useState<string>("auto");
   // Tema del estilo Editorial. Los 4 clásicos + 13 SUB-TEMAS de clase mundial
   // (Ola 3): cada uno con lienzo, tipografías y "gesto de motion" propios.
+  // ORDEN: los primeros 8 son los visibles por default (slice(0,8)) y se
+  // eligieron para que haya variedad real de lienzos/colores a primera vista.
   const EDITORIAL_THEMES = [
-    { id: "clasico", name: "Clásico", theme: "", font: "playfair", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "Georgia, serif" },
-    { id: "tinta", name: "Tinta", theme: "", font: "dmserif", background: "ink", bg: "#0a0f16", text: "#e9eef5", demoFont: "'Times New Roman', serif" },
-    { id: "crema", name: "Crema", theme: "", font: "lora", background: "cream", bg: "#f5efe3", text: "#1c1611", demoFont: "Georgia, serif" },
-    { id: "bold", name: "Bold", theme: "", font: "abril", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "'Arial Black', serif" },
-    { id: "prensa", name: "Prensa 1900", theme: "prensa", accent: "#8e2a1e", font: "playfair", background: "cream", bg: "#e8e1cf", text: "#1c1812", demoFont: "'Times New Roman', serif" },
-    { id: "vogue", name: "Vogue noir", theme: "vogue", accent: "#c9a96a", font: "bodoni", background: "dark", bg: "#0c0b0a", text: "#f4f0e6", demoFont: "'Didot', 'Bodoni MT', serif" },
-    { id: "kinfolk", name: "Kinfolk calma", theme: "kinfolk", accent: "#b06b4c", font: "lora", background: "cream", bg: "#f6f3ec", text: "#33302a", demoFont: "'Garamond', serif" },
-    { id: "riso", name: "Zine riso", theme: "riso", accent: "#FF48B0", font: "abril", background: "cream", bg: "#f1ece0", text: "#141414", demoFont: "'Arial Black', sans-serif" },
-    { id: "grabado", name: "Grabado", theme: "grabado", accent: "#8a6d3b", font: "playfair", background: "cream", bg: "#ece3cd", text: "#2a2118", demoFont: "'Book Antiqua', serif" },
-    { id: "constructivista", name: "Constructivista", theme: "constructivista", accent: "#cf2618", font: "abril", background: "cream", bg: "#ece2cf", text: "#181613", demoFont: "'Arial Narrow', sans-serif" },
-    { id: "bauhaus", name: "Bauhaus", theme: "bauhaus", accent: "#be1e2d", font: "lora", background: "cream", bg: "#f2e9d8", text: "#1f1d1a", demoFont: "'Century Gothic', sans-serif" },
-    { id: "swiss", name: "Suizo grid", theme: "swiss", accent: "#e30613", font: "lora", background: "cream", bg: "#f4f4f1", text: "#0d0d0d", demoFont: "'Helvetica', 'Arial', sans-serif" },
-    { id: "brutal", name: "Brutalista", theme: "brutal", accent: "#ff4d00", font: "lora", background: "cream", bg: "#efefea", text: "#000000", demoFont: "'Consolas', monospace" },
-    { id: "mincho", name: "Japón mincho", theme: "mincho", accent: "#b3342c", font: "lora", background: "cream", bg: "#f5f3ed", text: "#26241f", demoFont: "'MS Mincho', serif" },
-    { id: "stripe", name: "Stripe press", theme: "stripe", accent: "#635bff", font: "newsreader", background: "ink", bg: "#0a2540", text: "#f6f9fc", demoFont: "Georgia, serif" },
-    { id: "docu", name: "Docu rojo", theme: "docu", accent: "#e3120b", font: "lora", background: "cream", bg: "#f9f7f1", text: "#121212", demoFont: "'Franklin Gothic Medium', sans-serif" },
-    { id: "ft", name: "FT salmón", theme: "ft", accent: "#0d7680", font: "lora", background: "cream", bg: "#fff1e5", text: "#33302e", demoFont: "'Franklin Gothic Medium', sans-serif" },
+    { id: "clasico", name: "Clásico", hint: "Elegante y serio, estilo documental", theme: "", font: "playfair", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "Georgia, serif" },
+    { id: "ft", name: "FT salmón", hint: "Rosa salmón de periódico financiero", theme: "ft", accent: "#0d7680", font: "lora", background: "cream", bg: "#fff1e5", text: "#33302e", demoFont: "'Franklin Gothic Medium', sans-serif" },
+    { id: "vogue", name: "Vogue noir", hint: "Negro con dorado, revista de lujo", theme: "vogue", accent: "#c9a96a", font: "bodoni", background: "dark", bg: "#0c0b0a", text: "#f4f0e6", demoFont: "'Didot', 'Bodoni MT', serif" },
+    { id: "riso", name: "Zine riso", hint: "Fanzine rebelde, rosa neón", theme: "riso", accent: "#FF48B0", font: "abril", background: "cream", bg: "#f1ece0", text: "#141414", demoFont: "'Arial Black', sans-serif" },
+    { id: "stripe", name: "Stripe press", hint: "Azul tech de manual fino", theme: "stripe", accent: "#635bff", font: "newsreader", background: "ink", bg: "#0a2540", text: "#f6f9fc", demoFont: "Georgia, serif" },
+    { id: "prensa", name: "Prensa 1900", hint: "Periódico antiguo, tinta roja", theme: "prensa", accent: "#8e2a1e", font: "playfair", background: "cream", bg: "#e8e1cf", text: "#1c1812", demoFont: "'Times New Roman', serif" },
+    { id: "swiss", name: "Suizo grid", hint: "Blanco, orden, toque rojo", theme: "swiss", accent: "#e30613", font: "lora", background: "cream", bg: "#f4f4f1", text: "#0d0d0d", demoFont: "'Helvetica', 'Arial', sans-serif" },
+    { id: "bold", name: "Bold", hint: "Letras gruesas que gritan", theme: "", font: "abril", background: "dark", bg: "#0a0908", text: "#f3ede1", demoFont: "'Arial Black', serif" },
+    { id: "tinta", name: "Tinta", hint: "Azul noche, sobrio", theme: "", font: "dmserif", background: "ink", bg: "#0a0f16", text: "#e9eef5", demoFont: "'Times New Roman', serif" },
+    { id: "crema", name: "Crema", hint: "Claro y cálido, se siente caro", theme: "", font: "lora", background: "cream", bg: "#f5efe3", text: "#1c1611", demoFont: "Georgia, serif" },
+    { id: "kinfolk", name: "Kinfolk calma", hint: "Minimalista, tonos tierra", theme: "kinfolk", accent: "#b06b4c", font: "lora", background: "cream", bg: "#f6f3ec", text: "#33302a", demoFont: "'Garamond', serif" },
+    { id: "grabado", name: "Grabado", hint: "Ilustración antigua, sepia", theme: "grabado", accent: "#8a6d3b", font: "playfair", background: "cream", bg: "#ece3cd", text: "#2a2118", demoFont: "'Book Antiqua', serif" },
+    { id: "constructivista", name: "Constructivista", hint: "Cartel ruso: rojo y diagonales", theme: "constructivista", accent: "#cf2618", font: "abril", background: "cream", bg: "#ece2cf", text: "#181613", demoFont: "'Arial Narrow', sans-serif" },
+    { id: "bauhaus", name: "Bauhaus", hint: "Geometría con rojo", theme: "bauhaus", accent: "#be1e2d", font: "lora", background: "cream", bg: "#f2e9d8", text: "#1f1d1a", demoFont: "'Century Gothic', sans-serif" },
+    { id: "mincho", name: "Japón mincho", hint: "Papel claro y sello rojo, calma", theme: "mincho", accent: "#b3342c", font: "lora", background: "cream", bg: "#f5f3ed", text: "#26241f", demoFont: "'MS Mincho', serif" },
+    { id: "brutal", name: "Brutalista", hint: "Crudo y directo", theme: "brutal", accent: "#ff4d00", font: "lora", background: "cream", bg: "#efefea", text: "#000000", demoFont: "'Consolas', monospace" },
+    { id: "docu", name: "Docu rojo", hint: "Documental de denuncia", theme: "docu", accent: "#e3120b", font: "lora", background: "cream", bg: "#f9f7f1", text: "#121212", demoFont: "'Franklin Gothic Medium', sans-serif" },
   ] as const;
   const [editorialTheme, setEditorialTheme] = useState<string>("clasico");
   // 17 temas abruman: se muestran 8 y "Ver todos" despliega el resto.
@@ -205,6 +229,20 @@ export function WizardClient() {
   const [motionBackground, setMotionBackground] = useState<string>("auto");
   // Intensidad de FX (estilos hype*/supreme). "normal" = el estilo tal cual.
   const [fxIntensity, setFxIntensity] = useState<string>("normal");
+  // true cuando el usuario eligió un color A MANO en el paso 3: a partir de ahí,
+  // elegir un tema editorial ya NO le pisa el color.
+  const [accentTouched, setAccentTouched] = useState(false);
+  // Transcripción visible: lote en curso (para el panel "Estamos escuchando…")
+  // y videos cuyo audio no se pudo escuchar (cada uno con su botón Reintentar).
+  const [transcribeQueue, setTranscribeQueue] = useState<VideoEntry[]>([]);
+  const [transcribeErrors, setTranscribeErrors] = useState<VideoEntry[]>([]);
+  // Diálogos propios para plantillas (reemplazan window.prompt/confirm).
+  const [templateDialog, setTemplateDialog] = useState<
+    { mode: "save" } | { mode: "delete"; id: string; name: string } | null
+  >(null);
+  const [templateName, setTemplateName] = useState("");
+  // Combo "videoId::estilo" que se está re-creando desde el paso final.
+  const [retryingStyle, setRetryingStyle] = useState<string | null>(null);
 
   // F4 — Vista previa REAL: un frame (o clip de 3s) del video del user con el estilo.
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -263,6 +301,41 @@ export function WizardClient() {
     loadVideos();
   }, []);
 
+  // Progreso persistente: si hay una creación en curso guardada (<2h), reanudar
+  // el paso 4 y el polling — los jobs viven en el server y sobreviven al refresh.
+  function restoreActiveJob() {
+    try {
+      const raw = window.localStorage.getItem(ACTIVE_JOB_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as {
+        jobIds?: string[];
+        videoIds?: string[];
+        styles?: string[];
+        ts?: number;
+      };
+      const fresh =
+        typeof saved.ts === "number" && Date.now() - saved.ts < 2 * 60 * 60 * 1000;
+      if (!fresh || !Array.isArray(saved.jobIds) || saved.jobIds.length === 0) {
+        clearActiveJob();
+        return;
+      }
+      if (Array.isArray(saved.videoIds)) setSelectedVideos(new Set(saved.videoIds));
+      if (Array.isArray(saved.styles) && saved.styles.length > 0) {
+        setSelectedStyles(saved.styles as StyleId[]);
+      }
+      setBuilding(true);
+      setStep(4);
+      startPolling(saved.jobIds, saved.videoIds ?? [], { restored: true });
+    } catch {
+      clearActiveJob();
+    }
+  }
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    restoreActiveJob();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const selectedVideoList = videos.filter((v) => selectedVideos.has(v.id));
   const firstSelected = selectedVideoList[0];
 
@@ -294,11 +367,17 @@ export function WizardClient() {
         const r = await fetch("/api/videos/import", { method: "POST", body: form });
         if (r.ok) ok++; else fail++;
       }
-      if (ok > 0) toast.success(`${ok} video(s) importado(s) ✓`);
-      if (fail > 0) toast.error(`${fail} fallaron`);
+      if (ok > 0) toast.success(ok === 1 ? "1 video importado ✓" : `${ok} videos importados ✓`);
+      if (fail > 0) {
+        toast.error(
+          fail === 1 ? "1 video no se pudo importar" : `${fail} videos no se pudieron importar`
+        );
+      }
       loadVideos();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo importar tu video", {
+        action: { label: "Reintentar", onClick: () => importVideos(files) },
+      });
     } finally {
       setImporting(false);
     }
@@ -330,15 +409,24 @@ export function WizardClient() {
   function applyTemplate(t: Template) {
     setSelectedStyles(t.styles as StyleId[]);
     setAccent(t.accentColor);
+    // El color de la plantilla fue elegido a mano en su momento: cuenta como
+    // elección del usuario y los temas editoriales ya no lo pisan.
+    setAccentTouched(true);
     setSubtitleFont(t.subtitleFont || "auto");
     setSubtitleColor(t.subtitleColor || "auto");
     setAspectRatio(t.aspectRatio === "16:9" ? "16:9" : "9:16");
     toast.success(`Plantilla "${t.name}" aplicada`);
   }
 
-  async function saveTemplate() {
-    const name = window.prompt("Nombre de la plantilla (ej: Mi estilo viral):");
-    if (!name || !name.trim()) return;
+  // Diálogo propio en vez de window.prompt: abre, pide nombre y guarda.
+  function openSaveTemplateDialog() {
+    setTemplateName("");
+    setTemplateDialog({ mode: "save" });
+  }
+
+  async function saveTemplate(name: string) {
+    if (!name.trim()) return;
+    setTemplateDialog(null);
     try {
       const r = await fetch("/api/templates", {
         method: "POST",
@@ -357,21 +445,47 @@ export function WizardClient() {
       toast.success(`Plantilla "${name.trim()}" guardada`);
       loadTemplates();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toastError(e, "No se pudo guardar tu plantilla", {
+        action: { label: "Reintentar", onClick: () => saveTemplate(name) },
+      });
     }
   }
 
-  async function deleteTemplate(id: string, name: string) {
-    if (!window.confirm(`¿Borrar la plantilla "${name}"?`)) return;
+  async function deleteTemplate(id: string) {
+    setTemplateDialog(null);
     try {
-      await fetch(`/api/templates?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const r = await fetch(`/api/templates?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!r.ok) throw new Error("no se pudo borrar");
       loadTemplates();
-    } catch {
-      /* ignore */
+    } catch (err) {
+      toastError(err, "No se pudo borrar la plantilla", {
+        action: { label: "Reintentar", onClick: () => deleteTemplate(id) },
+      });
     }
+  }
+
+  // Overrides del paso a paso que viajan IGUAL a la creación final y a la vista
+  // previa (mismo mapeo): tema editorial, fondo animado e intensidad de FX.
+  // "auto"/"normal" = undefined = el render sale como siempre.
+  function overridesPayload() {
+    const t = EDITORIAL_THEMES.find((x) => x.id === editorialTheme);
+    return {
+      editorialTheme: t
+        ? { font: t.font, background: t.background, theme: t.theme || undefined }
+        : undefined,
+      motionBackground:
+        motionBackground === "aurora" || motionBackground === "mesh" || motionBackground === "grid"
+          ? motionBackground
+          : undefined,
+      fxIntensity:
+        fxIntensity === "suave" || fxIntensity === "max"
+          ? (fxIntensity as "suave" | "max")
+          : undefined,
+    };
   }
 
   // F4 — Genera la vista previa real (still del 35% o clip de 3s EN MOVIMIENTO).
+  // Manda los MISMOS overrides que la creación final → vista previa honesta.
   async function generateStylePreview(motion = false) {
     if (!firstSelected || selectedStyles.length === 0) return;
     setPreviewLoading(true);
@@ -386,16 +500,19 @@ export function WizardClient() {
           accentColor: accent,
           subtitleFont,
           subtitleColor,
+          ...overridesPayload(),
           motion,
         }),
       });
       const d = await r.json();
-      if (!r.ok || !d.url) throw new Error(d.error ?? "no se pudo generar la vista previa");
+      if (!r.ok || !d.url) throw new Error(d.error ?? "no se pudo crear la vista previa");
       setPreviewIsVideo(Boolean(d.motion));
       setPreviewUrl(`${d.url}&ts=${Date.now()}`);
-      if (d.cached) toast.success("Vista previa lista (caché)");
+      if (d.cached) toast.success("Vista previa lista — al instante");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toastError(e, "No se pudo crear la vista previa", {
+        action: { label: "Reintentar", onClick: () => generateStylePreview(motion) },
+      });
     } finally {
       setPreviewLoading(false);
     }
@@ -407,7 +524,52 @@ export function WizardClient() {
     );
   }
 
-  // Avanza al paso 2; transcribe en paralelo los videos no-transcritos del set.
+  // Escucha (transcribe) en paralelo un lote de videos. Devuelve true si TODOS
+  // quedaron listos. Los que fallan quedan en transcribeErrors, cada uno con su
+  // mensaje humano y botón Reintentar en el paso 1.
+  async function runTranscription(list: VideoEntry[]): Promise<boolean> {
+    if (list.length === 0) return true;
+    setTranscribing(true);
+    setTranscribeQueue(list);
+    // Si se reintenta un video que ya estaba en errores, sacarlo de la lista.
+    setTranscribeErrors((prev) => prev.filter((e) => !list.some((v) => v.id === e.id)));
+    try {
+      const settled = await Promise.allSettled(
+        list.map((v) =>
+          fetch("/api/videos/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ videoId: v.id }),
+          }).then(async (res) => {
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error ?? "no se pudo escuchar el audio");
+          })
+        )
+      );
+      const failed = list.filter((_, i) => settled[i].status === "rejected");
+      const ok = list.length - failed.length;
+      if (ok > 0) {
+        toast.success(
+          ok === 1 && list.length === 1
+            ? "Tu video ya tiene subtítulos ✓"
+            : `${ok} de ${list.length} videos ya tienen subtítulos`
+        );
+      }
+      if (failed.length > 0) setTranscribeErrors((prev) => [...prev, ...failed]);
+      await loadVideos();
+      return failed.length === 0;
+    } catch (err) {
+      toastError(err, "No se pudo escuchar tu video", {
+        action: { label: "Reintentar", onClick: () => runTranscription(list) },
+      });
+      return false;
+    } finally {
+      setTranscribing(false);
+      setTranscribeQueue([]);
+    }
+  }
+
+  // Avanza al paso 2; primero escucha los videos del set que aún no tienen subtítulos.
   async function advanceFromStep1() {
     if (selectedVideos.size === 0) return;
     const needsTranscribe = selectedVideoList.filter((v) => !v.status.transcribed);
@@ -415,37 +577,11 @@ export function WizardClient() {
       setStep(2);
       return;
     }
-    setTranscribing(true);
-    try {
-      const results = await Promise.allSettled(
-        needsTranscribe.map((v) =>
-          fetch("/api/videos/transcribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ videoId: v.id }),
-          }).then(async (res) => {
-            const data = await res.json();
-            if (!res.ok) throw new Error(`${v.id}: ${data.error ?? "transcribe falló"}`);
-            return { videoId: v.id, words: data.transcript?.words?.length ?? 0 };
-          })
-        )
-      );
-      const ok = results.filter((r) => r.status === "fulfilled").length;
-      const failed = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
-      if (failed.length > 0) {
-        for (const f of failed) toast.error(String(f.reason));
-      }
-      if (ok > 0) toast.success(`${ok}/${needsTranscribe.length} transcripciones listas`);
-      await loadVideos();
-      if (failed.length === 0) setStep(2);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      setTranscribing(false);
-    }
+    const allOk = await runTranscription(needsTranscribe);
+    if (allOk) setStep(2);
   }
 
-  // Elegí el caption correcto según la primera plataforma seleccionada.
+  // Elige la descripción correcta según la primera plataforma seleccionada.
   function captionForPlatforms(copy: CaptionMeta): string {
     const tagJoin = (arr?: string[]) => (arr && arr.length ? "\n\n" + arr.join(" ") : "");
     if (selectedPlatforms.includes("linkedin")) {
@@ -471,18 +607,153 @@ export function WizardClient() {
         { method: "POST" }
       );
       const data = await res.json();
-      if (!res.ok || !data.copy) throw new Error(data.error ?? "no se generó copy");
+      if (!res.ok || !data.copy) throw new Error(data.error ?? "no se generó la descripción");
       const copy = data.copy as CaptionMeta;
       setCaptionMeta(copy);
       setCaption(captionForPlatforms(copy));
-      const provider = copy._provider ?? "ia";
-      const model = copy._model ?? "";
-      toast.success(`Caption viral generado (${provider}${model ? " · " + model : ""})`);
+      toast.success("✅ Tu descripción está lista");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo generar la descripción", {
+        action: { label: "Reintentar", onClick: generateCaptionAI },
+      });
     } finally {
       setGeneratingCaption(false);
     }
+  }
+
+  // Cuerpo común del pedido a auto-build (lo usan handleBuild y el reintento
+  // de un solo estilo, para que el reintento salga con LA MISMA configuración).
+  function buildRequestBody(videoIds: string[], styles: StyleId[] | string[]) {
+    return {
+      videoIds,
+      styles,
+      accentColor: accent,
+      subtitleFont,
+      subtitleColor,
+      // Submenús opcionales: solo viajan si el user cambió el default —
+      // "auto"/"normal" = undefined = el render sale como siempre.
+      ...overridesPayload(),
+      platforms: selectedPlatforms,
+      aspectRatio,
+      caption: caption || undefined,
+      captionMeta: captionMeta ?? undefined,
+      // Modo cinematográfico (opt-in). Si enabled=false, el render sale idéntico a antes.
+      cinematic: cinematicConfig.enabled
+        ? {
+            overlayIds: cinematicConfig.overlayIds,
+            filmGrain: cinematicConfig.filmGrain,
+            vignette: cinematicConfig.vignette,
+            subtitleCinematic: cinematicConfig.subtitleStyleCinematic,
+          }
+        : undefined,
+    };
+  }
+
+  // Polling cada 2s del progreso AGREGADO de los jobs. Compartido por la
+  // creación normal, la reanudación tras un refresh (restored) y el botón
+  // "Reintentar este estilo" del paso final (mergeInto = solo pisa ese combo).
+  function startPolling(
+    jobIds: string[],
+    videoIds: string[],
+    opts: { restored?: boolean; mergeInto?: string } = {}
+  ) {
+    let emptyPolls = 0;
+    const poll = async () => {
+      try {
+        const responses = await Promise.allSettled(
+          jobIds.map((jid) => fetch(`/api/editor/progress?jobId=${jid}`).then((r) => r.json()))
+        );
+        const jobs = responses
+          .filter((r): r is PromiseFulfilledResult<{ job: { status: string; overallProgress: number; currentStyle?: string; steps: { styleId: string; status: string; progress: number; currentFrame?: number; totalFrames?: number; output?: string; error?: string }[] } }> => r.status === "fulfilled" && Boolean(r.value?.job))
+          .map((r) => r.value.job);
+
+        if (jobs.length === 0) {
+          emptyPolls += 1;
+          // Tras un refresh o reintento: si el job ya no existe (la app se
+          // reinició y la cola se perdió), avisar en vez de esperar para siempre.
+          if ((opts.restored || opts.mergeInto) && emptyPolls >= 2) {
+            clearActiveJob();
+            setBuilding(false);
+            setJobProgress(null);
+            setRetryingStyle(null);
+            toast.error("Se interrumpió la creación — vuelve a intentarlo");
+            return;
+          }
+          setTimeout(poll, 3000);
+          return;
+        }
+
+        // Promedio de overallProgress de todos los jobs
+        const avgProgress = Math.round(
+          jobs.reduce((acc, j) => acc + j.overallProgress, 0) / jobs.length
+        );
+        // El "currentStyle" es del primer job running (los otros están queued o ya terminaron)
+        const runningJob = jobs.find((j) => j.status === "running");
+        // Agregar todos los steps de todos los jobs en una sola lista (prefijando videoId)
+        const aggregatedSteps = jobs.flatMap((j, i) =>
+          j.steps.map((s) => ({ ...s, styleId: `${videoIds[i]}::${s.styleId}` }))
+        );
+
+        if (!opts.mergeInto) {
+          setJobProgress({
+            overallProgress: avgProgress,
+            currentStyle: runningJob?.currentStyle,
+            steps: aggregatedSteps,
+          });
+        }
+
+        const allDone = jobs.every((j) => j.status === "done" || j.status === "failed");
+        if (allDone) {
+          const allResults = jobs.flatMap((j, i) =>
+            j.steps.map((s) => ({
+              styleId: `${videoIds[i]}::${s.styleId}`,
+              ok: s.status === "ok",
+              output: s.output,
+              error: s.error,
+            }))
+          );
+
+          // Reintento de UN estilo desde el paso final: pisa solo ese resultado.
+          if (opts.mergeInto) {
+            const comboId = opts.mergeInto;
+            const updated = allResults[0];
+            setRetryingStyle(null);
+            if (updated) {
+              setResults((prev) =>
+                prev.map((p) => (p.styleId === comboId ? { ...updated, styleId: comboId } : p))
+              );
+              if (updated.ok) {
+                toast.success(`¡Listo! El estilo ${humanStyleName(comboId)} ya quedó perfecto`);
+              } else {
+                toastError(updated.error ?? "volvió a fallar", "Este estilo no se pudo crear", {
+                  action: { label: "Reintentar", onClick: () => retryOneStyle(comboId) },
+                });
+              }
+            }
+            return;
+          }
+
+          setResults(allResults);
+          const okCount = allResults.filter((r) => r.ok).length;
+          if (okCount > 0) {
+            toast.success(`¡Listo! ${okCount} de ${allResults.length} videos quedaron perfectos`);
+          } else {
+            toastError(
+              allResults[0]?.error ?? "ningún estilo se pudo crear",
+              "No se pudieron crear tus videos"
+            );
+          }
+          clearActiveJob();
+          setBuilding(false);
+          setStep(5);
+          return;
+        }
+        setTimeout(poll, 2000);
+      } catch {
+        setTimeout(poll, 4000);
+      }
+    };
+    poll();
   }
 
   async function handleBuild() {
@@ -495,108 +766,62 @@ export function WizardClient() {
       const res = await fetch("/api/editor/auto-build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          videoIds,
-          styles: selectedStyles,
-          accentColor: accent,
-          subtitleFont,
-          subtitleColor,
-          editorialTheme: (() => {
-            const t = EDITORIAL_THEMES.find((x) => x.id === editorialTheme);
-            return t ? { font: t.font, background: t.background, theme: t.theme || undefined } : undefined;
-          })(),
-          // Submenús opcionales: solo viajan si el user cambió el default —
-          // "auto"/"normal" = undefined = el render sale como siempre.
-          motionBackground:
-            motionBackground === "aurora" || motionBackground === "mesh" || motionBackground === "grid"
-              ? motionBackground
-              : undefined,
-          fxIntensity: fxIntensity === "suave" || fxIntensity === "max" ? fxIntensity : undefined,
-          platforms: selectedPlatforms,
-          aspectRatio,
-          caption: caption || undefined,
-          captionMeta: captionMeta ?? undefined,
-          // Modo cinematográfico (opt-in). Si enabled=false, el render sale idéntico a antes.
-          cinematic: cinematicConfig.enabled
-            ? {
-                overlayIds: cinematicConfig.overlayIds,
-                filmGrain: cinematicConfig.filmGrain,
-                vignette: cinematicConfig.vignette,
-                subtitleCinematic: cinematicConfig.subtitleStyleCinematic,
-              }
-            : undefined,
-        }),
+        body: JSON.stringify(buildRequestBody(videoIds, selectedStyles)),
       });
       const data = await res.json();
       if (!res.ok || !data.jobIds || data.jobIds.length === 0) {
-        toast.error(data.error ?? "build falló");
+        toastError(data.error ?? "no se pudo poner en fila", "No se pudo arrancar la creación", {
+          action: { label: "Reintentar", onClick: handleBuild },
+        });
         setBuilding(false);
         return;
       }
       const jobIds: string[] = data.jobIds;
       if (jobIds.length > 1) {
-        toast.success(`${jobIds.length} videos encolados — la cola los procesa de a uno`);
+        toast.success(`${jobIds.length} videos en fila — se crean de a uno`);
       }
-
-      // Polling cada 2s del progreso AGREGADO de todos los jobs.
-      // Para tracking individual de cada job, el usuario tiene el QueuePanel global (F2.4).
-      const poll = async () => {
-        try {
-          const responses = await Promise.allSettled(
-            jobIds.map((jid) => fetch(`/api/editor/progress?jobId=${jid}`).then((r) => r.json()))
-          );
-          const jobs = responses
-            .filter((r): r is PromiseFulfilledResult<{ job: { status: string; overallProgress: number; currentStyle?: string; steps: { styleId: string; status: string; progress: number; currentFrame?: number; totalFrames?: number; output?: string; error?: string }[] } }> => r.status === "fulfilled" && Boolean(r.value?.job))
-            .map((r) => r.value.job);
-
-          if (jobs.length === 0) {
-            setTimeout(poll, 3000);
-            return;
-          }
-
-          // Promedio de overallProgress de todos los jobs
-          const avgProgress = Math.round(
-            jobs.reduce((acc, j) => acc + j.overallProgress, 0) / jobs.length
-          );
-          // El "currentStyle" es del primer job running (el otros están queued o ya terminaron)
-          const runningJob = jobs.find((j) => j.status === "running");
-          // Agregar todos los steps de todos los jobs en una sola lista (prefijando videoId)
-          const aggregatedSteps = jobs.flatMap((j, i) =>
-            j.steps.map((s) => ({ ...s, styleId: `${videoIds[i]}::${s.styleId}` }))
-          );
-
-          setJobProgress({
-            overallProgress: avgProgress,
-            currentStyle: runningJob?.currentStyle,
-            steps: aggregatedSteps,
-          });
-
-          const allDone = jobs.every((j) => j.status === "done" || j.status === "failed");
-          if (allDone) {
-            const allResults = jobs.flatMap((j, i) =>
-              j.steps.map((s) => ({
-                styleId: `${videoIds[i]}::${s.styleId}`,
-                ok: s.status === "ok",
-                output: s.output,
-                error: s.error,
-              }))
-            );
-            setResults(allResults);
-            const okCount = allResults.filter((r) => r.ok).length;
-            toast.success(`${okCount}/${allResults.length} renders OK`);
-            setBuilding(false);
-            setStep(5);
-            return;
-          }
-          setTimeout(poll, 2000);
-        } catch {
-          setTimeout(poll, 4000);
-        }
-      };
-      poll();
+      // Progreso persistente: si recargas la página, el paso 4 se reanuda solo.
+      try {
+        window.localStorage.setItem(
+          ACTIVE_JOB_KEY,
+          JSON.stringify({ jobIds, videoIds, styles: selectedStyles, ts: Date.now() })
+        );
+      } catch {
+        /* sin almacenamiento — la creación sigue igual, solo no sobrevive al refresh */
+      }
+      startPolling(jobIds, videoIds);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo arrancar la creación", {
+        action: { label: "Reintentar", onClick: handleBuild },
+      });
       setBuilding(false);
+    }
+  }
+
+  // Re-encola SOLO un combo "videoId::estilo" que falló (botón del paso final).
+  // Mismo cuerpo que handleBuild pero con un único video y un único estilo.
+  async function retryOneStyle(comboId: string) {
+    const parts = comboId.split("::");
+    const styleId = parts.pop()!;
+    const videoId = parts.length > 0 ? parts.join("::") : Array.from(selectedVideos)[0];
+    if (!videoId || !styleId) return;
+    setRetryingStyle(comboId);
+    try {
+      const res = await fetch("/api/editor/auto-build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildRequestBody([videoId], [styleId])),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.jobIds || data.jobIds.length === 0) {
+        throw new Error(data.error ?? "no se pudo poner en fila");
+      }
+      startPolling(data.jobIds, [videoId], { mergeInto: comboId });
+    } catch (err) {
+      setRetryingStyle(null);
+      toastError(err, "No se pudo arrancar la creación", {
+        action: { label: "Reintentar", onClick: () => retryOneStyle(comboId) },
+      });
     }
   }
 
@@ -604,7 +829,7 @@ export function WizardClient() {
   // ver cómo queda TU video es lo que más confianza da; debe estar al frente.
   const previewPanel = (
     <div className="mt-5 rounded-lg border-2 border-emerald-500/30 bg-emerald-500/5 p-4 text-center">
-      <p className="mb-2 text-sm font-medium">👁️ Mirá cómo queda TU video antes de generarlo</p>
+      <p className="mb-2 text-sm font-medium">👁️ Mira cómo queda TU video antes de crearlo</p>
       <div className="flex flex-wrap items-center justify-center gap-2">
         <button
           type="button"
@@ -624,7 +849,7 @@ export function WizardClient() {
         </button>
       </div>
       <p className="mt-1 text-[10px] text-muted-foreground">
-        Tu video con el estilo &quot;{STYLES.find((s) => s.id === selectedStyles[0])?.name ?? "—"}&quot; y lo que hayas elegido. La segunda vez es instantánea (caché).
+        Tu video con el estilo &quot;{STYLES.find((s) => s.id === selectedStyles[0])?.name ?? "—"}&quot; y lo que hayas elegido. La segunda vez es al instante.
       </p>
       {previewUrl && previewIsVideo && (
         <video
@@ -651,7 +876,7 @@ export function WizardClient() {
       {/* Stepper visual — muestra el recorrido completo para que el usuario sepa dónde está.
           Pasos hechos: check verde, paso actual: bg primary con glow, futuros: gris. */}
       <div className="flex items-start gap-1 text-xs sm:gap-2">
-        {["Video", "Estilo", "Color", "Generar"].map((label, i) => {
+        {["Video", "Estilo", "Color", "Crear", "Listo"].map((label, i) => {
           const n = i + 1;
           const done = step > n;
           const current = step === n;
@@ -696,7 +921,7 @@ export function WizardClient() {
       {step === 1 && (
         <Card className="border-border bg-card p-6">
           <div className="mb-4 flex items-center justify-between gap-2">
-            <h2 className="text-lg font-medium">1. Elegí los videos</h2>
+            <h2 className="text-lg font-medium">1. Elige tus videos</h2>
             <div className="flex items-center gap-2">
               <span className="font-mono-tab text-[10px] text-muted-foreground">
                 {selectedVideos.size} de {videos.length} seleccionado{selectedVideos.size === 1 ? "" : "s"}
@@ -725,8 +950,8 @@ export function WizardClient() {
             <EmptyState
               icon={FileVideo}
               tone="amber"
-              title="Traé tu primer video"
-              description="Elegí un video de tu computadora (MP4, MOV o similar) y la app lo edita por vos."
+              title="Trae tu primer video"
+              description="Elige un video de tu computadora (MP4, MOV o similar) y la app lo edita por ti."
               cta={{
                 label: importing ? "Importando…" : "Importar desde mi compu",
                 onClick: () => importInputRef.current?.click(),
@@ -809,13 +1034,54 @@ export function WizardClient() {
               </div>
             </>
           )}
+
+          {/* Transcripción VISIBLE: mientras la app escucha los videos para crear
+              los subtítulos, se dice claro qué pasa y cuánto puede tardar. */}
+          {transcribing && (() => {
+            const totalSec = transcribeQueue.reduce((a, v) => a + (v.durationSec ?? 0), 0);
+            // Estimado conservador: ~1 min de espera por minuto de video.
+            const est = totalSec > 0 ? Math.max(1, Math.ceil(totalSec / 60)) : null;
+            return (
+              <div className="mt-4 rounded-lg border border-sky-500/30 bg-sky-500/5 p-4 text-sm">
+                <p className="flex items-center gap-2 font-medium">
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" />
+                  <span>
+                    🎧 Estamos escuchando {transcribeQueue.length === 1 ? "tu video" : "tus videos"}{" "}
+                    para crear los subtítulos…{est ? ` (~${est} min)` : ""}
+                  </span>
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Esto se hace una sola vez por video. Deja esta pantalla abierta mientras tanto.
+                </p>
+              </div>
+            );
+          })()}
+
+          {/* Videos cuyo audio no se pudo escuchar: mensaje humano + Reintentar. */}
+          {!transcribing && transcribeErrors.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {transcribeErrors.map((v) => (
+                <div
+                  key={v.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm"
+                >
+                  <p>
+                    No pudimos escuchar el audio de «{v.filename}». Revisa que el video tenga voz.
+                  </p>
+                  <Button variant="outline" size="sm" onClick={() => runTranscription([v])}>
+                    Reintentar
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
 
       {/* STEP 2: estilos + aspect ratio */}
       {step === 2 && (
         <Card className="border-border bg-card p-6">
-          <h2 className="mb-2 text-lg font-medium">2. Elegí estilo(s) y formato</h2>
+          <h2 className="mb-2 text-lg font-medium">2. Elige estilo y formato</h2>
 
           {/* Plantillas guardables — aplicar un combo favorito con un click */}
           <div className="mb-5 rounded-lg border border-border bg-muted/20 p-3">
@@ -825,7 +1091,7 @@ export function WizardClient() {
               </p>
               <button
                 type="button"
-                onClick={saveTemplate}
+                onClick={openSaveTemplateDialog}
                 className="rounded border border-border bg-card px-2 py-1 text-[11px] hover:bg-muted"
               >
                 💾 Guardar configuración actual
@@ -833,7 +1099,7 @@ export function WizardClient() {
             </div>
             {templates.length === 0 ? (
               <p className="text-[11px] text-muted-foreground">
-                Guardá tu combo de estilo + color + tipografía + redes para reusarlo con un click.
+                Guarda tu combo de estilo + color + tipografía + redes para reusarlo con un click.
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -847,7 +1113,7 @@ export function WizardClient() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => deleteTemplate(t.id, t.name)}
+                      onClick={() => setTemplateDialog({ mode: "delete", id: t.id, name: t.name })}
                       className="text-muted-foreground opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
                       title="Borrar plantilla"
                     >
@@ -909,8 +1175,8 @@ export function WizardClient() {
           </div>
 
           <p className="mb-4 text-sm text-muted-foreground">
-            Para tu primer video, dejá el <strong className="text-foreground">Recomendado</strong>.
-            Podés elegir varios para comparar — se genera uno por cada estilo (cada uno tarda unos minutos).
+            Para tu primer video, deja el <strong className="text-foreground">Recomendado</strong>.
+            Puedes elegir varios para comparar — se crea un video por cada estilo (cada uno tarda unos minutos).
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {STYLES.map((s) => {
@@ -957,9 +1223,12 @@ export function WizardClient() {
                     type="button"
                     onClick={() => {
                       setEditorialTheme(t.id);
-                      // Sub-temas con identidad fuerte: sugerir su acento (el
-                      // user puede cambiarlo después en el selector de color).
-                      if ("accent" in t && t.accent) setAccent(t.accent);
+                      // Sub-temas con identidad fuerte: sugerir su acento, pero
+                      // NUNCA pisar un color que el usuario ya eligió a mano.
+                      if ("accent" in t && t.accent && !accentTouched) {
+                        setAccent(t.accent);
+                        toast.info("Este tema trae su propio color — puedes cambiarlo en el paso 3");
+                      }
                     }}
                     className={`overflow-hidden rounded-lg border text-left transition-all ${
                       editorialTheme === t.id
@@ -967,16 +1236,22 @@ export function WizardClient() {
                         : "border-border hover:border-foreground/30"
                     }`}
                   >
-                    {/* mini-preview del tema: fondo + serif + acento */}
+                    {/* mini-preview del tema: fondo + serif + SU acento (el propio
+                        del tema si lo tiene — miniatura fiel, no el accent global) */}
                     <div className="flex h-14 flex-col justify-center overflow-hidden px-2" style={{ background: t.bg }}>
                       <span className="truncate text-[7px] uppercase tracking-[0.3em]" style={{ color: t.text, opacity: 0.5 }}>
                         La verdad
                       </span>
                       <span className="truncate text-sm font-bold leading-tight" style={{ color: t.text, fontFamily: t.demoFont }}>
-                        Título <em style={{ color: accent }}>clave.</em>
+                        Título <em style={{ color: ("accent" in t && t.accent) || accent }}>clave.</em>
                       </span>
                     </div>
-                    <div className="truncate px-2 py-1 text-[10px] text-muted-foreground">{t.name}</div>
+                    <div className="px-2 py-1">
+                      <p className="truncate text-[10px] font-medium">{t.name}</p>
+                      <p className="truncate text-[9px] text-muted-foreground" title={t.hint}>
+                        {t.hint}
+                      </p>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -1070,7 +1345,7 @@ export function WizardClient() {
 
           <p className="mt-4 text-xs text-muted-foreground">
             {selectedStyles.length === 0
-              ? "Elegí al menos un estilo"
+              ? "Elige al menos un estilo"
               : `${selectedStyles.length} estilo${selectedStyles.length === 1 ? "" : "s"} elegido${selectedStyles.length === 1 ? "" : "s"}`}
           </p>
         </Card>
@@ -1079,20 +1354,39 @@ export function WizardClient() {
       {/* STEP 3: color */}
       {step === 3 && (
         <Card className="border-border bg-card p-6">
-          <h2 className="mb-2 text-lg font-medium">3. Elegí el color principal</h2>
+          <h2 className="mb-2 text-lg font-medium">3. Elige el color principal</h2>
           <p className="mb-4 text-sm text-muted-foreground">
             {editorialOnly
               ? "En el estilo Editorial este color pinta las palabras destacadas de los titulares y las ilustraciones animadas."
-              : "Este color se usa en todo el video: el resaltado de los subtítulos, los stickers y los detalles. Elegí el que mejor vaya con tu marca o tu mensaje."}
+              : "Este color se usa en todo el video: el resaltado de los subtítulos, los stickers y los detalles. Elige el que mejor vaya con tu marca o tu mensaje."}
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {PALETTE.map((c) => {
+            {(() => {
+              // Si hay tema editorial con acento propio, se antepone como swatch
+              // "Del tema ⭐" — así el selector nunca queda sin selección cuando
+              // el tema sugirió su color.
+              const themeDef = hasEditorial
+                ? EDITORIAL_THEMES.find((x) => x.id === editorialTheme)
+                : undefined;
+              const themeAccent =
+                themeDef && "accent" in themeDef && themeDef.accent ? themeDef.accent : null;
+              const swatches = themeAccent
+                ? [
+                    { name: "Del tema ⭐", value: themeAccent, mood: "recomendado" },
+                    ...PALETTE.filter((c) => c.value !== themeAccent),
+                  ]
+                : PALETTE;
+              return swatches.map((c) => {
               const selected = accent === c.value;
               return (
                 <button
                   key={c.value}
                   type="button"
-                  onClick={() => setAccent(c.value)}
+                  onClick={() => {
+                    setAccent(c.value);
+                    // El usuario eligió color a mano: los temas ya no lo pisan.
+                    setAccentTouched(true);
+                  }}
                   className={`flex flex-col items-center gap-2 rounded-lg border p-3 transition-all ${
                     selected ? "border-foreground" : "border-border hover:border-foreground/30"
                   }`}
@@ -1105,7 +1399,8 @@ export function WizardClient() {
                   <span className="font-mono-tab text-[10px] text-muted-foreground">{c.mood}</span>
                 </button>
               );
-            })}
+              });
+            })()}
           </div>
 
           {/* Editorial-solo: la tipografía/colores del texto vienen del TEMA del paso 2,
@@ -1115,7 +1410,7 @@ export function WizardClient() {
               <p className="font-medium">📰 El estilo Editorial no lleva subtítulos</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Usa titulares serif gigantes con la tipografía y el fondo del tema que elegiste
-                en el paso anterior. Por eso acá no hay nada más que configurar: solo el color
+                en el paso anterior. Por eso aquí no hay nada más que configurar: solo el color
                 principal de arriba.
               </p>
             </div>
@@ -1184,7 +1479,7 @@ export function WizardClient() {
             <>
           <h3 className="mb-2 mt-6 text-sm font-medium">Tipografía de los subtítulos</h3>
           <p className="mb-3 text-xs text-muted-foreground">
-            &quot;Automática&quot; usa la del estilo. O elegí una para darle otra personalidad.
+            &quot;Automática&quot; usa la del estilo. O elige una para darle otra personalidad.
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
             {SUBTITLE_FONTS.map((f) => {
@@ -1218,7 +1513,7 @@ export function WizardClient() {
       {/* STEP 4: redes + caption + confirmar */}
       {step === 4 && (
         <Card className="border-border bg-card p-6">
-          <h2 className="mb-4 text-lg font-medium">4. Revisá y generá tu video</h2>
+          <h2 className="mb-4 text-lg font-medium">4. Revisa y crea tu video</h2>
           <div className="space-y-4">
             {/* La descripción se genera SOLA en segundo plano (no aporta verla acá:
                 en Producción están los copys por red listos). Queda plegada por si
@@ -1295,8 +1590,11 @@ export function WizardClient() {
             <ul className="space-y-1 text-xs text-muted-foreground">
               <li>
                 · Video{selectedVideos.size === 1 ? "" : "s"} ({selectedVideos.size}):{" "}
-                <span className="font-mono-tab text-foreground">
-                  {Array.from(selectedVideos).slice(0, 3).join(", ")}
+                <span className="text-foreground">
+                  {Array.from(selectedVideos)
+                    .slice(0, 3)
+                    .map((id) => videos.find((v) => v.id === id)?.filename ?? id)
+                    .join(", ")}
                   {selectedVideos.size > 3 && ` +${selectedVideos.size - 3} más`}
                 </span>
               </li>
@@ -1312,7 +1610,16 @@ export function WizardClient() {
               </li>
               <li>
                 · Color: <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: accent }} />{" "}
-                <span className="font-mono-tab text-foreground">{accent}</span>
+                <span className="text-foreground">
+                  {(() => {
+                    // Nombre humano del color: el de la paleta, o "del tema X"
+                    // si vino sugerido por un tema editorial.
+                    const p = PALETTE.find((c) => c.value === accent);
+                    if (p) return p.name;
+                    const t = EDITORIAL_THEMES.find((x) => "accent" in x && x.accent === accent);
+                    return t ? `del tema ${t.name}` : accent;
+                  })()}
+                </span>
               </li>
               <li>
                 · Vas a generar{" "}
@@ -1325,13 +1632,14 @@ export function WizardClient() {
               </li>
               <li className="text-amber-400">
                 ⏱️ Va a tardar alrededor de {4 * selectedVideos.size * selectedStyles.length} minutos.
-                Se generan de a uno — podés seguir usando la app mientras tanto.
+                Se crean de a uno — puedes seguir usando la app mientras tanto.
               </li>
               {cinematicConfig.enabled && (
                 <li className="text-violet-300">
                   · 🎬 Modo cinematográfico ACTIVO:{" "}
                   <span className="text-foreground">
-                    {cinematicConfig.overlayIds.length} imagen(es)
+                    {cinematicConfig.overlayIds.length}{" "}
+                    {cinematicConfig.overlayIds.length === 1 ? "imagen" : "imágenes"}
                     {cinematicConfig.filmGrain ? " · film grain" : ""}
                     {cinematicConfig.vignette ? " · vignette" : ""}
                     {cinematicConfig.subtitleStyleCinematic ? " · subs cine" : ""}
@@ -1345,11 +1653,11 @@ export function WizardClient() {
             {building ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Renderizando…
+                Creando tus videos…
               </>
             ) : (
               <>
-                Generar y renderizar
+                ✨ Crear mis videos
                 <ChevronRight className="ml-1.5 h-4 w-4" />
               </>
             )}
@@ -1448,7 +1756,7 @@ export function WizardClient() {
                 </h2>
                 {okCount > 0 && (
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Ya podés verlo y publicarlo en tus redes.
+                    Ya puedes verlo y publicarlo en tus redes.
                   </p>
                 )}
               </div>
@@ -1471,7 +1779,36 @@ export function WizardClient() {
                   <p className="font-medium">
                     {humanStyleName(r.styleId)} {r.ok ? "· listo" : "· falló"}
                   </p>
-                  {r.error && <p className="text-[10px] text-red-400">{r.error.slice(0, 200)}</p>}
+                  {!r.ok && (
+                    <div className="mt-1 space-y-1.5">
+                      <p className="text-xs text-red-300">Este estilo no se pudo crear.</p>
+                      {r.error && (
+                        <details className="text-[10px] text-muted-foreground">
+                          <summary className="cursor-pointer hover:text-foreground">
+                            Detalle técnico
+                          </summary>
+                          <p className="mt-1 whitespace-pre-wrap break-all text-red-400/80">
+                            {r.error}
+                          </p>
+                        </details>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={retryingStyle !== null}
+                        onClick={() => retryOneStyle(r.styleId)}
+                      >
+                        {retryingStyle === r.styleId ? (
+                          <>
+                            <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                            Creando de nuevo…
+                          </>
+                        ) : (
+                          "Reintentar este estilo"
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </li>
             ))}
@@ -1488,12 +1825,14 @@ export function WizardClient() {
               variant="outline"
               className="h-11"
               onClick={() => {
+                clearActiveJob();
                 setStep(1);
                 setResults([]);
                 setSelectedVideos(new Set());
                 setCaption("");
                 setCaptionMeta(null);
                 setJobProgress(null);
+                setRetryingStyle(null);
               }}
             >
               <FileVideo className="mr-1.5 h-4 w-4" />
@@ -1526,7 +1865,7 @@ export function WizardClient() {
               {step === 1 && transcribing ? (
                 <>
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  Transcribiendo…
+                  Escuchando tu video…
                 </>
               ) : (
                 <>
@@ -1538,6 +1877,71 @@ export function WizardClient() {
           )}
         </div>
       )}
+
+      {/* Diálogos propios para plantillas (sin window.prompt / window.confirm). */}
+      <Dialog
+        open={templateDialog?.mode === "save"}
+        onOpenChange={(open) => {
+          if (!open) setTemplateDialog(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Cómo se llama tu plantilla?</DialogTitle>
+            <DialogDescription>
+              Guarda este combo de estilo + color + tipografía para aplicarlo con un click.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={templateName}
+            onChange={(e) => setTemplateName(e.target.value)}
+            placeholder="Ej: Mi estilo viral"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && templateName.trim()) saveTemplate(templateName);
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateDialog(null)}>
+              Cancelar
+            </Button>
+            <Button disabled={!templateName.trim()} onClick={() => saveTemplate(templateName)}>
+              Guardar plantilla
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={templateDialog?.mode === "delete"}
+        onOpenChange={(open) => {
+          if (!open) setTemplateDialog(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              ¿Borrar la plantilla «{templateDialog?.mode === "delete" ? templateDialog.name : ""}»?
+            </DialogTitle>
+            <DialogDescription>
+              Esto no toca ningún video — solo borra la plantilla guardada.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateDialog(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (templateDialog?.mode === "delete") deleteTemplate(templateDialog.id);
+              }}
+            >
+              Borrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

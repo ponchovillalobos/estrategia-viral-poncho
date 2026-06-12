@@ -63,7 +63,7 @@ export async function POST() {
     state.running = false;
     state.done = true;
     state.ok = r.ok;
-    if (!r.ok) state.lastLine = r.stderr.slice(-200) || "La descarga falló — revisá tu conexión.";
+    if (!r.ok) state.lastLine = r.stderr.slice(-200) || "La descarga falló — revisa tu conexión.";
   });
 
   return NextResponse.json({ ok: true });

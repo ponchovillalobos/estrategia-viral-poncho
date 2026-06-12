@@ -78,7 +78,7 @@ async function getPersonUrn(): Promise<string> {
   const settings = await readSettings();
   const urn = settings.linkedin.personUrn;
   if (!urn) {
-    throw new Error("No hay personUrn de LinkedIn. Conectá la cuenta en Settings.");
+    throw new Error("No hay personUrn de LinkedIn. Conecta la cuenta en Configuración.");
   }
   return urn;
 }
@@ -272,7 +272,7 @@ export async function uploadVideoToLinkedIn(
 ): Promise<LinkedInPostResult> {
   const accessToken = await getValidLinkedInAccessToken();
   if (!accessToken) {
-    throw new Error("No hay access_token de LinkedIn. Conectá la cuenta en Settings.");
+    throw new Error("No hay access_token de LinkedIn. Conecta la cuenta en Configuración.");
   }
   const personUrn = await getPersonUrn();
 

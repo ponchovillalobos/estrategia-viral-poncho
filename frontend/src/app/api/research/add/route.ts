@@ -132,7 +132,7 @@ async function processResearch(item: ResearchItem): Promise<void> {
       if (timedOut) {
         await updateResearch(item.id, {
           status: "failed",
-          lastError: "Descarga abortada por timeout (15 min) — reintentá o revisá la URL.",
+          lastError: "Descarga abortada por exceso de tiempo (15 min) — intenta de nuevo o revisa la URL.",
         });
         resolve();
         return;
@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Esa URL es de un PERFIL, no de un post. Copiá la URL de un video/reel/short específico.\n" +
+            "Esa URL es de un PERFIL, no de un post. Copia la URL de un video/reel/short específico.\n" +
             "Ejemplos:\n" +
             "  · TikTok: https://www.tiktok.com/@user/video/123456...\n" +
             "  · Instagram: https://www.instagram.com/reel/Cabc.../\n" +

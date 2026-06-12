@@ -10,7 +10,7 @@ export default function EditorIndexPage() {
       <SectionHeader
         eyebrow="Editor de shorts"
         title="Crear un video corto"
-        description="Elegí uno de tus videos para convertirlo en un short viral. ¿No ves el tuyo? Subilo desde tu compu con el botón de abajo. La forma más fácil es usar «Crear automático»: te lleva paso a paso."
+        description="Tus videos subidos. Elige uno para convertirlo en un short viral, o sube otro desde tu compu. Para crear un short paso a paso, usa «Crear automático»."
         color={SECTION_COLORS.editor}
       >
         <Link

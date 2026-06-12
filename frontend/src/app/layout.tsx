@@ -25,8 +25,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Estrategia Viral Poncho — Dashboard",
-  description: "Plan viral 30 días — comunicación + ventas + IA",
+  title: "Estrategia Viral Poncho",
+  description:
+    "Convierte tus videos en shorts virales — 100% en tu compu, sin saber editar.",
 };
 
 export default function RootLayout({

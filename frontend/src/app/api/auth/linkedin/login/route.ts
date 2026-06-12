@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Falta Client ID de LinkedIn. Andá a Settings → LinkedIn y completá Client ID + Secret de tu app.",
+          "Falta Client ID de LinkedIn. Ve a Configuración → LinkedIn y completa Client ID + Secret de tu app.",
       },
       { status: 400 }
     );

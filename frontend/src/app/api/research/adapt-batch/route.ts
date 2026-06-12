@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
   try {
     if (isBatchActive()) {
       return NextResponse.json(
-        { error: "ya hay un batch corriendo. Esperá a que termine o cancelalo." },
+        { error: "Ya hay una tarea en curso. Espera a que termine o cancélala." },
         { status: 409 }
       );
     }

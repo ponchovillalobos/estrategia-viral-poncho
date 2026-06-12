@@ -26,6 +26,9 @@ interface UpdateInfo {
   hasUpdate: boolean;
   url: string;
   notes: string;
+  /** Link DIRECTO al instalador (.exe) del release; si el release no trae
+   *  un .exe entre sus assets, cae a la página del release (html_url). */
+  downloadUrl: string;
 }
 
 // Cache en globalThis para que sobreviva al hot-reload del dev server
@@ -60,6 +63,7 @@ function noUpdate(): UpdateInfo {
     hasUpdate: false,
     url: "",
     notes: "",
+    downloadUrl: "",
   };
 }
 
@@ -86,14 +90,23 @@ export async function GET() {
       tag_name?: string;
       html_url?: string;
       body?: string;
+      assets?: { name?: string; browser_download_url?: string }[];
     };
     const latest = (release.tag_name ?? "").replace(/^v/i, "") || APP_VERSION;
+    // Link directo al instalador: buscamos el .exe entre los assets del release
+    // (preferimos el que diga "setup"). Si no hay, la página del release.
+    const exes = (release.assets ?? []).filter(
+      (a) => a.name?.toLowerCase().endsWith(".exe") && a.browser_download_url
+    );
+    const setupAsset =
+      exes.find((a) => a.name!.toLowerCase().includes("setup")) ?? exes[0];
     info = {
       current: APP_VERSION,
       latest,
       hasUpdate: isNewer(latest, APP_VERSION),
       url: release.html_url ?? "",
       notes: release.body ?? "",
+      downloadUrl: setupAsset?.browser_download_url ?? release.html_url ?? "",
     };
   } catch {
     // Sin red / rate limit / repo sin releases → silencio total, sin update.

@@ -20,6 +20,7 @@ import {
   Hand,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 
 interface InstagramHelperDialogProps {
   open: boolean;
@@ -82,9 +83,9 @@ export function InstagramHelperDialog({
       );
 
       setStep1Done(true);
-      toast.success("Explorer abierto con el video. Arrastralo a Instagram →");
+      toast.success("Explorer abierto con el video. Arrástralo a Instagram →");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo preparar el video");
     } finally {
       setBusy(null);
     }
@@ -101,9 +102,9 @@ export function InstagramHelperDialog({
     setBusy("copyPath");
     try {
       await navigator.clipboard.writeText(renderPath);
-      toast.success("Ruta copiada (usala en el file picker de IG si no podés arrastrar)");
+      toast.success("Ruta copiada (úsala en el selector de archivos de IG si no puedes arrastrar)");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo copiar la ruta");
     } finally {
       setBusy(null);
     }
@@ -114,9 +115,9 @@ export function InstagramHelperDialog({
     try {
       await navigator.clipboard.writeText(caption);
       setStep2Done(true);
-      toast.success("Caption Instagram en el portapapeles. Ctrl+V en el campo de descripción.");
+      toast.success("Descripción de Instagram en el portapapeles. Ctrl+V en el campo de descripción.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo copiar la descripción");
     } finally {
       setBusy(null);
     }
@@ -192,7 +193,7 @@ export function InstagramHelperDialog({
               <div className="mt-3 space-y-2 rounded-md border border-border bg-card p-2">
                 <div className="flex items-center gap-1.5 font-mono-tab text-[10px] text-muted-foreground">
                   <Hand className="h-3 w-3 text-amber-400" />
-                  ARRASTRÁ el video del Explorer al área de subida de Instagram (o usá &quot;Subir desde computadora&quot;).
+                  ARRASTRA el video del Explorer al área de subida de Instagram (o usa &quot;Subir desde computadora&quot;).
                 </div>
                 <div className="rounded bg-muted/30 px-2 py-1.5 font-mono-tab text-[10px] text-foreground/80 break-all">
                   {renderPath}
@@ -248,16 +249,16 @@ export function InstagramHelperDialog({
               ) : (
                 <Copy className="mr-1.5 h-3.5 w-3.5" />
               )}
-              {step2Done ? "Volver a copiar caption IG" : "Copiar caption Instagram"}
+              {step2Done ? "Volver a copiar descripción IG" : "Copiar descripción Instagram"}
             </Button>
 
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Cuando termine de cargar el Reel, tocá este botón y pegá (<strong>Ctrl+V</strong>)
+              Cuando termine de cargar el Reel, da clic en este botón y pega (<strong>Ctrl+V</strong>)
               en el campo de descripción de IG.
             </p>
             {!caption && (
               <p className="mt-1 text-[10px] text-amber-400">
-                Este proyecto no tiene caption Instagram — generalo con ✨ en la card.
+                Este proyecto no tiene descripción de Instagram — genérala con ✨ en la tarjeta.
               </p>
             )}
           </div>
@@ -269,21 +270,21 @@ export function InstagramHelperDialog({
             </p>
             <div className="flex items-center gap-2">
               <span className="font-mono-tab text-foreground/70">•</span>
-              <span>IG acepta drag desde Explorer. Si falla, usá &quot;Subir desde computadora&quot;.</span>
+              <span>IG acepta arrastrar desde el Explorer. Si falla, usa &quot;Subir desde computadora&quot;.</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="font-mono-tab text-foreground/70">•</span>
-              <span>El caption ya viene con hashtags al final — no los pongas en comentarios.</span>
+              <span>La descripción ya viene con hashtags al final — no los pongas en comentarios.</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="font-mono-tab text-foreground/70">•</span>
-              <span>Antes de publicar, marcá &quot;Compartir también en feed&quot; para doble reach.</span>
+              <span>Antes de publicar, marca &quot;Compartir también en feed&quot; para doble alcance.</span>
             </div>
           </div>
 
           {step1Done && step2Done && (
             <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[11px] text-emerald-200">
-              ✓ Listo para publicar en Instagram. Tocá &quot;Compartir&quot; cuando estés conforme.
+              ✓ Listo para publicar en Instagram. Da clic en &quot;Compartir&quot; cuando estés conforme.
             </div>
           )}
 

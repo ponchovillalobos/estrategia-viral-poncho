@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import { StyleMiniDemo } from "@/components/editor/wizard/style-mini-demo";
 
 // ─── Fuentes para el preview (mismas que el wizard de shorts; gratis, self-host) ──
@@ -147,11 +148,16 @@ interface JobState {
   };
   startedAt: number;
   finishedAt?: number;
-  status: "running" | "done" | "failed";
+  status: "queued" | "running" | "done" | "failed" | "cancelled";
   overallProgress: number;
   steps: JobStep[];
   log: string[];
   clipsCount?: number;
+}
+
+interface IaLocalStatus {
+  running: boolean;
+  models: string[];
 }
 
 interface ProposalClip {
@@ -205,6 +211,11 @@ const PALETTE = [
 ];
 
 const TOTAL_STEPS = 5;
+
+/** Nombre humano de un estilo (nunca mostrar el id crudo tipo "hype_max_sfx"). */
+function styleName(id: string): string {
+  return STYLES.find((s) => s.id === id)?.name ?? id;
+}
 
 // Temas del estilo Editorial (paridad con el wizard de shorts): 4 clásicos +
 // 13 sub-temas de clase mundial (Ola 3 — ver remotion/src/layers/editorial-themes.tsx).
@@ -267,6 +278,10 @@ export function LongFormWizard() {
   const [activeJob, setActiveJob] = useState<JobState | null>(null);
   const [proposals, setProposals] = useState<ProposalsResponse | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
+  const [cancelling, setCancelling] = useState(false);
+  // Semáforo de la IA local (modo inteligente): null = todavía no se chequeó.
+  const [iaStatus, setIaStatus] = useState<IaLocalStatus | null>(null);
+  const [checkingIa, setCheckingIa] = useState(false);
 
   // ─── State del wizard (6 pasos) ─────────────────────────────────────────
   const [step, setStep] = useState(1);
@@ -280,7 +295,7 @@ export function LongFormWizard() {
   // Fuente + color del TEXTO de subtítulos (paridad con el wizard de shorts).
   const [subtitleFont, setSubtitleFont] = useState<string>("auto");
   const [subtitleColor, setSubtitleColor] = useState<string>("auto");
-  // Tema del estilo Editorial (fuente serif + fondo). Solo aplica si elegís 📰.
+  // Tema del estilo Editorial (fuente serif + fondo). Solo aplica si eliges 📰.
   const [editorialTheme, setEditorialTheme] = useState<string>("clasico");
   // 17 temas abruman: se muestran 8 y "Ver todos" despliega el resto (paridad shorts).
   const [showAllThemes, setShowAllThemes] = useState(false);
@@ -306,11 +321,32 @@ export function LongFormWizard() {
         setSelectedIds(new Set([data.videos[0].videoId]));
       }
     } catch (err) {
-      toast.error(`No se pudo cargar la lista: ${err instanceof Error ? err.message : err}`);
+      toastError(err, "No se pudo cargar la lista de videos");
     } finally {
       setLoadingList(false);
     }
   }, [selectedIds.size]);
+
+  // Chequea si la IA local está prendida (para el semáforo del modo inteligente).
+  const checkIaLocal = useCallback(async (): Promise<IaLocalStatus> => {
+    setCheckingIa(true);
+    try {
+      const r = await fetch("/api/ollama/status");
+      const data = (await r.json()) as Partial<IaLocalStatus>;
+      const status: IaLocalStatus = {
+        running: !!data.running,
+        models: Array.isArray(data.models) ? data.models : [],
+      };
+      setIaStatus(status);
+      return status;
+    } catch {
+      const status: IaLocalStatus = { running: false, models: [] };
+      setIaStatus(status);
+      return status;
+    } finally {
+      setCheckingIa(false);
+    }
+  }, []);
 
   function toggleVideo(id: string) {
     setSelectedIds((prev) => {
@@ -333,7 +369,7 @@ export function LongFormWizard() {
     if (tooBig) {
       toast.error(
         `«${tooBig.name}» pesa ${(tooBig.size / 1024 / 1024 / 1024).toFixed(1)} GB — demasiado para subir por el navegador. ` +
-          `Usá «Importar por ruta» abajo y pegá la ubicación del archivo.`
+          `Usa «Importar por ruta» abajo y pega la ubicación del archivo.`
       );
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
@@ -348,15 +384,18 @@ export function LongFormWizard() {
         if (r.ok) {
           ok++;
         } else {
-          // Mostrar el motivo real (ej. «video incompleto/corrupto, resubilo»).
+          // Mostrar el motivo real (ej. «video incompleto/corrupto, resúbelo»).
+          // El server ya devuelve mensajes humanizados: se muestran tal cual.
           const data = (await r.json().catch(() => ({}))) as { error?: string };
-          toast.error(`${file.name}: ${data.error ?? "no se pudo subir"}`);
+          toast.error(`No se pudo subir «${file.name}»`, {
+            description: data.error || undefined,
+          });
         }
       }
       if (ok > 0) toast.success(`${ok} video(s) subido(s) ✓`);
       await refreshList();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo subir el video");
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -367,7 +406,7 @@ export function LongFormWizard() {
   async function importByPath() {
     const p = pathInput.trim();
     if (!p) {
-      toast.error("Pegá la ruta del archivo (clic derecho → «Copiar como ruta de acceso»).");
+      toast.error("Pega la ruta del archivo (clic derecho → «Copiar como ruta de acceso»).");
       return;
     }
     setImportingPath(true);
@@ -383,10 +422,11 @@ export function LongFormWizard() {
         setPathInput("");
         await refreshList();
       } else {
-        toast.error(data.error ?? "no se pudo importar");
+        // El server ya devuelve mensajes humanizados: se muestran tal cual.
+        toast.error("No se pudo importar el video", { description: data.error || undefined });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo importar el video");
     } finally {
       setImportingPath(false);
     }
@@ -400,6 +440,14 @@ export function LongFormWizard() {
     return () => clearInterval(tick);
   }, [refreshList]);
 
+  // Semáforo IA local: chequear al entrar al paso 2 con modo inteligente elegido
+  // (y cada vez que el usuario vuelve a seleccionar ese modo).
+  useEffect(() => {
+    if (step === 2 && !useHeuristic) {
+      checkIaLocal();
+    }
+  }, [step, useHeuristic, checkIaLocal]);
+
   async function loadProposals(videoId: string) {
     try {
       const r = await fetch(`/api/long_form/proposals/${encodeURIComponent(videoId)}`);
@@ -412,9 +460,10 @@ export function LongFormWizard() {
     }
   }
 
-  // Polling del job activo
+  // Polling del job activo (también mientras espera en fila)
   useEffect(() => {
-    if (!activeJob || activeJob.status !== "running") {
+    const isLive = activeJob && (activeJob.status === "running" || activeJob.status === "queued");
+    if (!isLive) {
       if (pollRef.current != null) {
         window.clearInterval(pollRef.current);
         pollRef.current = null;
@@ -427,7 +476,7 @@ export function LongFormWizard() {
         if (!r.ok) return;
         const data = (await r.json()) as JobState;
         setActiveJob(data);
-        if (data.status !== "running") {
+        if (data.status === "done") {
           loadProposals(data.videoId);
         }
       } catch {
@@ -448,17 +497,29 @@ export function LongFormWizard() {
 
   async function startPipeline() {
     if (selectedIds.size === 0) {
-      toast.error("Elegí al menos un video primero");
+      toast.error("Elige al menos un video primero");
       return;
     }
     if (doRender && selectedStyles.length === 0) {
-      toast.error("Elegí al menos un estilo para renderizar");
+      toast.error("Elige al menos un estilo para generar los videos");
       return;
     }
     setSubmitting(true);
     setProposals(null);
     const videoIds = Array.from(selectedIds);
     try {
+      // Modo inteligente: verificar la IA local ANTES de arrancar. Mejor bloquear
+      // aquí con un mensaje claro que dejar que el proceso falle a los 10 minutos.
+      if (!useHeuristic) {
+        const status = await checkIaLocal();
+        if (!status.running) {
+          toast.error("La IA local está apagada", {
+            description:
+              "Abre la app Ollama desde el menú Inicio, o usa el modo rápido.",
+          });
+          return;
+        }
+      }
       const body: Record<string, unknown> = {
         videoIds,
         render: doRender,
@@ -486,22 +547,51 @@ export function LongFormWizard() {
         body: JSON.stringify(body),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "no se pudo arrancar");
+      if (!r.ok) {
+        // El server ya devuelve mensajes humanizados: se muestran tal cual.
+        toast.error("No se pudo iniciar el procesamiento", {
+          description: typeof data.error === "string" ? data.error : undefined,
+        });
+        return;
+      }
       const jobIds: string[] = data.jobIds ?? (data.jobId ? [data.jobId] : []);
-      if (jobIds.length === 0) throw new Error("no se encolaron jobs");
+      if (jobIds.length === 0) throw new Error("no se encoló ningún proceso");
       if (jobIds.length > 1) {
-        toast.success(`${jobIds.length} videos encolados — la cola los procesa de a uno`);
+        toast.success(`${jobIds.length} videos en fila — se procesan de uno en uno`);
       } else {
-        toast.success("Procesamiento iniciado — podés seguir el avance acá abajo");
+        toast.success("Procesamiento iniciado — puedes seguir el avance aquí abajo");
       }
       // Mostrar el primer job en el JobView; los demás se ven en QueuePanel global.
       const jobRes = await fetch(`/api/long_form/progress?jobId=${jobIds[0]}`);
       const jobData = (await jobRes.json()) as JobState;
       setActiveJob(jobData);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo iniciar el procesamiento");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // Cancela el job activo: si está en fila lo saca de la cola; si corre, mata el proceso.
+  async function cancelActiveJob() {
+    if (!activeJob) return;
+    setCancelling(true);
+    try {
+      const r = await fetch("/api/long_form/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: activeJob.id }),
+      });
+      const data = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(data.error ?? "no se pudo cancelar");
+      toast.success("Análisis cancelado");
+      // Refrescar el estado para mostrar el panel "cancelado".
+      const jr = await fetch(`/api/long_form/progress?jobId=${activeJob.id}`);
+      if (jr.ok) setActiveJob((await jr.json()) as JobState);
+    } catch (err) {
+      toastError(err, "No se pudo cancelar el análisis");
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -527,7 +617,14 @@ export function LongFormWizard() {
     return (
       <div className="space-y-6">
         <WizardHeader />
-        <JobView job={activeJob} now={now} proposals={proposals} onClose={cancelView} />
+        <JobView
+          job={activeJob}
+          now={now}
+          proposals={proposals}
+          onClose={cancelView}
+          onCancel={cancelActiveJob}
+          cancelling={cancelling}
+        />
       </div>
     );
   }
@@ -564,10 +661,10 @@ export function LongFormWizard() {
       {step === 1 && (
         <Card className="border-border bg-card p-6">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-medium">1. Elegí los videos largos</h2>
+            <h2 className="text-lg font-medium">1. Elige los videos largos</h2>
             <div className="flex items-center gap-2">
               <span className="font-mono-tab text-[10px] text-muted-foreground">
-                {selectedIds.size} seleccionado{selectedIds.size === 1 ? "" : "s"} · podés elegir varios
+                {selectedIds.size} seleccionado{selectedIds.size === 1 ? "" : "s"} · puedes elegir varios
               </span>
               <input
                 ref={fileInputRef}
@@ -598,19 +695,19 @@ export function LongFormWizard() {
                 className="flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 {loadingList ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCcw className="h-3 w-3" />}
-                refrescar
+                Actualizar
               </button>
             </div>
           </div>
 
           {/* Importar por ruta — para videos GRANDES (cursos largos de varios GB). El
-              navegador no puede subir archivos así por HTTP; acá se importa directo del
+              navegador no puede subir archivos así por HTTP; aquí se importa directo del
               disco (la app corre en tu misma compu). */}
           <div className="mb-4 rounded-md border border-violet-500/25 bg-violet-500/5 p-3">
             <p className="mb-2 text-[11px] text-muted-foreground">
               <span className="font-medium text-violet-200">¿Video grande (más de ~1.5 GB)?</span>{" "}
-              No lo subas con el botón de arriba (se corta). En el Explorador hacé clic
-              derecho sobre el archivo → «Copiar como ruta de acceso», pegala acá y se
+              No lo subas con el botón de arriba (se corta). En el Explorador haz clic
+              derecho sobre el archivo → «Copiar como ruta de acceso», pégala aquí y se
               importa directo del disco.
             </p>
             <div className="flex items-center gap-2">
@@ -644,8 +741,8 @@ export function LongFormWizard() {
               <EmptyState
                 icon={FolderOpen}
                 tone="violet"
-                title="Todavía no tenés videos largos"
-                description="Subí un curso, charla o entrevista desde tu compu y el sistema lo recorta en clips virales."
+                title="Todavía no tienes videos largos"
+                description="Sube un curso, charla o entrevista desde tu compu y el sistema lo recorta en clips virales."
                 cta={{
                   label: importing ? "Subiendo…" : "Subir desde mi compu",
                   onClick: () => fileInputRef.current?.click(),
@@ -653,7 +750,7 @@ export function LongFormWizard() {
               />
               <details className="rounded-md border border-border bg-muted/20 p-3">
                 <summary className="cursor-pointer font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
-                  ¿Preferís copiar el archivo a mano?
+                  ¿Prefieres copiar el archivo a mano?
                 </summary>
                 <div className="mt-2">
                   <CopyableText label="Path para copiar tus videos" value={list.rawDir} />
@@ -669,7 +766,7 @@ export function LongFormWizard() {
                     onClick={() => setSelectedIds(new Set(list.videos.map((v) => v.videoId)))}
                     className="rounded border border-border bg-muted/30 px-2 py-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
-                    seleccionar todos ({list.videos.length})
+                    Seleccionar todos ({list.videos.length})
                   </button>
                   <button
                     type="button"
@@ -677,7 +774,7 @@ export function LongFormWizard() {
                     disabled={selectedIds.size === 0}
                     className="rounded border border-border bg-muted/30 px-2 py-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
                   >
-                    quitar selección
+                    Quitar selección
                   </button>
                 </div>
               )}
@@ -746,7 +843,7 @@ export function LongFormWizard() {
           {list && list.orphans.length > 0 && (
             <div className="mt-4 rounded-md border border-border bg-muted/20 p-3">
               <p className="mb-2 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
-                Largos procesados antes (raw eliminado pero clips disponibles)
+                Largos procesados antes (video original eliminado pero clips disponibles)
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {list.orphans.map((o) => (
@@ -812,11 +909,28 @@ export function LongFormWizard() {
                 {!useHeuristic && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Transcribe el video en trozos (sin colgarse, aunque dure 90 min) y Ollama lee TODO para
-                elegir los momentos más virales — <strong className="text-foreground">mínimo 15 clips, más si hay</strong> —
+                Transcribe el video en trozos (sin colgarse, aunque dure 90 min) y la IA local lee TODO
+                para elegir los momentos más virales — <strong className="text-foreground">mínimo 15 clips, más si hay</strong> —
                 con hook + caption + hashtags listos. <strong className="text-foreground">~30-50 min</strong> en segundo plano.
-                Requiere Ollama corriendo (<code>ollama serve</code>).
               </p>
+              {/* Semáforo de la IA local: se chequea al seleccionar este modo. */}
+              <div className="mt-2">
+                {checkingIa && iaStatus === null ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[10px] text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Revisando la IA local…
+                  </span>
+                ) : iaStatus?.running ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-medium text-emerald-300">
+                    ✓ IA local lista
+                  </span>
+                ) : iaStatus ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-2.5 py-1 text-[10px] font-medium text-red-300">
+                    <XCircle className="h-3 w-3 shrink-0" />
+                    La IA local está apagada — abre la app Ollama desde el menú Inicio, o usa el modo rápido
+                  </span>
+                ) : null}
+              </div>
             </button>
           </div>
 
@@ -833,7 +947,7 @@ export function LongFormWizard() {
                   <Input
                     value={ollamaModel}
                     onChange={(e) => setOllamaModel(e.target.value)}
-                    placeholder="default qwen3:1.7b"
+                    placeholder="automático (qwen3:1.7b)"
                     className="font-mono-tab"
                   />
                 </div>
@@ -847,7 +961,7 @@ export function LongFormWizard() {
                     max={30}
                     value={maxClips}
                     onChange={(e) => setMaxClips(e.target.value)}
-                    placeholder="auto: mín 15, más si el video es largo"
+                    placeholder="automático: mínimo 15, más si el video es largo"
                     className="font-mono-tab"
                   />
                 </div>
@@ -865,7 +979,7 @@ export function LongFormWizard() {
               />
               <div className="flex-1">
                 <p className="text-sm font-medium text-sky-200">
-                  Saltear transcripción ({selectedIds.size === 1 ? "ya existe" : "todos los seleccionados ya la tienen"})
+                  Saltar la transcripción ({selectedIds.size === 1 ? "ya existe" : "todos los seleccionados ya la tienen"})
                 </p>
                 <p className="text-xs text-muted-foreground">Ahorra 3-10 min por video.</p>
               </div>
@@ -909,7 +1023,7 @@ export function LongFormWizard() {
           {/* Aspect ratio toggle */}
           <div className="mb-5">
             <p className="mb-2 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
-              Formato de salida (si el video source no coincide, se hace center-crop)
+              Formato de salida (si tu video no coincide, se aplica un recorte centrado automático)
             </p>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -959,11 +1073,11 @@ export function LongFormWizard() {
             {/* Face tracking — solo útil si el aspect cambia respecto al source */}
             <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
               <p className="mb-2 font-mono-tab text-[10px] uppercase tracking-wider text-amber-300">
-                Reframe inteligente (face tracking)
+                Encuadre inteligente (seguir la cara)
               </p>
               <p className="mb-2 text-[11px] text-muted-foreground">
-                Si el video source no coincide con el aspect ratio elegido, ¿centrar el crop en
-                la cara detectada en vez de center-crop ciego?
+                Si tu video no coincide con el formato elegido, ¿centrar el recorte en la cara
+                detectada en vez del recorte centrado automático?
               </p>
               <div className="grid grid-cols-3 gap-1.5">
                 <button
@@ -976,8 +1090,8 @@ export function LongFormWizard() {
                       : "border-border hover:border-foreground/30"
                   )}
                 >
-                  <p className="text-xs font-medium">Off</p>
-                  <p className="font-mono-tab text-[9px] text-muted-foreground">center crop ciego</p>
+                  <p className="text-xs font-medium">Apagado</p>
+                  <p className="font-mono-tab text-[9px] text-muted-foreground">Recorta el centro (puede cortar caras)</p>
                 </button>
                 <button
                   type="button"
@@ -989,8 +1103,8 @@ export function LongFormWizard() {
                       : "border-border hover:border-foreground/30"
                   )}
                 >
-                  <p className="text-xs font-medium">Single (recomendado)</p>
-                  <p className="font-mono-tab text-[9px] text-muted-foreground">~1s/clip · estático</p>
+                  <p className="text-xs font-medium">Sencillo (recomendado)</p>
+                  <p className="font-mono-tab text-[9px] text-muted-foreground">Encuadra la cara una vez (~1 s por clip)</p>
                 </button>
                 <button
                   type="button"
@@ -1002,16 +1116,16 @@ export function LongFormWizard() {
                       : "border-border hover:border-foreground/30"
                   )}
                 >
-                  <p className="text-xs font-medium">Per-frame</p>
-                  <p className="font-mono-tab text-[9px] text-muted-foreground">~5-10s/clip · preciso</p>
+                  <p className="text-xs font-medium">Preciso</p>
+                  <p className="font-mono-tab text-[9px] text-muted-foreground">Sigue la cara todo el tiempo (~5-10 s por clip)</p>
                 </button>
               </div>
             </div>
           </div>
 
           <p className="mb-4 text-xs text-muted-foreground">
-            Cada estilo seleccionado genera un MP4 por clip. Si elegís 2 estilos y se extraen 5 clips,
-            se renderizan 10 archivos.
+            Cada estilo seleccionado genera un MP4 por clip. Si eliges 2 estilos y se recortan 5 clips,
+            se generan 10 archivos.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {STYLES.map((s) => {
@@ -1091,7 +1205,7 @@ export function LongFormWizard() {
 
           <p className="mt-4 text-xs text-muted-foreground">
             {selectedStyles.length === 0
-              ? "Seleccioná al menos uno"
+              ? "Selecciona al menos uno"
               : `${selectedStyles.length} estilo${selectedStyles.length === 1 ? "" : "s"} seleccionado${selectedStyles.length === 1 ? "" : "s"}`}
           </p>
 
@@ -1103,10 +1217,10 @@ export function LongFormWizard() {
               className="mt-0.5 h-4 w-4 rounded border-border bg-muted accent-emerald-500"
             />
             <div className="flex-1">
-              <p className="text-sm font-medium">Renderizar después de extraer los clips</p>
+              <p className="text-sm font-medium">Generar los videos al terminar de recortar</p>
               <p className="text-xs text-muted-foreground">
-                Si lo apagás, solo se cortan los clips crudos (.mp4 raw). Podés renderizarlos manualmente
-                después desde /produccion.
+                Si lo apagas, solo se recortan los clips sin editar. Puedes generar los videos
+                después desde Mis videos.
               </p>
             </div>
           </label>
@@ -1155,7 +1269,7 @@ export function LongFormWizard() {
               <p className="font-medium">📰 El estilo Editorial no lleva subtítulos</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Usa titulares serif gigantes con la tipografía y el fondo del tema que elegiste
-                en el paso anterior. Por eso acá no hay nada más que configurar: solo el color
+                en el paso anterior. Por eso aquí no hay nada más que configurar: solo el color
                 principal de arriba.
               </p>
             </div>
@@ -1268,13 +1382,13 @@ export function LongFormWizard() {
                   {selectedIds.size > 3 && ` +${selectedIds.size - 3} más`}
                 </span>
               </li>
-              <li>· Modo: <span className="text-foreground">{useHeuristic ? "Rápido (bloques parejos, sin IA)" : "Inteligente (Ollama encuentra lo viral, mín 15 clips)"}</span>
+              <li>· Modo: <span className="text-foreground">{useHeuristic ? "Rápido (bloques parejos, sin IA)" : "Inteligente (la IA local encuentra lo viral, mínimo 15 clips)"}</span>
                 {!useHeuristic && ollamaModel && <span className="text-muted-foreground"> · modelo {ollamaModel}</span>}
               </li>
-              <li>· Renderizar: <span className="text-foreground">{doRender ? "sí" : "no (solo extracción)"}</span></li>
+              <li>· Generar videos: <span className="text-foreground">{doRender ? "sí" : "no (solo recortar clips)"}</span></li>
               {doRender && (
                 <>
-                  <li>· Estilo{selectedStyles.length === 1 ? "" : "s"}: <span className="text-foreground">{selectedStyles.join(", ")}</span></li>
+                  <li>· Estilo{selectedStyles.length === 1 ? "" : "s"}: <span className="text-foreground">{selectedStyles.map(styleName).join(", ")}</span></li>
                   <li>
                     · Formato:{" "}
                     <span className="text-foreground">
@@ -1309,13 +1423,30 @@ export function LongFormWizard() {
                   )}
                 </>
               )}
-              {maxClips && <li>· Max clips: <span className="text-foreground">{maxClips}</span></li>}
-              {doRender && (
-                <li className="text-amber-400">
-                  Estimado: ~{Math.max(2, (parseInt(maxClips || "5", 10) * selectedStyles.length * 2))} min total
-                  (depende del hardware)
-                </li>
-              )}
+              {maxClips && <li>· Máximo de clips: <span className="text-foreground">{maxClips}</span></li>}
+              {/* Estimado HONESTO: rango según el modo (la duración del video no está
+                  disponible en /api/long_form/list, así que se habla en rangos). */}
+              <li className="text-amber-400">
+                {useHeuristic ? (
+                  <>
+                    Estimado: el corte en bloques tarda unos minutos
+                    {doRender && <> + ~2-3 min por cada clip generado</>} (depende de tu compu).
+                    Puedes cerrar esta pantalla, sigue solo.
+                  </>
+                ) : (
+                  <>
+                    Estimado: análisis ~30-50 min para un video de 1 hora (puedes cerrar esta
+                    pantalla, sigue solo)
+                    {doRender && (
+                      <>
+                        {" "}+ ~2-3 min por cada clip (
+                        {maxClips.trim() ? `hasta ${maxClips.trim()}` : "mínimo 15"})
+                      </>
+                    )}
+                    .
+                  </>
+                )}
+              </li>
             </ul>
           </div>
 
@@ -1373,7 +1504,7 @@ function WizardHeader() {
     <SectionHeader
       eyebrow="Videos largos → clips cortos"
       title="De un video largo a varios clips virales"
-      description="Subí un video largo (un curso, charla o entrevista) y el sistema encuentra los 5 a 7 mejores momentos y los recorta en clips de 30 a 60 segundos, con el estilo que elijas."
+      description="Sube un video largo (un curso, charla o entrevista) y el sistema encuentra los mejores momentos de tu video (15 o más en modo inteligente) y los recorta en clips de 30 a 60 segundos, con el estilo que elijas."
       color={SECTION_COLORS.largos}
     />
   );
@@ -1437,26 +1568,39 @@ function JobView({
   now,
   proposals,
   onClose,
+  onCancel,
+  cancelling,
 }: {
   job: JobState;
   now: number;
   proposals: ProposalsResponse | null;
   onClose: () => void;
+  onCancel: () => void;
+  cancelling: boolean;
 }) {
   const elapsed = (job.finishedAt ?? now) - job.startedAt;
+  const isLive = job.status === "running" || job.status === "queued";
+  // Confirmación propia del botón Cancelar (dos pasos, sin window.confirm).
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   return (
     <Card className="border-border bg-card p-5">
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-base font-medium">
             Procesando <span className="font-mono-tab text-violet-400">{job.videoId}</span>
           </h2>
           <p className="font-mono-tab text-[10px] text-muted-foreground">
-            job {job.id.slice(-12)} · <Clock className="inline h-3 w-3" /> {fmtElapsed(elapsed)}
+            <Clock className="inline h-3 w-3" /> {fmtElapsed(elapsed)}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {job.status === "queued" && (
+            <span className="flex items-center gap-1.5 rounded bg-sky-500/20 px-2 py-1 font-mono-tab text-[10px] uppercase tracking-wider text-sky-300">
+              <Clock className="h-3 w-3" />
+              en fila
+            </span>
+          )}
           {job.status === "running" && (
             <span className="flex items-center gap-1.5 rounded bg-amber-500/20 px-2 py-1 font-mono-tab text-[10px] uppercase tracking-wider text-amber-300">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -1475,19 +1619,65 @@ function JobView({
               falló
             </span>
           )}
+          {job.status === "cancelled" && (
+            <span className="flex items-center gap-1.5 rounded bg-muted px-2 py-1 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
+              <XCircle className="h-3 w-3" />
+              cancelado
+            </span>
+          )}
+          {/* Cancelar: siempre visible mientras corre o espera en fila. */}
+          {isLive && !confirmCancel && (
+            <button
+              type="button"
+              onClick={() => setConfirmCancel(true)}
+              disabled={cancelling}
+              className="flex items-center gap-1.5 rounded border border-red-500/40 px-2.5 py-1 text-[11px] font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+            >
+              {cancelling ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+              Cancelar
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
             className="rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
           >
-            cerrar y volver
+            Cerrar y volver
           </button>
         </div>
       </div>
 
+      {isLive && confirmCancel && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 p-3">
+          <p className="text-xs font-medium text-red-200">
+            ¿Cancelar el análisis? El avance se pierde.
+          </p>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmCancel(false);
+                onCancel();
+              }}
+              disabled={cancelling}
+              className="rounded bg-red-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-red-400 disabled:opacity-50"
+            >
+              Sí, cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmCancel(false)}
+              className="rounded border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              No, seguir
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mb-5 space-y-1">
         <div className="flex items-center justify-between font-mono-tab text-[10px] text-muted-foreground">
-          <span>progreso global</span>
+          <span>Progreso global</span>
           <span>{job.overallProgress}%</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -1496,9 +1686,11 @@ function JobView({
               "h-full transition-all duration-500",
               job.status === "failed"
                 ? "bg-red-500"
-                : job.status === "done"
-                  ? "bg-emerald-500"
-                  : "bg-amber-500"
+                : job.status === "cancelled"
+                  ? "bg-muted-foreground/40"
+                  : job.status === "done"
+                    ? "bg-emerald-500"
+                    : "bg-amber-500"
             )}
             style={{ width: `${job.overallProgress}%` }}
           />
@@ -1535,16 +1727,20 @@ function JobView({
         ))}
       </ol>
 
-      {job.log.length > 0 && (
-        <details className="mt-5 rounded-md border border-border bg-muted/20 p-3">
-          <summary className="cursor-pointer font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
-            Detalle del proceso ({job.log.length} líneas)
-          </summary>
+      <details className="mt-5 rounded-md border border-border bg-muted/20 p-3">
+        <summary className="cursor-pointer font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
+          Detalle del proceso{job.log.length > 0 && ` (${job.log.length} líneas)`}
+        </summary>
+        {/* El identificador técnico vive aquí, colapsado — no en el encabezado. */}
+        <p className="mt-2 font-mono-tab text-[10px] text-muted-foreground">
+          id técnico: {job.id}
+        </p>
+        {job.log.length > 0 && (
           <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono-tab text-[10px] text-foreground/70">
             {job.log.slice(-30).join("\n")}
           </pre>
-        </details>
-      )}
+        )}
+      </details>
 
       {job.status === "done" && proposals && proposals.clips && (
         <div className="mt-5 space-y-3">
@@ -1552,17 +1748,17 @@ function JobView({
             <p className="flex items-center gap-2 text-sm font-medium text-emerald-200">
               <CheckCircle2 className="h-4 w-4" />
               {proposals.clips.length} clips generados
-              {job.clipsCount != null && ` (${job.clipsCount} extraídos OK)`}
+              {job.clipsCount != null && ` (${job.clipsCount} recortados bien)`}
               {proposals.fallback_heuristic && (
                 <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 font-mono-tab text-[9px] text-amber-300">
-                  modo heurístico
+                  modo rápido
                 </span>
               )}
             </p>
             <p className="mt-1 font-mono-tab text-[10px] text-muted-foreground">
               {job.options?.render
-                ? `Renders con estilo(s): ${(job.options.styles ?? []).join(", ")} — listos para publicar desde Producción.`
-                : "Sin render — abrí Producción para renderizar cada uno manualmente."}
+                ? `Videos generados con estilo(s): ${(job.options.styles ?? []).map(styleName).join(", ")} — listos para publicar desde Mis videos.`
+                : "Sin video final — abre Mis videos para generarlo."}
             </p>
           </div>
 
@@ -1572,6 +1768,20 @@ function JobView({
               return (
               <div key={idx} className="rounded-md border border-border bg-muted/30 p-3">
                 <div className="flex items-start gap-2">
+                  {/* Miniatura del momento exacto donde arranca el clip (frame en t=inicio). */}
+                  <div className="relative h-16 w-10 shrink-0 overflow-hidden rounded border border-border bg-muted/40">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/videos/${encodeURIComponent(job.videoId)}/thumbnail?source=long_form&t=${Math.max(0, Math.round(c.start))}`}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                    <FileVideo className="absolute left-1/2 top-1/2 -z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-muted-foreground" />
+                  </div>
                   <span className="rounded bg-violet-500/20 px-1.5 py-0.5 font-mono-tab text-[10px] text-violet-300">
                     c{idx.toString().padStart(2, "0")}
                   </span>
@@ -1620,7 +1830,7 @@ function JobView({
             className="inline-flex h-9 items-center gap-1.5 rounded-md bg-emerald-500 px-4 text-sm font-medium text-black hover:bg-emerald-400"
           >
             <Play className="h-3.5 w-3.5" />
-            Abrir Producción para ver/publicar
+            Abrir Mis videos para ver y publicar
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
@@ -1633,8 +1843,20 @@ function JobView({
             El procesamiento falló
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Revisá el log arriba. Causas comunes: Ollama no corriendo (<code>ollama serve</code>),
-            modelo no descargado, transcript vacío o video corrupto.
+            Causas comunes: la IA local está apagada (ábrela desde el menú Inicio), el video
+            no tiene voz, o el archivo está dañado. El detalle está arriba, en «Detalle del proceso».
+          </p>
+        </div>
+      )}
+
+      {job.status === "cancelled" && (
+        <div className="mt-5 rounded-md border border-border bg-muted/20 p-3">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <XCircle className="h-4 w-4 text-muted-foreground" />
+            Análisis cancelado
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Cancelado por ti. Puedes volver a empezar cuando quieras con «Cerrar y volver».
           </p>
         </div>
       )}

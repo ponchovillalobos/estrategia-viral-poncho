@@ -57,7 +57,7 @@ export function MetricsForm() {
       return;
     }
     if (!views) {
-      toast.error("Views es obligatorio");
+      toast.error("Las vistas son obligatorias");
       return;
     }
     const num = (s: string) => (s ? parseFloat(s) : undefined);
@@ -88,7 +88,7 @@ export function MetricsForm() {
     <Card className="border-border bg-card p-6">
       <h3 className="text-lg font-medium">Nueva entrada</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Pegá los números de un post que publicaste. Con solo vistas/likes/comentarios ya
+        Pega los números de un post que publicaste. Con solo vistas/likes/comentarios ya
         sirve; los campos opcionales (tiempo de visualización, nombre del short) permiten
         rankear qué hooks y estilos te funcionan mejor.
       </p>

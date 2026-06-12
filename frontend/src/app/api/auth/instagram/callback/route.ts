@@ -31,13 +31,13 @@ export async function GET(req: NextRequest) {
 
   const cookieState = req.cookies.get("instagram_oauth_state")?.value;
   if (!cookieState || cookieState !== state) {
-    return makeErrorPage("State inválido (posible CSRF). Reintentá el login desde Settings.");
+    return makeErrorPage("State inválido (posible CSRF). Intenta el login de nuevo desde Configuración.");
   }
 
   const settings = await readSettings();
   const { appId, appSecret } = settings.instagram;
   if (!appId || !appSecret) {
-    return makeErrorPage("Faltan App ID/Secret en Settings. Guardalos antes de conectar.");
+    return makeErrorPage("Faltan App ID/Secret en Configuración. Guárdalos antes de conectar.");
   }
 
   try {
@@ -77,7 +77,7 @@ function makeSuccessPage(name: string) {
 </style></head>
 <body><div class="card"><div class="check">✓</div><h1>Instagram conectado</h1>
 <p>Cuenta: <span class="acc">@${escapeHtml(name)}</span></p>
-<p>Ya podés publicar Reels desde /produccion.</p>
+<p>Ya puedes publicar Reels desde /produccion.</p>
 <a href="/produccion">Ir a Producción</a></div></body></html>`;
   return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 }

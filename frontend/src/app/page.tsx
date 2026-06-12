@@ -6,16 +6,16 @@ export const dynamic = "force-dynamic";
 
 const ACTIONS = [
   {
-    href: "/editor",
+    href: "/editor/wizard",
     title: "Crear un video corto",
-    desc: "Subí un video y convertilo en un short viral, paso a paso.",
+    desc: "Sube un video y conviértelo en un short viral, paso a paso.",
     icon: Scissors,
     primary: true,
   },
   {
     href: "/largos",
     title: "Cortar un video largo",
-    desc: "Subí un curso o charla y la IA extrae los mejores clips virales.",
+    desc: "Sube un curso o charla y la IA extrae los mejores clips virales.",
     icon: Film,
     primary: false,
   },
@@ -26,23 +26,17 @@ const ACTIONS = [
     icon: FolderKanban,
     primary: false,
   },
-  {
-    href: "/metricas",
-    title: "Mis resultados",
-    desc: "Anotá cómo le fue a cada video y descubrí qué te funciona.",
-    icon: Share2,
-    primary: false,
-  },
 ] as const;
 
 const FLOW = [
-  { icon: Upload, label: "Subís tu video" },
-  { icon: Wand2, label: "Elegís un estilo" },
+  { icon: Upload, label: "Subes tu video" },
+  { icon: Wand2, label: "Eliges un estilo" },
   { icon: Sparkles, label: "Se genera solo" },
-  { icon: Send, label: "Publicás en tus redes" },
+  { icon: Send, label: "Publicas en tus redes" },
 ] as const;
 
 const SECONDARY = [
+  { href: "/metricas", label: "Mis resultados (anota cómo le fue a cada video)", icon: Share2 },
   { href: "/research", label: "Buscar inspiración (analizar virales ajenos)", icon: Telescope },
 ] as const;
 
@@ -57,19 +51,19 @@ export default function Home() {
           className="pointer-events-none absolute -top-10 left-0 -z-10 h-64 w-[28rem] max-w-full rounded-full bg-primary/20 opacity-50 blur-3xl"
         />
         <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-          Hola 👋 ¿Qué querés hacer hoy?
+          Hola 👋 ¿Qué quieres hacer hoy?
         </h1>
         <p className="max-w-2xl text-lg text-muted-foreground">
-          Convertí tus videos en{" "}
+          Convierte tus videos en{" "}
           <strong className="bg-gradient-to-r from-primary via-emerald-300 to-cyan-300 bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(52,211,153,0.35)]">
             shorts virales
           </strong>{" "}
-          y publicalos en tus redes — sin saber editar. Elegí una opción para empezar.
+          y publícalos en tus redes — sin saber editar. Elige una opción para empezar.
         </p>
       </header>
 
-      {/* 4 acciones principales */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* 3 acciones principales ("Mis resultados" bajó a la fila secundaria) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {ACTIONS.map(({ href, title, desc, icon: Icon, primary }) => (
           <Link
             key={href}

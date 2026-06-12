@@ -59,7 +59,7 @@ export function AnimationsPanel({ animations, onChange, currentTime }: Props) {
       <div className="space-y-2">
         <Label className="text-xs">Marcas activas ({animations.length})</Label>
         {animations.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Sin animaciones. Agregá una arriba.</p>
+          <p className="text-xs text-muted-foreground">Sin animaciones. Agrega una arriba.</p>
         ) : (
           <ul className="space-y-1.5">
             {animations.map((a, i) => (

@@ -1,7 +1,7 @@
 /**
  * Cola de notificaciones in-process.
  *
- * El worker de scheduling escribe acá cuando una entry de Instagram bridge llega a su hora
+ * El worker de scheduling escribe aquí cuando una entry de Instagram bridge llega a su hora
  * (no podemos publicar automático, hay que avisar al humano). El cliente lee vía
  * /api/notifications con polling para mostrar toast + sonido.
  *
@@ -13,7 +13,12 @@ import { DATA_ROOT } from "@/lib/paths";
 
 const STORE_FILE = path.join(path.dirname(DATA_ROOT), "notifications.json");
 
-export type NotificationType = "instagram_due" | "tiktok_failed" | "linkedin_failed";
+export type NotificationType =
+  | "instagram_due"
+  | "tiktok_failed"
+  | "linkedin_failed"
+  | "render_done"
+  | "render_failed";
 
 export interface Notification {
   id: string;

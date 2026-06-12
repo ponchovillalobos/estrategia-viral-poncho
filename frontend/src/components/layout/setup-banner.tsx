@@ -65,7 +65,7 @@ export function SetupBanner() {
       await poll();
     } catch {
       setPreparing(false);
-      setProgressLine("Error de conexión durante la descarga — reintentá.");
+      setProgressLine("Error de conexión durante la descarga — reintenta.");
     }
   }
 
@@ -117,7 +117,8 @@ export function SetupBanner() {
                 onClick={() => setDismissed(true)}
                 className="text-xs text-amber-200/70 underline hover:text-amber-100"
               >
-                después
+                Dejarlo para después (tu primer video tardará más porque la descarga
+                arrancará en ese momento)
               </button>
             )}
             {progressLine && (

@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Pixabay API key no configurada. Andá a /settings y pegá tu key (gratis en pixabay.com).",
+            "Pixabay API key no configurada. Ve a Configuración y pega tu key (gratis en pixabay.com).",
         },
         { status: 400 }
       );

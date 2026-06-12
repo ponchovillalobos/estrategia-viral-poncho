@@ -5,7 +5,7 @@ import { HelpCircle } from "lucide-react";
 /**
  * Ayuda contextual: un ícono "?" que muestra una explicación breve al pasar el mouse
  * o al enfocarlo con el teclado. Sin dependencias (CSS puro), accesible. Pensado para
- * desarmar la jerga: poné un HelpHint al lado de términos como "estilo", "subtítulos",
+ * desarmar la jerga: pon un HelpHint al lado de términos como "estilo", "subtítulos",
  * "B-roll" con una frase simple en lenguaje de principiante.
  */
 export function HelpHint({

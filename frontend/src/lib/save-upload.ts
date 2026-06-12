@@ -93,7 +93,7 @@ export async function validateVideo(filePath: string): Promise<void> {
   // ENOENT de spawn culpaba al video del usuario y lo mandaba a re-subir en vano.
   if (lower.includes("enoent") || lower.includes("spawn")) {
     throw new UploadError(
-      "La app no encuentra su procesador de video (ffprobe). Abrí Configuración → " +
+      "La app no encuentra su procesador de video (ffprobe). Abre Configuración → " +
         "Verificar instalación — el video que subiste está bien."
     );
   }
@@ -104,14 +104,14 @@ export async function validateVideo(filePath: string): Promise<void> {
   ) {
     throw new UploadError(
       "El video subido está incompleto o corrupto (probablemente la subida se cortó). " +
-        "Volvé a subirlo — si pesa mucho, esperá a que termine la barra antes de cambiar de pantalla."
+        "Vuelve a subirlo — si pesa mucho, espera a que termine la barra antes de cambiar de pantalla."
     );
   }
   let parsed: { format?: { duration?: string }; streams?: { codec_type?: string }[] } = {};
   try {
     parsed = JSON.parse(result.stdout);
   } catch {
-    throw new UploadError("El video subido no se pudo leer (contenedor inválido). Volvé a subirlo.");
+    throw new UploadError("El video subido no se pudo leer (contenedor inválido). Vuelve a subirlo.");
   }
   const hasDuration = parsed.format?.duration && parseFloat(parsed.format.duration) > 0;
   const hasVideo = (parsed.streams ?? []).some((s) => s.codec_type === "video");
@@ -140,7 +140,7 @@ export async function saveUploadedVideo(
   }
   if (blob.size > maxBytes) {
     throw new UploadError(
-      `archivo muy grande (${(blob.size / 1024 / 1024 / 1024).toFixed(1)} GB, max ${(
+      `archivo muy grande (${(blob.size / 1024 / 1024 / 1024).toFixed(1)} GB, máx. ${(
         maxBytes / 1024 / 1024 / 1024
       ).toFixed(1)} GB)`,
       400
@@ -162,7 +162,7 @@ export async function saveUploadedVideo(
     // 2) Sanity: lo escrito debe coincidir con el tamaño declarado por el cliente.
     if (blob.size && written !== blob.size) {
       throw new UploadError(
-        `subida incompleta (${written} de ${blob.size} bytes). Reintentá la subida.`
+        `subida incompleta (${written} de ${blob.size} bytes). Intenta la subida de nuevo.`
       );
     }
 
@@ -170,7 +170,7 @@ export async function saveUploadedVideo(
     //    Esto es lo que atrapa un upload que llegó cortado (moov atom ausente).
     await validateVideo(tmpPath);
 
-    // 4) Publicar atómicamente: el nombre final aparece recién acá, ya validado.
+    // 4) Publicar atómicamente: el nombre final aparece recién aquí, ya validado.
     await fs.rename(tmpPath, finalPath);
     return { filename: path.basename(finalPath), sizeBytes: written, path: finalPath };
   } catch (err) {

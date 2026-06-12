@@ -82,7 +82,7 @@ interface InitResponse {
 export async function uploadVideoToTikTok(opts: UploadOptions): Promise<UploadResult> {
   const accessToken = await getValidAccessToken();
   if (!accessToken) {
-    throw new Error("No hay access_token de TikTok. Conectá la cuenta en Settings.");
+    throw new Error("No hay access_token de TikTok. Conecta la cuenta en Configuración.");
   }
 
   // 1. Tamaño del archivo

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { SECTION_COLORS } from "@/lib/section-colors";
 import { LayoutDashboard, Scissors, FolderKanban, Settings, Film, Menu, X } from "lucide-react";
@@ -18,6 +18,30 @@ export function TabNav() {
   if (prevPath !== pathname) {
     setPrevPath(pathname);
     setMenuOpen(false);
+  }
+
+  // Permite abrir Configuración desde cualquier parte (p.ej. el checklist de la
+  // home dispara `window.dispatchEvent(new CustomEvent("open-settings"))`).
+  useEffect(() => {
+    const openSettings = () => setSettingsOpen(true);
+    window.addEventListener("open-settings", openSettings);
+    return () => window.removeEventListener("open-settings", openSettings);
+  }, []);
+
+  // /metricas y /research viven fuera del menú (decisión 2026-06) pero pertenecen
+  // conceptualmente a Inicio: resaltamos "Inicio" para que el menú nunca quede
+  // sin selección.
+  function isActive(href: string): boolean {
+    if (href === "/") {
+      return (
+        pathname === "/" ||
+        pathname === "/metricas" ||
+        pathname.startsWith("/metricas/") ||
+        pathname === "/research" ||
+        pathname.startsWith("/research/")
+      );
+    }
+    return pathname === href || pathname.startsWith(href + "/");
   }
 
   // Cada tab tiene su propio color (definido en lib/section-colors.ts — single
@@ -44,7 +68,7 @@ export function TabNav() {
             label más fuerte y underline glow cuando está activo. */}
         <div className="hidden items-center gap-0.5 lg:flex">
           {links.map(({ href, label, icon: Icon, color }) => {
-            const active = pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
+            const active = isActive(href);
             return (
               <Link
                 key={href}
@@ -110,7 +134,7 @@ export function TabNav() {
         <div className="border-t border-border bg-background lg:hidden">
           <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-1 px-4 py-3 sm:grid-cols-3">
             {links.map(({ href, label, icon: Icon, color }) => {
-              const active = pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
+              const active = isActive(href);
               return (
                 <Link
                   key={href}

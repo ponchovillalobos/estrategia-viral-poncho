@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Skeleton primitive: bloque animado con `animate-pulse` y el bg del muted.
- * Úsalo como placeholder mientras se carga la data real. Composé bloques
+ * Úsalo como placeholder mientras se carga la data real. Compón bloques
  * dentro de un layout que respete las dimensiones del contenido final.
  */
 export function Skeleton({ className }: { className?: string }) {

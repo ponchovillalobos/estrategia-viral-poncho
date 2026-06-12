@@ -3,7 +3,7 @@
  * y devuelve un proyecto JSON listo para guardar + renderizar.
  *
  * El estilo "supreme" antes vivía solo en remotion/build-clip-supreme.mjs (long-form).
- * Ahora está acá también para que tanto cortos como largos puedan elegirlo.
+ * Ahora está aquí también para que tanto cortos como largos puedan elegirlo.
  */
 
 import { pickEmojis } from "./viral-emojis";
@@ -413,7 +413,7 @@ function applyCapcutFx<T extends object>(
       : {}),
     ...(opts.iconStickers ? { iconStickers: generateIconStickers(ctx) } : {}),
     // A2 — autoReframe necesita tracking activo para tener trackPath. Si el estilo
-    // ya pidió tracking (vía opts.tracking) o lo activamos acá, el trackPath se llena.
+    // ya pidió tracking (vía opts.tracking) o lo activamos aquí, el trackPath se llena.
     ...(opts.autoReframe
       ? {
           autoReframe: true,
@@ -794,7 +794,7 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
   }
 
   // ─── broll_full / broll_pip: estilos NUEVOS con B-roll automático de Pexels por
-  // transcripción. auto-build llena `project.bRoll` con autoMatchBroll(). Acá solo
+  // transcripción. auto-build llena `project.bRoll` con autoMatchBroll(). Aquí solo
   // fijamos el MODO (fullscreen vs pip) + edición + FX CapCut. ───
   if (styleId === "broll_full" || styleId === "broll_pip") {
     return applyCapcutFx(
@@ -1140,7 +1140,7 @@ export const STYLE_INFO: Record<StyleId, { name: string; tagline: string; emoji:
     emoji: "🖼️",
   },
   text_behind: {
-    name: "Texto detrás de vos",
+    name: "Texto detrás de ti",
     tagline: "El efecto CapCut clásico: la palabra clave queda detrás del sujeto",
     emoji: "🧍",
   },

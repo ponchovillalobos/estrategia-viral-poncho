@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import { cn } from "@/lib/utils";
 
 /**
@@ -144,11 +145,11 @@ export function LinkedInSetupClient() {
 
   async function saveAndConnect() {
     if (!clientId.trim()) {
-      toast.error("Pegá el Client ID antes de continuar");
+      toast.error("Pega el Client ID antes de continuar");
       return;
     }
     if (!clientSecret.trim() && !settings?.linkedin.hasClientSecret) {
-      toast.error("Pegá el Client Secret antes de continuar");
+      toast.error("Pega el Client Secret antes de continuar");
       return;
     }
     setSaving(true);
@@ -163,15 +164,15 @@ export function LinkedInSetupClient() {
           },
         }),
       });
-      if (!res.ok) throw new Error("save falló");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setDone((s) => ({ ...s, credentials: true }));
       toast.success("Credenciales guardadas. Redirigiendo a LinkedIn para autorizar…");
-      // Auto-redirect a OAuth — sin click extra
+      // Auto-redirect a OAuth — sin clic extra
       setTimeout(() => {
         window.location.href = "/api/auth/linkedin/login";
       }, 600);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudieron guardar las credenciales");
       setSaving(false);
     }
   }
@@ -190,7 +191,7 @@ export function LinkedInSetupClient() {
       await loadSettings();
       toast.success(
         next
-          ? "Métricas habilitadas. Reconectá LinkedIn para otorgar el permiso (requiere que tu app esté aprobada)."
+          ? "Métricas habilitadas. Reconecta LinkedIn para otorgar el permiso (requiere que tu app esté aprobada)."
           : "Métricas deshabilitadas."
       );
     } catch {
@@ -213,9 +214,9 @@ export function LinkedInSetupClient() {
           Conectar LinkedIn en 6 pasos
         </h1>
         <p className="max-w-2xl text-muted-foreground">
-          LinkedIn no permite que yo me loguee con tu password (sería contra sus términos y
-          podría suspenderte la cuenta). Lo que sí podemos hacer: te pre-cargo TODOS los
-          textos a pegar, y cuando llegues al final, conecto solo. Vos hacés ~6 clicks.
+          LinkedIn no permite que yo inicie sesión con tu contraseña (sería contra sus
+          términos y podría suspenderte la cuenta). Lo que sí podemos hacer: te pre-cargo
+          TODOS los textos a pegar, y cuando llegues al final, conecto solo. Tú haces ~6 clics.
         </p>
         {/* Progress bar */}
         <div className="space-y-1 pt-2">
@@ -268,8 +269,8 @@ export function LinkedInSetupClient() {
         showCheck={done.openPortal && !isConnected}
       >
         <p className="text-sm text-muted-foreground">
-          Te abro el portal en una pestaña nueva. Si no estás logueado, te va a pedir tu
-          email + password (de LinkedIn — yo no veo nada de eso).
+          Te abro el portal en una pestaña nueva. Si no has iniciado sesión, te va a pedir
+          tu correo + contraseña (de LinkedIn — yo no veo nada de eso).
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <a
@@ -297,19 +298,19 @@ export function LinkedInSetupClient() {
         locked={!done.openPortal}
       >
         <p className="text-sm text-muted-foreground">
-          En el portal: click <strong>Create app</strong>. Si te pide vincular a una{" "}
-          <strong>LinkedIn Page</strong>, podés usar cualquier página que administres (si
-          no tenés, LinkedIn ofrece crear una rápido — tipo «página personal»).
+          En el portal: clic en <strong>Create app</strong>. Si te pide vincular a una{" "}
+          <strong>LinkedIn Page</strong>, puedes usar cualquier página que administres (si
+          no tienes, LinkedIn ofrece crear una rápido — tipo «página personal»).
         </p>
         <p className="text-sm text-muted-foreground">
-          Pegá estos valores con un click:
+          Pega estos valores con un clic:
         </p>
         <div className="space-y-2">
           <CopyableRow label="App name" value="Estrategia Viral Poncho" />
           <CopyableRow label="Privacy policy URL" value={`${baseUrl}/privacy`} />
         </div>
         <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-amber-200">
-          Marcá la casilla &quot;<strong>I have read and agree to these terms</strong>&quot; al final → click{" "}
+          Marca la casilla &quot;<strong>I have read and agree to these terms</strong>&quot; al final → clic en{" "}
           <strong>Create app</strong>.
         </p>
         <Button
@@ -329,7 +330,7 @@ export function LinkedInSetupClient() {
         locked={!done.createApp}
       >
         <p className="text-sm text-muted-foreground">
-          Una vez creada la app, vas a la pestaña <strong>Products</strong> y pedís acceso
+          Una vez creada la app, ve a la pestaña <strong>Products</strong> y pide acceso
           a estos dos. Son <em>self-serve</em> — se aprueban en ~30 segundos cada uno:
         </p>
         <div className="space-y-1.5">
@@ -358,12 +359,12 @@ export function LinkedInSetupClient() {
       >
         <p className="text-sm text-muted-foreground">
           Pestaña <strong>Auth</strong> → sección <strong>OAuth 2.0 settings</strong> →{" "}
-          <strong>Authorized redirect URLs for your app</strong> → click el lápiz (Edit).
-          Agregá esta URL exacta:
+          <strong>Authorized redirect URLs for your app</strong> → clic en el lápiz (Edit).
+          Agrega esta URL exacta:
         </p>
         <CopyableRow label="Authorized Redirect URL" value={redirectUri} />
         <p className="text-xs text-muted-foreground">
-          Click <strong>Update</strong> abajo para guardar. Confirmá que arriba los
+          Clic en <strong>Update</strong> abajo para guardar. Confirma que arriba los
           <strong> OAuth 2.0 scopes</strong> muestran <code>openid</code>,{" "}
           <code>profile</code> y <code>w_member_social</code> (deberían aparecer solos
           después del paso 3).
@@ -386,11 +387,11 @@ export function LinkedInSetupClient() {
       >
         <p className="text-sm text-muted-foreground">
           En la misma pestaña <strong>Auth</strong>, arriba ves <strong>Application credentials</strong>.
-          Copiá los dos valores y pegalos acá. Se guardan en{" "}
+          Copia los dos valores y pégalos aquí. Se guardan en{" "}
           <code className="font-mono-tab text-[10px]">
             C:\hermes-data\user-settings.json
           </code>{" "}
-          local — nunca salen de tu PC.
+          local — nunca salen de tu compu.
         </p>
         <div className="space-y-3">
           <div className="space-y-1">
@@ -409,7 +410,7 @@ export function LinkedInSetupClient() {
               Primary Client Secret
               {settings?.linkedin.hasClientSecret && (
                 <span className="ml-2 font-mono-tab text-[10px] text-emerald-400">
-                  (guardado · dejá vacío para no cambiar)
+                  (guardado · déjalo vacío para no cambiarlo)
                 </span>
               )}
             </Label>
@@ -427,8 +428,8 @@ export function LinkedInSetupClient() {
           </div>
           <p className="rounded-md border border-sky-500/30 bg-sky-500/5 p-2 text-[11px] text-sky-200">
             <Sparkles className="mr-1 inline h-3 w-3" />
-            Al guardar, te llevo directo a LinkedIn para que autorices la app. No tenés que
-            tocar nada más — son 2 clicks en la página de LinkedIn («Allow») y volvés acá
+            Al guardar, te llevo directo a LinkedIn para que autorices la app. No tienes que
+            tocar nada más — son 2 clics en la página de LinkedIn («Allow») y vuelves aquí
             con todo conectado.
           </p>
           <Button
@@ -465,8 +466,8 @@ export function LinkedInSetupClient() {
         ) : hasCreds ? (
           <>
             <p className="text-sm text-muted-foreground">
-              Click el botón abajo si no se disparó solo del paso 5 (puede pasar si tu
-              browser bloquea el redirect automático).
+              Da clic en el botón de abajo si no se disparó solo del paso 5 (puede pasar
+              si tu navegador bloquea el redirect automático).
             </p>
             <Button
               onClick={() => (window.location.href = "/api/auth/linkedin/login")}
@@ -478,7 +479,7 @@ export function LinkedInSetupClient() {
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Completá el paso 5 primero (guardar credenciales) y este paso se ejecuta solo.
+            Completa el paso 5 primero (guardar credenciales) y este paso se ejecuta solo.
           </p>
         )}
       </StepCard>
@@ -498,14 +499,14 @@ export function LinkedInSetupClient() {
               Métricas reales de LinkedIn (avanzado)
             </span>
             <p className="text-xs text-muted-foreground">
-              Trae impresiones, reacciones, comentarios y reposts de tus posts directo al
-              dashboard (botón &quot;Sincronizar LinkedIn&quot; en /metricas). Usa la
+              Trae impresiones, reacciones, comentarios y reposts de tus posts directo a
+              la app (botón &quot;Sincronizar LinkedIn&quot; en /metricas). Usa la
               <strong> Member Post Analytics API</strong>, que <strong>no es self-serve</strong>:
               LinkedIn tiene que <strong>aprobar tu app</strong> para esa API (formulario gratis).
               Al activarlo, el próximo &quot;Conectar&quot; pide el permiso{" "}
               <code className="font-mono-tab text-[10px]">r_member_postAnalytics</code> —
-              si tu app aún no está aprobada, LinkedIn rechazará el login. Mientras tanto, dejá
-              esto apagado y cargá las métricas a mano en /metricas.
+              si tu app aún no está aprobada, LinkedIn rechazará el login. Mientras tanto, deja
+              esto apagado y carga las métricas a mano en /metricas.
             </p>
           </label>
         </div>
@@ -516,18 +517,18 @@ export function LinkedInSetupClient() {
         <p className="font-medium text-foreground">¿Algo no funciona?</p>
         <ul className="mt-2 space-y-1">
           <li>
-            • Si en el paso 4 LinkedIn no acepta la redirect URL, verificá que estés
-            pegando exactamente <code>{redirectUri}</code> (sin trailing slash).
+            • Si en el paso 4 LinkedIn no acepta la redirect URL, verifica que estés
+            pegando exactamente <code>{redirectUri}</code> (sin barra al final).
           </li>
           <li>
-            • Si el botón &quot;Conectar mi LinkedIn&quot; falla, andá a{" "}
+            • Si el botón &quot;Conectar mi LinkedIn&quot; falla, ve a{" "}
             <Link href="/produccion" className="text-sky-400 hover:underline">
               /produccion
             </Link>{" "}
-            y abrí Settings → reintentá desde ahí.
+            y abre Configuración → reintenta desde ahí.
           </li>
           <li>
-            • Los tokens duran 60 días — después la app te avisa y reconectás con un click.
+            • Los tokens duran 60 días — después la app te avisa y reconectas con un clic.
           </li>
         </ul>
       </div>

@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const cookieState = req.cookies.get("tiktok_oauth_state")?.value;
   if (!cookieState || cookieState !== state) {
     return makeErrorPage(
-      "State inválido (posible CSRF). Reintentá el login desde Settings."
+      "State inválido (posible CSRF). Intenta el login de nuevo desde Configuración."
     );
   }
 
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   const { clientKey, clientSecret } = settings.tiktok;
   if (!clientKey || !clientSecret) {
     return makeErrorPage(
-      "Faltan Client Key/Secret en Settings. Guardalos antes de conectar."
+      "Faltan Client Key/Secret en Configuración. Guárdalos antes de conectar."
     );
   }
 
@@ -95,7 +95,7 @@ function makeSuccessPage(username: string) {
     <div class="check">✓</div>
     <h1>TikTok conectado</h1>
     <p>Cuenta: <span class="acc">${escapeHtml(username)}</span></p>
-    <p>Ya podés programar y publicar desde /produccion.</p>
+    <p>Ya puedes programar y publicar desde /produccion.</p>
     <a href="/produccion">Ir a Producción</a>
   </div>
 </body>

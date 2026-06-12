@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { MetricsForm } from "@/components/metricas/metrics-form";
 import { MetricsTable } from "@/components/metricas/metrics-table";
 import { BackupActions } from "@/components/metricas/backup-actions";
@@ -9,10 +10,17 @@ import { SECTION_COLORS } from "@/lib/section-colors";
 export default function MetricasPage() {
   return (
     <div className="space-y-8">
+      {/* Esta sección vive fuera del menú — link explícito de regreso. */}
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        ← Inicio
+      </Link>
       <SectionHeader
         eyebrow="Resultados de tus publicaciones"
         title="Mis resultados"
-        description="Anotá acá cómo le fue a cada video que publicaste (vistas, likes, comentarios). Con eso el sistema aprende qué hooks y descripciones te funcionan mejor. Si publicaste en LinkedIn desde la app, el botón «Sincronizar LinkedIn» trae los números solo."
+        description="Anota aquí cómo le fue a cada video que publicaste (vistas, likes, comentarios). Con eso el sistema aprende qué hooks y descripciones te funcionan mejor. Si publicaste en LinkedIn desde la app, el botón «Sincronizar LinkedIn» trae los números solo."
         color={SECTION_COLORS.metricas}
       >
         <LinkedInSyncButton />
@@ -27,18 +35,18 @@ export default function MetricasPage() {
         <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
           <li>
             <span className="font-mono-tab text-foreground">TikTok</span> · App
-            → tu video → ··· → Datos del video. Copiá vistas, likes, comentarios,
+            → tu video → ··· → Datos del video. Copia vistas, likes, comentarios,
             compartidos, guardados. Para el tiempo de visualización → «Análisis» →
             «Tiempo promedio visualizado».
           </li>
           <li>
             <span className="font-mono-tab text-foreground">Instagram</span> ·
-            App → tu reel → ver Insights. Anotá alcance (como vistas), likes,
+            App → tu reel → ver Insights. Anota alcance (como vistas), likes,
             comentarios, guardados, compartidos. Tiempo → «Tiempo de reproducción promedio».
           </li>
           <li>
             <span className="font-mono-tab text-foreground">LinkedIn</span> ·
-            Tu post → «ver analytics». Anotá impresiones (como vistas), reacciones
+            Tu post → «ver analytics». Anota impresiones (como vistas), reacciones
             (likes), comentarios, reposts (compartidos).
           </li>
           <li>

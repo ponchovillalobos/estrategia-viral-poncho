@@ -3,11 +3,12 @@
  * Consumido por el QueuePanel cliente con polling cada ~3s.
  */
 import { NextResponse } from "next/server";
-import { getJob as getEditorJob } from "@/lib/job-store";
-import { getLongFormJob } from "@/lib/long-form-job-store";
+import { getJob as getEditorJob, listJobs as listEditorJobs, jobTitle, type Job } from "@/lib/job-store";
+import { getLongFormJob, listLongFormJobs, type LongFormJob } from "@/lib/long-form-job-store";
 import { getResearch } from "@/lib/research-store";
 import { listQueue, forceUnstuck, cancelAllPending, cancelPending, type JobKind } from "@/lib/job-queue";
 import { NextRequest } from "next/server";
+import { STYLE_LABEL } from "@/components/produccion/produccion-types";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,53 @@ interface QueueEntryView {
   finishedAt?: number;
   /** ETA en segundos para jobs running (estimado por velocidad de progreso). */
   etaSec?: number | null;
+  /** Título humano del video (cuando se puede derivar del output). */
+  title?: string;
+  /** Motivo humano del fallo (sólo status failed). */
+  error?: string;
+  /** Params originales para reintentar vía POST /api/editor/auto-build (sólo editor). */
+  params?: { videoId: string; styles: string[]; accentColor: string };
+}
+
+/** Texto humano del motivo de fallo: recorta la cola técnica "[detalle] …". */
+function humanFailReason(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const visible = raw.split("\n[detalle]")[0].trim();
+  return visible || undefined;
+}
+
+/** Entrada del panel para un job de editor ya terminado (done/failed). */
+function finishedEditorEntry(job: Job): QueueEntryView {
+  const failedStep = job.steps.find((s) => s.status === "fail" && s.error);
+  return {
+    kind: "editor",
+    jobId: job.id,
+    videoId: job.videoId,
+    status: job.status,
+    progress: job.overallProgress,
+    position: null,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+    title: jobTitle(job),
+    error: job.status === "failed" ? humanFailReason(failedStep?.error) : undefined,
+    params: { videoId: job.videoId, styles: job.styles, accentColor: job.accentColor },
+  };
+}
+
+/** Entrada del panel para un job de video largo ya terminado. */
+function finishedLongFormEntry(job: LongFormJob): QueueEntryView {
+  const failedStep = job.steps.find((s) => s.status === "fail" && s.message);
+  return {
+    kind: "long_form",
+    jobId: job.id,
+    videoId: job.videoId,
+    status: job.status,
+    progress: job.overallProgress,
+    position: null,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+    error: job.status === "failed" ? humanFailReason(failedStep?.message) : undefined,
+  };
 }
 
 /**
@@ -54,11 +102,13 @@ async function buildEntryFromQueue(
       progress: job.overallProgress,
       position: typeof item.position === "number" ? item.position : null,
       detail: job.currentStyle
-        ? `estilo: ${job.currentStyle}`
-        : `${job.styles.length} estilos`,
+        ? `estilo: ${STYLE_LABEL[job.currentStyle] ?? job.currentStyle}`
+        : `${job.styles.length} estilo${job.styles.length === 1 ? "" : "s"}`,
       startedAt: job.startedAt,
       finishedAt: job.finishedAt,
       etaSec: job.status === "running" ? progressEta(job.overallProgress, job.startedAt) : null,
+      title: jobTitle(job),
+      params: { videoId: job.videoId, styles: job.styles, accentColor: job.accentColor },
     };
   }
   if (item.kind === "long_form") {
@@ -116,12 +166,30 @@ export async function GET() {
   const activeFiltered = active.filter((e): e is QueueEntryView => e !== null);
   const pendingFiltered = pending.filter((e): e is QueueEntryView => e !== null);
 
+  // Terminados de las últimas 24h (más recientes primero) — el panel los muestra
+  // como "Listo ✓" / "Falló" con opción de reintentar, hasta que el usuario los cierre.
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const liveIds = new Set([...activeFiltered, ...pendingFiltered].map((e) => e.jobId));
+  const finished: QueueEntryView[] = [
+    ...listEditorJobs()
+      .filter((j) => (j.status === "done" || j.status === "failed") && (j.finishedAt ?? 0) > cutoff)
+      .map(finishedEditorEntry),
+    ...listLongFormJobs()
+      .filter((j) => (j.status === "done" || j.status === "failed") && (j.finishedAt ?? 0) > cutoff)
+      .map(finishedLongFormEntry),
+  ]
+    .filter((e) => !liveIds.has(e.jobId))
+    .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))
+    .slice(0, 20);
+
   return NextResponse.json({
     maxConcurrent: snapshot.maxConcurrent,
     active: activeFiltered,
     pending: pendingFiltered,
+    finished,
     totalActive: activeFiltered.length,
     totalPending: pendingFiltered.length,
+    totalFinished: finished.length,
   });
 }
 

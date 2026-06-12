@@ -4,17 +4,18 @@
 // como provider o handle) y los setters de "busy" / "copied" como callbacks. De ese
 // modo viven fuera del componente y son fáciles de testear sin renderizar React.
 //
-// Las toasts y el fetch se manejan acá dentro; el componente sólo provee los setters
+// Las toasts y el fetch se manejan aquí dentro; el componente sólo provee los setters
 // que controlan su estado visual y, en el caso de `regenerate`, un callback para
 // recargar la lista.
 
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import {
   pickCaptionForPlatform,
   type ProjectExt,
 } from "@/components/produccion/produccion-types";
 
-/** Copia el caption legacy del proyecto al portapapeles y dispara setCopiedId con timeout. */
+/** Copia la descripción legacy del proyecto al portapapeles y dispara setCopiedId con timeout. */
 export async function copyCaption(
   p: ProjectExt,
   setCopiedId: (id: string | null) => void
@@ -22,7 +23,7 @@ export async function copyCaption(
   try {
     await navigator.clipboard.writeText(p.caption ?? "");
     setCopiedId(p.id);
-    toast.success("Caption copiado");
+    toast.success("Descripción copiada");
     setTimeout(() => setCopiedId(null), 2000);
   } catch {
     toast.error("No se pudo copiar");
@@ -50,9 +51,7 @@ export async function publishToLinkedIn(
     if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
     toast.success("Publicado en LinkedIn ✓", { id: toastId });
   } catch (err) {
-    toast.error(`LinkedIn falló: ${err instanceof Error ? err.message : String(err)}`, {
-      id: toastId,
-    });
+    toastError(err, "No se pudo publicar en LinkedIn", { id: toastId });
   } finally {
     setBusy(null);
   }
@@ -79,9 +78,7 @@ export async function publishToInstagram(
     if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
     toast.success("Publicado en Instagram ✓", { id: toastId });
   } catch (err) {
-    toast.error(`Instagram falló: ${err instanceof Error ? err.message : String(err)}`, {
-      id: toastId,
-    });
+    toastError(err, "No se pudo publicar en Instagram", { id: toastId });
   } finally {
     setBusy(null);
   }
@@ -93,9 +90,9 @@ export async function publishToInstagram(
  * Flujo:
  *   1. Copia el archivo de video (no texto, el binary) al portapapeles via PowerShell.
  *      TikTok acepta Ctrl+V en el file picker → video subido sin arrastrar.
- *   2. Abre Explorer con el archivo seleccionado por si preferís drag.
+ *   2. Abre Explorer con el archivo seleccionado por si prefieres arrastrar.
  *   3. Abre tiktok.com/upload en pestaña nueva.
- *   4. El caption queda esperando en el botón 📋 al lado del caption — lo copiás
+ *   4. La descripción queda esperando en el botón 📋 — la copias
  *      después de que cargue el video.
  */
 export async function postToTikTok(
@@ -104,7 +101,7 @@ export async function postToTikTok(
   tiktokHandle: string | null
 ) {
   if (!p.caption) {
-    toast.error("Este proyecto no tiene caption. Generalo primero con ✨.");
+    toast.error("Este proyecto no tiene descripción. Genérala primero con ✨.");
     return;
   }
   setBusy(p.id);
@@ -138,19 +135,17 @@ export async function postToTikTok(
 
     const asAccount = tiktokHandle ? ` como ${tiktokHandle}` : "";
     toast.success(
-      `Video copiado${asAccount}. En TikTok: click "Seleccionar video" → Ctrl+V. Luego volvé acá y tocá 📋 para copiar el caption.`,
+      `Video copiado${asAccount}. En TikTok: da clic en "Seleccionar video" → Ctrl+V. Luego regresa aquí y da clic en 📋 para copiar la descripción.`,
       { duration: 9000 }
     );
   } catch (err) {
-    toast.error(
-      err instanceof Error ? err.message : "No se pudo preparar el upload"
-    );
+    toastError(err, "No se pudo preparar la subida");
   } finally {
     setBusy(null);
   }
 }
 
-/** Regenera el caption con el provider dado y vuelve a cargar la lista al éxito. */
+/** Regenera la descripción con el provider dado y vuelve a cargar la lista al éxito. */
 export async function regenerate(
   p: ProjectExt,
   setBusy: (id: string | null) => void,
@@ -167,10 +162,10 @@ export async function regenerate(
     if (!res.ok) throw new Error(data.error ?? "regenerate failed");
     const usedProvider = data.copy?._provider ?? provider;
     const usedModel = data.copy?._model ?? "";
-    toast.success(`Caption regenerado (${usedProvider} · ${usedModel})`);
+    toast.success(`Descripción regenerada (${usedProvider} · ${usedModel})`);
     reload();
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : String(err));
+    toastError(err, "No se pudo regenerar la descripción");
   } finally {
     setBusy(null);
   }

@@ -35,15 +35,15 @@ export async function publishReelToInstagram(
 ): Promise<InstagramPublishResult> {
   const token = await getValidInstagramAccessToken();
   if (!token) {
-    throw new Error("No hay token de Instagram válido. Conectá la cuenta en Settings → Instagram.");
+    throw new Error("No hay token de Instagram válido. Conecta la cuenta en Configuración → Instagram.");
   }
   const settings = await readSettings();
   const { igUserId, publicBaseUrl } = settings.instagram;
-  if (!igUserId) throw new Error("Falta la cuenta IG (igUserId). Reconectá Instagram.");
+  if (!igUserId) throw new Error("Falta la cuenta IG (igUserId). Reconecta Instagram.");
   if (!publicBaseUrl) {
     throw new Error(
       "Falta la URL pública. Instagram baja el video desde una URL HTTPS accesible (un túnel " +
-        "tipo Cloudflare). Configurala en Settings → Instagram (publicBaseUrl)."
+        "tipo Cloudflare). Configúrala en Configuración → Instagram (publicBaseUrl)."
     );
   }
   const videoUrl = `${publicBaseUrl}/api/videos/${encodeURIComponent(opts.videoId)}/stream?source=render`;

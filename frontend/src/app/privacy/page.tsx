@@ -1,8 +1,22 @@
+import path from "node:path";
+import { DATA_ROOT, RAW_DIR } from "@/lib/paths";
+
 export const metadata = {
   title: "Política de privacidad — Estrategia Viral Poncho",
 };
 
+// Server component dinámico a propósito: las rutas se resuelven en runtime con
+// el resolver real (lib/paths.ts), no se hornean en build. Así la página dice
+// la carpeta VERDADERA de esta instalación (viral-data, hermes-data o
+// %USERPROFILE%\ViralStudio) en vez de un "C:\hermes-data" hardcodeado.
+export const dynamic = "force-dynamic";
+
 export default function PrivacyPage() {
+  // La carpeta "base" de datos (un nivel arriba de .../videos), donde también
+  // vive user-settings.json — mismo cálculo que lib/user-settings.ts.
+  const baseDir = path.dirname(DATA_ROOT);
+  const settingsFile = path.join(baseDir, "user-settings.json");
+
   return (
     <div className="prose prose-invert max-w-2xl space-y-4 py-6 text-sm">
       <h1 className="text-2xl font-semibold">Política de privacidad</h1>
@@ -13,17 +27,17 @@ export default function PrivacyPage() {
 
       <h2 className="text-lg font-medium">Datos que se procesan</h2>
       <ul className="list-disc pl-6 space-y-1">
-        <li>Videos MP4 que vos colocás en tu carpeta local (<code>C:\hermes-data\videos\raw\</code>)</li>
+        <li>Videos MP4 que colocas en tu carpeta local (<code>{RAW_DIR}</code>)</li>
         <li>Transcripciones generadas localmente con WhisperX (no salen de tu PC)</li>
-        <li>Captions y hashtags generados con Claude/Codex/Ollama — el contenido del transcript se envía al proveedor que vos elijas</li>
-        <li>Tokens OAuth de TikTok (si conectás tu cuenta) almacenados localmente en{" "}
-          <code>C:\hermes-data\user-settings.json</code>
+        <li>Captions y hashtags generados con Claude/Codex/Ollama — el contenido del transcript se envía al proveedor que tú elijas</li>
+        <li>Tokens OAuth de TikTok (si conectas tu cuenta) almacenados localmente en{" "}
+          <code>{settingsFile}</code>
         </li>
       </ul>
 
       <h2 className="text-lg font-medium">Qué se publica en TikTok</h2>
       <p>
-        Cuando vos disparás manualmente una publicación o programación: el video MP4, el
+        Cuando tú disparas manualmente una publicación o programación: el video MP4, el
         caption en texto plano, la elección de privacidad, y los flags de duet/stitch/
         comentarios. Nada más.
       </p>
@@ -36,9 +50,9 @@ export default function PrivacyPage() {
 
       <h2 className="text-lg font-medium">Eliminación de datos</h2>
       <p>
-        Para borrar todos tus datos: eliminá la carpeta <code>C:\hermes-data\</code>{" "}
-        y la carpeta del proyecto. Para revocar acceso de TikTok: desconectá desde
-        Settings o revocá la app en{" "}
+        Para borrar todos tus datos: elimina la carpeta <code>{baseDir}</code>{" "}
+        y la carpeta del proyecto. Para revocar acceso de TikTok: desconecta desde
+        Settings o revoca la app en{" "}
         <a href="https://www.tiktok.com/setting/connected-apps" className="text-emerald-400">
           tiktok.com/setting/connected-apps
         </a>
@@ -51,7 +65,7 @@ export default function PrivacyPage() {
       </p>
 
       <p className="text-xs text-muted-foreground pt-6">
-        Última actualización: mayo 2026
+        Última actualización: junio 2026
       </p>
     </div>
   );

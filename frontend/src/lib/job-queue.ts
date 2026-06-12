@@ -88,7 +88,7 @@ function markRunning(kind: JobKind, jobId: string) {
     job.queuePosition = undefined;
   } else if (kind === "research") {
     // El runner de research va a transitar el status a "downloading" en su primer step;
-    // acá solo dejamos "downloading" como marca de arranque, no "running".
+    // aquí solo dejamos "downloading" como marca de arranque, no "running".
     updateResearch(jobId, { status: "downloading" }).catch(() => {});
   }
 }

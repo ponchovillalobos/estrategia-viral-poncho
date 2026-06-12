@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Falta App ID de Meta. Andá a Settings → Instagram y completá App ID + App Secret de tu app.",
+          "Falta App ID de Meta. Ve a Configuración → Instagram y completa App ID + App Secret de tu app.",
       },
       { status: 400 }
     );

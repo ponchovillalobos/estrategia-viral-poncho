@@ -15,7 +15,7 @@ const USED_DIR = path.join(RAW_DIR, "used");
  * transcripts, cuts) — así el video desaparece de TODAS las pantallas del portal.
  *
  * Es irreversible (a diferencia de "archivar", que solo mueve a used/). El botón en
- * la UI pide confirmación antes de llamar acá.
+ * la UI pide confirmación antes de llamar aquí.
  */
 async function deleteMatching(dir: string, videoId: string): Promise<string[]> {
   const files = await fs.readdir(dir).catch(() => [] as string[]);

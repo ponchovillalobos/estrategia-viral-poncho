@@ -3,7 +3,8 @@
 import { FileVideo, Check, Copy, Loader2, Music2 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { CaptionTabs } from "@/components/produccion/caption-tabs";
-import type { ProjectExt } from "@/components/produccion/produccion-types";
+import { STYLE_LABEL, type ProjectExt } from "@/components/produccion/produccion-types";
+import { toastError } from "@/lib/toast-error";
 
 /**
  * Diálogo modal de preview de un proyecto: video 9:16 a la izquierda + transcripción
@@ -29,6 +30,20 @@ export function ProjectPreviewDialog({
   transcriptCopied: boolean;
   onCopyTranscript: (videoId: string) => void;
 }) {
+  // Abre la carpeta donde está el archivo del video, con el archivo seleccionado.
+  async function revealRender(p: ProjectExt) {
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(p.id)}/reveal-render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: p.source ?? "short" }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      toastError(err, "No se pudo abrir la carpeta");
+    }
+  }
+
   return (
     <Dialog open={!!project} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -36,7 +51,7 @@ export function ProjectPreviewDialog({
         showCloseButton
       >
         <DialogTitle className="sr-only">
-          Preview {project?.id ?? ""}
+          Vista previa de {project?.title ?? project?.id ?? ""}
         </DialogTitle>
         {project && (
           <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-0 max-h-[85vh]">
@@ -50,14 +65,14 @@ export function ProjectPreviewDialog({
                 playsInline
                 className="aspect-[9/16] w-full bg-black md:max-w-[360px]"
               />
-              <div className="space-y-1 border-t border-foreground/10 bg-card p-3 text-sm">
-                <p className="font-mono-tab text-xs text-foreground break-all">
-                  {project.id}
+              <div className="space-y-1.5 border-t border-foreground/10 bg-card p-3 text-sm">
+                <p className="text-sm font-semibold leading-tight text-foreground">
+                  {project.title ?? project.id}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                   {project.styleId && (
-                    <span className="font-mono-tab uppercase tracking-wider">
-                      {project.styleId}
+                    <span className="rounded-full bg-muted px-2 py-0.5">
+                      {STYLE_LABEL[project.styleId] ?? project.styleId}
                     </span>
                   )}
                   {(project.platforms ?? []).map((plat) => (
@@ -74,6 +89,25 @@ export function ProjectPreviewDialog({
                       {tiktokHandle}
                     </span>
                   )}
+                </div>
+                {/* Acciones del archivo — siempre disponibles bajo el player. */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <a
+                    href={`/api/videos/${encodeURIComponent(project.id)}/stream?source=render&download=1`}
+                    download
+                    title="Descargar el MP4 a tu compu"
+                    className="flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/5 px-2 py-1 font-mono-tab text-[10px] uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/15"
+                  >
+                    💾 Guardar video
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => revealRender(project)}
+                    title="Abrir la carpeta donde está el archivo del video"
+                    className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground hover:border-emerald-400/50 hover:text-emerald-300"
+                  >
+                    📂 Abrir carpeta
+                  </button>
                 </div>
               </div>
             </div>

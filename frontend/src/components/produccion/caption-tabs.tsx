@@ -105,11 +105,11 @@ export function CaptionTabs({ project }: { project: ProjectExt }) {
       </div>
       <div className="max-h-[40vh] overflow-y-auto p-3">
         <pre className="whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-foreground/90">
-          {activeText || "(sin caption para esta plataforma)"}
+          {activeText || "(sin descripción para esta plataforma)"}
         </pre>
       </div>
       <p className="border-t border-foreground/10 px-3 py-1 font-mono-tab text-[9px] text-muted-foreground">
-        {activeLen} / {limit} chars
+        {activeLen} / {limit} caracteres
       </p>
     </div>
   );

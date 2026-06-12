@@ -11,7 +11,7 @@ export const STATUS_COLOR: Record<Project["status"], string> = {
 };
 
 export const STATUS_OPTIONS = ["all", "borrador", "aprobado", "publicado"] as const;
-export const PLATFORM_OPTIONS = ["all", "instagram", "linkedin"] as const;
+export const PLATFORM_OPTIONS = ["all", "tiktok", "instagram", "linkedin"] as const;
 export type StatusFilter = (typeof STATUS_OPTIONS)[number];
 export type PlatformFilter = (typeof PLATFORM_OPTIONS)[number];
 
@@ -31,6 +31,13 @@ export const STYLE_LABEL: Record<string, string> = {
   cinematic_pro: "Cine",
   broll_full: "Con videos de apoyo",
   broll_pip: "Videos de apoyo (chico)",
+  text_behind: "Texto detrás de ti",
+  graphics_pro: "Con gráficas",
+  graphics_max: "Gráficas intensas",
+  motion_pro: "Fondo animado",
+  motion_beat: "Animado al ritmo",
+  motion_grid: "Animado en cuadrícula",
+  editorial: "Editorial",
 };
 
 export interface ProjectExt extends Project {

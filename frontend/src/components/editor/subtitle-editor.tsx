@@ -40,7 +40,7 @@ export function SubtitleEditor({
   if (words.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Sin transcripción aún. Tocá «Transcribir» arriba.
+        Sin transcripción aún. Da clic en «Transcribir» arriba.
       </p>
     );
   }

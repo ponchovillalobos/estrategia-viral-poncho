@@ -78,7 +78,7 @@ ${StrTrimNewLines}   ; declara StrTrimNewLines (instalador)
 !define MUI_UNABORTWARNING
 
 !define MUI_WELCOMEPAGE_TITLE "¡Bienvenido a ${APP_NAME}!"
-!define MUI_WELCOMEPAGE_TEXT "Este asistente instala ${APP_NAME}: el editor de videos virales con IA que corre 100% en tu computadora — gratis, en español, sin nube y sin API keys.$\r$\n$\r$\nQué va a pasar:$\r$\n  1. Revisamos que tu computadora cumpla los requisitos.$\r$\n  2. Se descarga la app (~1 GB, necesitas internet).$\r$\n  3. Se instala y te deja un acceso directo en el escritorio.$\r$\n$\r$\nNo necesitas instalar nada más: Node, Python y ffmpeg ya van adentro.$\r$\n$\r$\nPresiona Siguiente para empezar."
+!define MUI_WELCOMEPAGE_TEXT "Este asistente instala ${APP_NAME}: el editor de videos virales con IA que corre 100% en tu computadora — gratis, en español, sin nube y sin API keys.$\r$\n$\r$\nQué va a pasar:$\r$\n  1. Revisamos que tu computadora cumpla los requisitos.$\r$\n  2. Se descarga la app (~1 GB, necesitas internet).$\r$\n  3. Se instala y te deja un acceso directo en el escritorio.$\r$\n$\r$\nNo necesitas instalar nada más para empezar: Node, Python y ffmpeg ya van adentro. (El modo inteligente de videos largos usa una IA local gratuita y opcional — la app te guía si la quieres.)$\r$\n$\r$\nPresiona Siguiente para empezar."
 
 !define MUI_DIRECTORYPAGE_TEXT_TOP "Elige dónde instalar ${APP_NAME}.$\r$\n$\r$\nRecomendado: dejar la carpeta como está. Evita carpetas dentro de OneDrive o Google Drive (la app pesa varios GB y la sincronización la rompe)."
 !define MUI_DIRECTORYPAGE_TEXT_DESTINATION "Carpeta de instalación"

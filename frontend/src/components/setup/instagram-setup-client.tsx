@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ExternalLink, Copy, Check, Loader2, CheckCircle2, ArrowRight, Camera, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 
 /**
  * Wizard guiado para conectar Instagram (Graph API de Meta).
@@ -79,9 +80,9 @@ export function InstagramSetupClient() {
   const isConnected = Boolean(settings?.instagram.hasAccessToken);
 
   async function saveAndConnect() {
-    if (!appId.trim()) return toast.error("Pegá el App ID");
-    if (!appSecret.trim() && !settings?.instagram.hasAppSecret) return toast.error("Pegá el App Secret");
-    if (!publicBaseUrl.trim()) return toast.error("Pegá la URL pública del túnel (la necesita Instagram para bajar el video)");
+    if (!appId.trim()) return toast.error("Pega el App ID");
+    if (!appSecret.trim() && !settings?.instagram.hasAppSecret) return toast.error("Pega el App Secret");
+    if (!publicBaseUrl.trim()) return toast.error("Pega la URL pública del túnel (la necesita Instagram para bajar el video)");
     setSaving(true);
     try {
       const res = await fetch("/api/settings", {
@@ -95,13 +96,13 @@ export function InstagramSetupClient() {
           },
         }),
       });
-      if (!res.ok) throw new Error("save falló");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       toast.success("Guardado. Redirigiendo a Meta para autorizar…");
       setTimeout(() => {
         window.location.href = "/api/auth/instagram/login";
       }, 600);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudieron guardar las credenciales");
       setSaving(false);
     }
   }
@@ -145,8 +146,8 @@ export function InstagramSetupClient() {
       <Card className="border-border bg-card p-5 space-y-3">
         <h2 className="text-base font-medium">1 · Crear la app en Meta</h2>
         <p className="text-sm text-muted-foreground">
-          Abrí Meta for Developers y creá una app de tipo <strong>Business</strong>. Después, en{" "}
-          <strong>Add Products</strong>, agregá <strong>Instagram</strong> (Graph API).
+          Abre Meta for Developers y crea una app de tipo <strong>Business</strong>. Después, en{" "}
+          <strong>Add Products</strong>, agrega <strong>Instagram</strong> (Graph API).
         </p>
         <a
           href="https://developers.facebook.com/apps"
@@ -176,7 +177,7 @@ export function InstagramSetupClient() {
         <h2 className="text-base font-medium">3 · Redirect URI + permisos</h2>
         <p className="text-sm text-muted-foreground">
           En la config de <strong>Facebook Login</strong> de la app → <strong>Valid OAuth Redirect URIs</strong>,
-          pegá esta URL exacta:
+          pega esta URL exacta:
         </p>
         <CopyableRow label="Valid OAuth Redirect URI" value={redirectUri} />
         <p className="text-xs text-muted-foreground">
@@ -200,7 +201,7 @@ export function InstagramSetupClient() {
         </p>
         <CopyableRow label="Comando del túnel" value="cloudflared tunnel --url http://localhost:3000" />
         <p className="text-xs text-muted-foreground">
-          Te va a dar una URL tipo <code>https://algo-random.trycloudflare.com</code>. Pegala abajo.
+          Te va a dar una URL tipo <code>https://algo-random.trycloudflare.com</code>. Pégala abajo.
           (Tiene que estar corriendo al momento de publicar.)
         </p>
       </Card>
@@ -209,7 +210,7 @@ export function InstagramSetupClient() {
       <Card className="border-border bg-card p-5 space-y-3">
         <h2 className="text-base font-medium">5 · Pegar credenciales y conectar</h2>
         <p className="text-sm text-muted-foreground">
-          En <strong>App settings → Basic</strong> copiá <strong>App ID</strong> y{" "}
+          En <strong>App settings → Basic</strong> copia <strong>App ID</strong> y{" "}
           <strong>App Secret</strong>. Se guardan local en{" "}
           <code className="font-mono-tab text-[10px]">C:\hermes-data\user-settings.json</code>.
         </p>
@@ -222,7 +223,7 @@ export function InstagramSetupClient() {
             <Label className="text-xs">
               App Secret
               {settings?.instagram.hasAppSecret && (
-                <span className="ml-2 font-mono-tab text-[10px] text-emerald-400">(guardado · dejá vacío para no cambiar)</span>
+                <span className="ml-2 font-mono-tab text-[10px] text-emerald-400">(guardado · déjalo vacío para no cambiarlo)</span>
               )}
             </Label>
             <Input
@@ -255,8 +256,8 @@ export function InstagramSetupClient() {
           <Camera className="mr-1 inline h-3 w-3" /> Notas
         </p>
         <ul className="mt-2 space-y-1">
-          <li>• El token dura ~60 días — después reconectás con un click.</li>
-          <li>• Si cambia la URL del túnel, actualizala acá antes de publicar.</li>
+          <li>• El token dura ~60 días — después reconectas con un clic.</li>
+          <li>• Si cambia la URL del túnel, actualízala aquí antes de publicar.</li>
           <li>• El redirect URI tiene que ser idéntico (sin barra final) o Meta lo rechaza.</li>
         </ul>
       </div>

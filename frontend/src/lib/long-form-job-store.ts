@@ -55,12 +55,13 @@ export interface LongFormJob {
   startedAt: number;
   finishedAt?: number;
   /**
-   * "queued"  → encolado por el job-queue, esperando slot
-   * "running" → el pipeline Python está corriendo
-   * "done"    → todos los steps OK
-   * "failed"  → fallo en algún step
+   * "queued"    → encolado por el job-queue, esperando slot
+   * "running"   → el pipeline Python está corriendo
+   * "done"      → todos los steps OK
+   * "failed"    → fallo en algún step
+   * "cancelled" → el usuario lo canceló (no es un fallo; se muestra distinto)
    */
-  status: "queued" | "running" | "done" | "failed";
+  status: "queued" | "running" | "done" | "failed" | "cancelled";
   /** Posición en cola (1-indexed); undefined cuando está running/done/failed */
   queuePosition?: number;
   /** 0-100 — derivado de los pasos completados */
@@ -73,13 +74,13 @@ export interface LongFormJob {
 }
 
 const DEFAULT_STEPS: { key: LongFormStepKey; label: string }[] = [
-  { key: "transcribe", label: "Transcribir audio del video original" },
+  { key: "transcribe", label: "Convertir a texto lo que se dice en el video" },
   { key: "detect_silences", label: "Detectar silencios" },
-  { key: "cut_silences", label: "Cortar silencios → video clean" },
-  { key: "re_transcribe", label: "Re-transcribir el clean (timestamps alineados)" },
-  { key: "analyze", label: "Analizar con IA → proponer 5-7 clips icónicos" },
-  { key: "extract_clips", label: "Recortar los clips (30-60s c/u)" },
-  { key: "render", label: "Renderizar clips con estilo supreme" },
+  { key: "cut_silences", label: "Cortar los silencios del video" },
+  { key: "re_transcribe", label: "Volver a transcribir el video sin silencios" },
+  { key: "analyze", label: "Analizar con IA → elegir los mejores momentos" },
+  { key: "extract_clips", label: "Recortar los clips (30-60 s cada uno)" },
+  { key: "render", label: "Generar los videos finales con tu estilo" },
 ];
 
 declare global {
@@ -105,7 +106,7 @@ function reconcileLongFormJob(job: LongFormJob): void {
   for (const step of job.steps) {
     if (step.status === "pending" || step.status === "running") {
       step.status = "fail";
-      step.message = "Interrumpido por reinicio del servidor — volvé a correr el pipeline.";
+      step.message = "Interrumpido por reinicio del servidor — vuelve a empezar el proceso.";
       if (!step.finishedAt) step.finishedAt = Date.now();
     }
   }
@@ -168,6 +169,9 @@ export function updateLongFormStep(
 ): void {
   const job = STORE.get(jobId);
   if (!job) return;
+  // Un job cancelado por el usuario es terminal: el handler de cierre del proceso
+  // matado por taskkill NO debe pisarlo con "failed".
+  if (job.status === "cancelled") return;
   const step = job.steps.find((s) => s.key === stepKey);
   if (!step) return;
 
@@ -228,6 +232,63 @@ export function setLongFormClipsCount(jobId: string, count: number): void {
   if (!job) return;
   job.clipsCount = count;
   persist();
+}
+
+/**
+ * Cancelación pedida por el usuario. Marca el job "cancelled" (NO "failed") con
+ * mensaje "Cancelado por ti" y cierra los steps abiertos como "skipped".
+ * También convierte los steps que la cola ya marcó "fail · cancelado" (cancelPending
+ * de job-queue) para que el panel no muestre un fallo donde hubo una decisión.
+ *
+ * Devuelve false si el job no existe o ya era terminal.
+ */
+export function cancelLongFormJob(jobId: string, message = "Cancelado por ti"): boolean {
+  const job = STORE.get(jobId);
+  if (!job) return false;
+  if (job.status === "done" || job.status === "cancelled") return false;
+  const wasFailedByQueueCancel =
+    job.status === "failed" &&
+    job.steps.some((s) => s.status === "fail" && /cancelado/i.test(s.message ?? ""));
+  if (job.status === "failed" && !wasFailedByQueueCancel) return false;
+
+  job.status = "cancelled";
+  job.queuePosition = undefined;
+  if (!job.finishedAt) job.finishedAt = Date.now();
+  for (const step of job.steps) {
+    const cancelledByQueue = step.status === "fail" && /cancelado/i.test(step.message ?? "");
+    if (step.status === "pending" || step.status === "running" || cancelledByQueue) {
+      step.status = "skipped";
+      step.message = message;
+      if (!step.finishedAt) step.finishedAt = Date.now();
+    }
+  }
+  saveNow(PERSIST_FILE, Array.from(STORE.values()));
+  return true;
+}
+
+// ─── Registro jobId → pid del proceso Python ────────────────────────────────
+// Vive en globalThis para sobrevivir hot-reload en dev (mismo patrón que STORE).
+// /api/long_form/process registra el pid al spawnear; /api/long_form/cancel lo usa
+// para matar el árbol completo (python + ffmpeg + remotion) con taskkill /T /F.
+
+declare global {
+
+  var __viral_lf_pid_map__: Map<string, number> | undefined;
+}
+
+const PID_MAP: Map<string, number> =
+  globalThis.__viral_lf_pid_map__ ?? (globalThis.__viral_lf_pid_map__ = new Map());
+
+export function registerLongFormPid(jobId: string, pid: number): void {
+  PID_MAP.set(jobId, pid);
+}
+
+export function getLongFormPid(jobId: string): number | undefined {
+  return PID_MAP.get(jobId);
+}
+
+export function unregisterLongFormPid(jobId: string): void {
+  PID_MAP.delete(jobId);
 }
 
 // Limpieza: borrar jobs > 4h de antigüedad (los pipelines de render pueden tardar mucho)

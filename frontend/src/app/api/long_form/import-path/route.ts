@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as { path?: string };
     const srcRaw = (body.path ?? "").trim().replace(/^["']|["']$/g, ""); // sacar comillas pegadas
     if (!srcRaw) {
-      return NextResponse.json({ error: "Pegá la ruta del archivo en tu compu." }, { status: 400 });
+      return NextResponse.json({ error: "Pega la ruta del archivo en tu compu." }, { status: 400 });
     }
 
     // El archivo tiene que existir y ser un archivo (no carpeta).
@@ -35,8 +35,9 @@ export async function POST(req: NextRequest) {
     try {
       stat = await fs.stat(srcRaw);
     } catch {
+      // Solo el nombre del archivo en el mensaje (sin rutas C:\ visibles).
       return NextResponse.json(
-        { error: `No encontré ese archivo: ${srcRaw}. Revisá la ruta (clic derecho → Copiar como ruta de acceso).` },
+        { error: `No encontré el archivo «${path.basename(srcRaw)}» en esa ruta. Revisa la ruta (clic derecho → Copiar como ruta de acceso).` },
         { status: 404 }
       );
     }

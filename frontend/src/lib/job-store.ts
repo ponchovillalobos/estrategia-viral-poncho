@@ -11,6 +11,7 @@ import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { RENDERS_DIR } from "@/lib/paths";
 import { loadSnapshot, scheduleSave, saveNow } from "@/lib/job-persistence";
+import { pushNotification, type NotificationType } from "@/lib/notifications-store";
 
 const PERSIST_FILE = "editor-jobs.json";
 
@@ -110,7 +111,7 @@ function reconcileJob(job: Job): void {
       step.output = outPath;
     } else {
       step.status = "fail";
-      step.error = "Interrumpido por reinicio del servidor — volvé a renderizar.";
+      step.error = "Se interrumpió porque la app se reinició — intenta generarlo de nuevo.";
     }
   }
   job.queuePosition = undefined;
@@ -149,6 +150,52 @@ export function getJob(id: string): Job | undefined {
   return STORE.get(id);
 }
 
+/** Todos los jobs del store (para historial / panel de cola). */
+export function listJobs(): Job[] {
+  return Array.from(STORE.values());
+}
+
+/**
+ * Título humano del job: el nombre del archivo de salida (que auto-build arma con el
+ * título del contenido + estilo, ej "Como vender mas Viral"). undefined si todavía
+ * no hay output o si el nombre es el técnico videoId_estilo.
+ */
+export function jobTitle(job: Job): string | undefined {
+  for (const step of job.steps) {
+    if (!step.output) continue;
+    const base = path.basename(step.output).replace(/\.mp4$/i, "");
+    if (base && base !== `${job.videoId}_${step.styleId}`) return base;
+  }
+  return undefined;
+}
+
+/**
+ * Avisa al usuario (vía /api/notifications → NotificationPoller) que el job terminó.
+ * Se llama UNA sola vez por job, en la transición a estado terminal. El store de
+ * notificaciones además dedupea por (type, scheduleId, projectId) sin ack.
+ */
+function notifyTerminal(job: Job): void {
+  const failedStep = job.steps.find((s) => s.status === "fail" && s.error);
+  // Si el propio usuario lo canceló, no hay nada que avisar.
+  if (failedStep?.error && /cancelado por el usuario/i.test(failedStep.error)) return;
+  const title = jobTitle(job);
+  // El union NotificationType original no incluye los tipos de render; el store
+  // serializa a JSON así que el cast es seguro (el poller los maneja por string).
+  const type = (job.status === "done" ? "render_done" : "render_failed") as unknown as NotificationType;
+  pushNotification({
+    type,
+    projectId: job.videoId,
+    scheduleId: job.id,
+    scheduledAt: Date.now(),
+    message:
+      job.status === "done"
+        ? title ?? job.videoId
+        : (failedStep?.error ?? "").split("\n[detalle]")[0] || "Algo salió mal al generar el video.",
+  }).catch(() => {
+    /* best-effort: si el JSON de notificaciones falla, el job igual queda bien */
+  });
+}
+
 export function updateStep(
   jobId: string,
   styleId: StyleId,
@@ -168,6 +215,8 @@ export function updateStep(
   // el server muere enseguida); en updates de progreso, con debounce.
   if (nowTerminal && !wasTerminal) {
     saveNow(PERSIST_FILE, Array.from(STORE.values()));
+    // Aviso de éxito/fallo al usuario — sólo en la transición (anti-spam: 1 vez por job).
+    notifyTerminal(job);
   } else {
     persist();
   }
@@ -180,9 +229,10 @@ export function setCurrentStyle(jobId: string, styleId: StyleId): void {
   persist();
 }
 
-// Limpieza: borrar jobs > 1h de antigüedad
+// Limpieza: borrar jobs > 72h de antigüedad (los terminados quedan visibles en el
+// historial /api/jobs/history y en el panel de cola durante ese tiempo).
 setInterval(() => {
-  const cutoff = Date.now() - 60 * 60 * 1000;
+  const cutoff = Date.now() - 72 * 60 * 60 * 1000;
   let changed = false;
   for (const [k, v] of STORE.entries()) {
     if (v.startedAt < cutoff) {

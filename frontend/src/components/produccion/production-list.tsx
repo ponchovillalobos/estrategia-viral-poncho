@@ -9,7 +9,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ProjectCardSkeleton } from "@/components/ui/skeleton";
-import { RefreshCcw, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Play, Calendar, Camera, Trash2, CheckSquare } from "lucide-react";
+import { RefreshCcw, ExternalLink, Clock, Copy, Check, Sparkles, Loader2, Search, X, Play, Calendar, Camera, Trash2, CheckSquare, FolderOpen } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toastError } from "@/lib/toast-error";
 import { ScheduleDialog } from "@/components/produccion/schedule-dialog";
 import { UploadHelperDialog } from "@/components/produccion/upload-helper-dialog";
 import { InstagramHelperDialog } from "@/components/produccion/instagram-helper-dialog";
@@ -60,6 +62,9 @@ export function ProductionList() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  // Confirmación de borrado con nuestro propio diálogo (nada de confirm() nativo).
+  const [deleteTarget, setDeleteTarget] = useState<ProjectExt | null>(null);
+  const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -67,7 +72,7 @@ export function ProductionList() {
       if (filterStatus !== "all" && p.status !== filterStatus) return false;
       if (filterPlatform !== "all" && !(p.platforms?.includes(filterPlatform) ?? false)) return false;
       if (q) {
-        const haystack = `${p.id} ${p.caption ?? ""}`.toLowerCase();
+        const haystack = `${p.id} ${p.title ?? ""} ${p.caption ?? ""}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
@@ -88,26 +93,42 @@ export function ProductionList() {
       const res = await fetch("/api/projects", { cache: "no-store" });
       const data = await res.json();
       setProjects(data.projects ?? []);
+    } catch (err) {
+      toastError(err, "No se pudieron cargar tus videos", {
+        action: { label: "Intentar de nuevo", onClick: load },
+      });
     } finally {
       setLoading(false);
     }
   }
 
-  // Borra el short de Producción (su JSON + el video renderizado). No toca el video
-  // raw fuente. Optimista: lo saco de la lista ya; si falla, recargo para restaurar.
-  async function removeProject(p: ProjectExt) {
-    if (
-      !confirm(
-        `¿Borrar el short "${p.title ?? p.id}"?\n\nSe elimina de "Mis videos" junto con su video renderizado. El video original NO se toca. Esto no se puede deshacer.`
-      )
-    )
-      return;
+  // Borra el video de "Mis videos" (su JSON + el archivo generado). No toca el video
+  // original. Optimista: lo saco de la lista ya; si falla, aviso y recargo para restaurar.
+  async function doRemoveProject(p: ProjectExt) {
+    setDeleteTarget(null);
     setProjects((prev) => prev.filter((x) => x.id !== p.id));
     try {
       const res = await fetch(`/api/projects/${encodeURIComponent(p.id)}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("delete failed");
-    } catch {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      toastError(err, "No se pudo borrar el video", {
+        action: { label: "Intentar de nuevo", onClick: () => doRemoveProject(p) },
+      });
       load(); // restaurar si algo falló
+    }
+  }
+
+  // Abre la carpeta donde está el archivo del video, con el archivo seleccionado.
+  async function revealRender(p: ProjectExt) {
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(p.id)}/reveal-render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: p.source ?? "short" }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      toastError(err, "No se pudo abrir la carpeta");
     }
   }
 
@@ -125,24 +146,31 @@ export function ProductionList() {
     setSelectedIds(new Set());
   }
 
-  // Borra TODOS los shorts seleccionados (su JSON + render). No toca los videos raw.
-  async function removeSelected() {
+  // Borra TODOS los videos seleccionados (su JSON + el archivo generado).
+  // No toca los videos originales. Reporta cuántos no se pudieron borrar.
+  async function doRemoveSelected() {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
-    if (
-      !confirm(
-        `¿Borrar ${ids.length} short${ids.length === 1 ? "" : "s"} seleccionado${ids.length === 1 ? "" : "s"}?\n\nSe eliminan de "Mis videos" junto con sus videos renderizados. Los videos originales NO se tocan. Esto no se puede deshacer.`
-      )
-    )
-      return;
+    setBatchConfirmOpen(false);
     setDeleting(true);
     setProjects((prev) => prev.filter((x) => !selectedIds.has(x.id)));
     try {
-      await Promise.all(
+      const results = await Promise.all(
         ids.map((id) =>
-          fetch(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null)
+          fetch(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" })
+            .then((r) => r.ok)
+            .catch(() => false)
         )
       );
+      const failedCount = results.filter((ok) => !ok).length;
+      if (failedCount > 0) {
+        toastError(
+          new Error(`fallaron ${failedCount} de ${ids.length} borrados`),
+          failedCount === 1
+            ? "No se pudo borrar 1 de los videos"
+            : `No se pudieron borrar ${failedCount} de los videos`
+        );
+      }
     } finally {
       setDeleting(false);
       exitSelectMode();
@@ -217,7 +245,7 @@ export function ProductionList() {
       .catch(() => {});
   }, []);
 
-  // Cuando se abre el preview, cargá el transcript y reseteá el feedback de copiado.
+  // Cuando se abre el preview, carga el transcript y resetea el feedback de copiado.
   // Patrón store-and-compare en vez de useEffect+setState.
   const previewVideoId = previewProject?.videoId;
   const [prevPreviewVideoId, setPrevPreviewVideoId] = useState<string | undefined>(previewVideoId);
@@ -237,7 +265,7 @@ export function ProductionList() {
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre o caption…"
+              placeholder="Buscar por nombre o descripción…"
               className="w-full rounded-md border border-border bg-card pl-8 pr-3 py-1.5 text-sm placeholder:text-foreground/55 focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
@@ -246,7 +274,7 @@ export function ProductionList() {
               {hasActiveFilters
                 ? `${filtered.length} de ${projects.length}`
                 : projects.length}{" "}
-              proyecto{filtered.length === 1 ? "" : "s"}
+              video{filtered.length === 1 ? "" : "s"}
             </span>
             <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
               <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
@@ -286,7 +314,7 @@ export function ProductionList() {
             <div className="ml-auto">
               <Button
                 size="sm"
-                onClick={removeSelected}
+                onClick={() => setBatchConfirmOpen(true)}
                 disabled={selectedIds.size === 0 || deleting}
                 className="bg-red-600 text-white hover:bg-red-700"
               >
@@ -350,8 +378,8 @@ export function ProductionList() {
         <EmptyState
           icon={Sparkles}
           tone="emerald"
-          title="Todavía no tenés videos generados"
-          description="Acá van a aparecer tus shorts ya editados, listos para publicar. Creá el primero eligiendo un video y un estilo."
+          title="Todavía no tienes videos generados"
+          description="Aquí van a aparecer tus videos ya editados, listos para subir a tus redes. Crea el primero eligiendo un video y un estilo."
           cta={{ label: "Crear mi primer video", href: "/editor" }}
         />
       )}
@@ -361,7 +389,7 @@ export function ProductionList() {
           icon={Search}
           tone="muted"
           title="Sin coincidencias para los filtros actuales"
-          description="Probá cambiar el término de búsqueda o el filtro de estado/plataforma."
+          description="Prueba cambiar el término de búsqueda o el filtro de estado/plataforma."
           cta={{ label: "Limpiar filtros", onClick: clearFilters }}
         />
       )}
@@ -380,7 +408,7 @@ export function ProductionList() {
               <button
                 type="button"
                 onClick={() => (selectMode ? toggleSelect(p.id) : setPreviewProject(p))}
-                title={selectMode ? "Click para seleccionar" : "Click para reproducir"}
+                title={selectMode ? "Toca para seleccionarlo" : "Toca para verlo"}
                 className="group relative aspect-[9/16] cursor-pointer overflow-hidden bg-zinc-900 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {/* Casilla de selección (solo en modo selección). */}
@@ -453,7 +481,7 @@ export function ProductionList() {
                 <div className="space-y-1.5 rounded-md border border-border bg-muted/30 p-2.5">
                   <div className="flex items-center justify-between">
                     <span className="font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
-                      caption para publicar
+                      descripción para publicar
                     </span>
                     <div className="flex items-center gap-1">
                       <div className="group/regen relative">
@@ -461,7 +489,7 @@ export function ProductionList() {
                           type="button"
                           onClick={() => regenerate(p, "auto")}
                           disabled={regenerating === p.id}
-                          title="Regenerar caption (auto-detecta mejor LLM)"
+                          title="Regenerar la descripción (la IA elige la mejor opción por ti)"
                           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                         >
                           {regenerating === p.id ? (
@@ -501,7 +529,7 @@ export function ProductionList() {
                         type="button"
                         onClick={() => copyCaption(p)}
                         className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-emerald-400"
-                        title="Copiar caption completo"
+                        title="Copiar la descripción completa"
                       >
                         {copiedId === p.id ? (
                           <Check className="h-3 w-3 animate-in zoom-in-50 duration-200 text-primary" />
@@ -517,12 +545,12 @@ export function ProductionList() {
                     </pre>
                   ) : (
                     <p className="text-[11px] text-muted-foreground italic">
-                      Todavía no tiene descripción. Tocá el botón ✨ Generar para crearla con IA.
+                      Todavía no tiene descripción. Toca el botón ✨ para crearla con IA.
                     </p>
                   )}
                   {/* Copys POR RED: cada botón copia la versión adaptada a esa red
                       (texto corto + hashtags de TikTok/IG, versión larga para LinkedIn).
-                      Es el flujo manual: copiás y pegás en la app de la red. */}
+                      Es el flujo manual: copias y pegas en la app de la red. */}
                   {p.caption && (
                     <div className="flex flex-wrap items-center gap-1 border-t border-border/60 pt-1.5">
                       <span className="font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground">
@@ -544,6 +572,25 @@ export function ProductionList() {
                 </div>
 
                 <div className="flex flex-col gap-1.5 text-[10px] text-muted-foreground">
+                  {/* Fila 0 — acciones del archivo, SIEMPRE visibles (con o sin publicación). */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <a
+                      href={`/api/videos/${encodeURIComponent(p.id)}/stream?source=render&download=1`}
+                      download
+                      title="Descargar el MP4 a tu compu"
+                      className="flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/5 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/15"
+                    >
+                      💾 Guardar video
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => revealRender(p)}
+                      title="Abrir la carpeta donde está el archivo del video"
+                      className="flex items-center gap-1 rounded border border-border bg-card px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-muted-foreground hover:border-emerald-400/50 hover:text-emerald-300"
+                    >
+                      📂 Abrir carpeta
+                    </button>
+                  </div>
                   {/* Fila 1 — programar (multi-plataforma) + editor + updated */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-3">
@@ -560,7 +607,7 @@ export function ProductionList() {
                           disabled={!p.caption}
                           title={
                             !p.caption
-                              ? "Generá un caption primero con ✨"
+                              ? "Genera una descripción primero con ✨"
                               : "Programar publicación en una o varias redes"
                           }
                           className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono-tab uppercase tracking-wider hover:bg-muted hover:text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -577,8 +624,8 @@ export function ProductionList() {
                       </span>
                       <button
                         type="button"
-                        onClick={() => removeProject(p)}
-                        title="Borrar este short (no toca el video original)"
+                        onClick={() => setDeleteTarget(p)}
+                        title="Borrar este video (tu video original no se toca)"
                         className="flex items-center rounded p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-400"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -601,10 +648,10 @@ export function ProductionList() {
                       disabled={!p.caption || publishingToInstagram === p.id}
                       title={
                         !p.caption
-                          ? "Generá un caption primero con ✨"
+                          ? "Genera una descripción primero con ✨"
                           : instagramConnected
                             ? `Publicar AHORA en Instagram${instagramHandle ? ` (${instagramHandle})` : ""}`
-                            : `Publicar en Instagram con un paso extra (te copia el video y abre IG)${instagramHandle ? ` — ${instagramHandle}` : ""}. Conectá IG en Configuración para publicar directo.`
+                            : `Publicar en Instagram con un paso extra (te copia el video y abre IG)${instagramHandle ? ` — ${instagramHandle}` : ""}. Conecta IG en Configuración para publicar directo.`
                       }
                       className="flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/5 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-amber-300 hover:bg-amber-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
@@ -622,9 +669,9 @@ export function ProductionList() {
                       disabled={!p.caption || !linkedinConnected || publishingToLinkedin === p.id}
                       title={
                         !p.caption
-                          ? "Generá un caption primero con ✨"
+                          ? "Genera una descripción primero con ✨"
                           : !linkedinConnected
-                            ? "Conectá LinkedIn en Settings primero"
+                            ? "Conecta LinkedIn en Configuración primero"
                             : `Publicar AHORA en LinkedIn${linkedinHandle ? ` (${linkedinHandle})` : ""}`
                       }
                       className="flex items-center gap-1 rounded border border-sky-500/30 bg-sky-500/5 px-1.5 py-0.5 font-mono-tab text-[9px] uppercase tracking-wider text-sky-300 hover:bg-sky-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -645,6 +692,70 @@ export function ProductionList() {
           </Card>
         ))}
       </div>
+
+      {/* Footer — recordatorio de dónde viven los archivos. */}
+      {projects.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <span>Tus videos se guardan en tu compu.</span>
+          <Button variant="ghost" size="sm" onClick={() => revealRender(projects[0])}>
+            <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+            Abrir la carpeta
+          </Button>
+        </div>
+      )}
+
+      {/* Confirmación de borrado individual — diálogo propio, nada de confirm() nativo. */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Borrar este video?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget ? `"${deleteTarget.title ?? deleteTarget.id}" se elimina de Mis videos. ` : ""}
+              Tu video original no se toca.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+              Mejor no
+            </Button>
+            <Button
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={() => deleteTarget && doRemoveProject(deleteTarget)}
+            >
+              Sí, borrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmación de borrado en lote */}
+      <Dialog open={batchConfirmOpen} onOpenChange={(open) => !open && setBatchConfirmOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              ¿Borrar {selectedIds.size === 1 ? "este video" : `estos ${selectedIds.size} videos`}?
+            </DialogTitle>
+            <DialogDescription>
+              {selectedIds.size === 1
+                ? "Se elimina de Mis videos. Tu video original no se toca."
+                : "Se eliminan de Mis videos. Tus videos originales no se tocan."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBatchConfirmOpen(false)}>
+              Mejor no
+            </Button>
+            <Button
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={deleting}
+              onClick={doRemoveSelected}
+            >
+              {deleting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Sí, borrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {uploadHelperTarget && (
         <UploadHelperDialog

@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { REMOTION_DIR, RENDERS_DIR, RAW_DIR } from "@/lib/paths";
+import { humanizeError } from "@/lib/humanize-error";
 import {
   acquireRenderLock,
   releaseRenderLock,
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Este video ya se está generando en este momento. Esperá a que termine (mirá el panel de tareas abajo a la derecha) y reintentá.",
+            "Este video ya se está generando en este momento. Espera a que termine (mira el panel de tareas abajo a la derecha) y reintenta.",
         },
         { status: 409 }
       );
@@ -67,18 +68,36 @@ export async function POST(req: NextRequest) {
         files = await fs.readdir(RAW_DIR);
       } catch {
         return NextResponse.json(
-          { error: `no se pudo leer RAW_DIR: ${RAW_DIR}` },
+          {
+            error:
+              "No se pudo abrir tu carpeta de videos. Revisa que exista y que Windows no la esté bloqueando.",
+            technical: `no se pudo leer RAW_DIR: ${RAW_DIR}`,
+          },
           { status: 500 }
         );
       }
       const match = files.find((f) => path.basename(f, path.extname(f)) === videoId);
       if (!match) {
-        return NextResponse.json({ error: "raw video not found" }, { status: 404 });
+        return NextResponse.json(
+          {
+            error:
+              "No se encontró el video original. Puede que lo hayas movido o borrado de tu carpeta de videos; vuelve a subirlo e intenta de nuevo.",
+            technical: `raw video not found: ${videoId} en ${RAW_DIR}`,
+          },
+          { status: 404 }
+        );
       }
 
       const apiHost = process.env.VIRAL_API_HOST ?? "http://localhost:3000";
       const rawUrl = `${apiHost}/api/videos/${encodeURIComponent(videoId)}/stream?source=raw`;
-      const fullProps = { ...props, rawVideoUrl: rawUrl };
+      const fullProps: Record<string, unknown> = { ...props, rawVideoUrl: rawUrl };
+      // La música llega como URL RELATIVA desde el editor (el cliente no sabe en
+      // qué puerto corre el server: la app instalada usa 3100+, no 3000). Aquí la
+      // absolutizamos con el mismo host que el video. Si llega absoluta (props
+      // viejos / proyectos guardados), se respeta tal cual.
+      if (typeof fullProps.musicUrl === "string" && fullProps.musicUrl.startsWith("/")) {
+        fullProps.musicUrl = `${apiHost}${fullProps.musicUrl}`;
+      }
 
       const args = [
         "remotion",
@@ -124,12 +143,17 @@ export async function POST(req: NextRequest) {
 
       if (code !== 0 || timedOut) {
         await fs.rm(outFile, { force: true }).catch(() => {});
+        // Nada de "render failed" crudo: el stderr pasa por humanizeError y el
+        // usuario recibe un mensaje accionable; lo técnico va aparte.
+        const raw = `${stderr}\n${stdout}`.trim();
+        const human = humanizeError(
+          timedOut ? `TIMEOUT: la generación superó el tope de 25 minutos.\n${raw}` : raw,
+          timedOut
+            ? "La generación tardó demasiado y se canceló. Intenta de nuevo, o prueba primero con calidad Preview."
+            : "No se pudo generar el video. Intenta de nuevo; si vuelve a pasar, prueba con calidad Preview o reinicia la app."
+        );
         return NextResponse.json(
-          {
-            error: timedOut ? "render timeout" : "render failed",
-            stderr: stderr.slice(-3000),
-            stdout: stdout.slice(-2000),
-          },
+          { error: human.message, technical: human.technical },
           { status: 500 }
         );
       }
@@ -148,8 +172,9 @@ export async function POST(req: NextRequest) {
       await releaseRenderLock(videoId);
     }
   } catch (err) {
+    const human = humanizeError(err instanceof Error ? err.message : String(err));
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: human.message, technical: human.technical },
       { status: 500 }
     );
   }

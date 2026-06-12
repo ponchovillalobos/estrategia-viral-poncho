@@ -19,11 +19,18 @@
 //    log y muestra un diálogo de error EN ESPAÑOL con el motivo (EADDRINUSE,
 //    EACCES…) en vez de dejar la pantalla en blanco.
 use std::net::{SocketAddr, TcpListener, TcpStream};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::Manager;
+
+/// CREATE_NO_WINDOW: sin este flag, cada proceso hijo (tasklist, taskkill, el
+/// node del server) abre una consola negra fantasma encima de la app.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 struct ServerProc(Mutex<Option<Child>>);
 
@@ -87,12 +94,17 @@ fn kill_previous_server() {
     if let Ok(pid) = std::fs::read_to_string(&pf) {
         let pid = pid.trim().to_string();
         if !pid.is_empty() && pid.chars().all(|c| c.is_ascii_digit()) {
-            if let Ok(out) = Command::new("tasklist")
-                .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
-                .output()
-            {
+            let mut tasklist = Command::new("tasklist");
+            tasklist.args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]);
+            #[cfg(windows)]
+            tasklist.creation_flags(CREATE_NO_WINDOW);
+            if let Ok(out) = tasklist.output() {
                 if String::from_utf8_lossy(&out.stdout).to_lowercase().contains("node.exe") {
-                    let _ = Command::new("taskkill").args(["/PID", &pid, "/T", "/F"]).output();
+                    let mut taskkill = Command::new("taskkill");
+                    taskkill.args(["/PID", &pid, "/T", "/F"]);
+                    #[cfg(windows)]
+                    taskkill.creation_flags(CREATE_NO_WINDOW);
+                    let _ = taskkill.output();
                 }
             }
         }
@@ -130,6 +142,9 @@ fn spawn_server(port: u16) -> Option<Child> {
     let log2 = log.as_ref().and_then(|f| f.try_clone().ok());
 
     let mut cmd = Command::new(&node_exe);
+    // Sin consola fantasma: el server corre invisible, su salida va al log.
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
     cmd.arg("server.js")
         .current_dir(&standalone)
         .env("PORT", port.to_string())
@@ -203,7 +218,7 @@ fn wait_for_server(port: u16, state: &ServerProc) -> Result<(), String> {
                 None => {
                     return Err(
                         "No se encontró el motor de la app (falta la carpeta payload o el \
-                         proyecto compilado). Reinstalá la aplicación."
+                         proyecto compilado). Reinstala la aplicación."
                             .into(),
                     );
                 }
@@ -211,13 +226,13 @@ fn wait_for_server(port: u16, state: &ServerProc) -> Result<(), String> {
                     if let Ok(Some(_status)) = child.try_wait() {
                         let log = std::fs::read_to_string(server_log()).unwrap_or_default();
                         let hint = if log.contains("EADDRINUSE") {
-                            "Otro programa está usando el puerto de la app. Cerrá otras \
-                             aplicaciones (o reiniciá la compu) y volvé a abrir."
+                            "Otro programa está usando el puerto de la app. Cierra otras \
+                             aplicaciones (o reinicia la compu) y vuelve a abrir."
                         } else if log.contains("EACCES") {
-                            "Windows bloqueó el acceso. Probá ejecutar la app desde una \
+                            "Windows bloqueó el acceso. Prueba ejecutar la app desde una \
                              carpeta de tu usuario (Documentos o Escritorio)."
                         } else if log.contains("Cannot find module") {
-                            "La instalación está incompleta (faltan archivos). Reinstalá \
+                            "La instalación está incompleta (faltan archivos). Reinstala \
                              la aplicación."
                         } else {
                             "El motor de la app se cerró al arrancar."
@@ -237,8 +252,8 @@ fn wait_for_server(port: u16, state: &ServerProc) -> Result<(), String> {
         }
         if std::time::Instant::now() > deadline {
             return Err(
-                "La app no respondió en 40 segundos. Cerrala, esperá unos segundos y \
-                 volvé a abrirla. Si sigue pasando, reiniciá la computadora."
+                "La app no respondió en 40 segundos. Ciérrala, espera unos segundos y \
+                 vuelve a abrirla. Si sigue pasando, reinicia la computadora."
                     .into(),
             );
         }

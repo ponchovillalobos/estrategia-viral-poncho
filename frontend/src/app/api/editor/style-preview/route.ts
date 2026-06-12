@@ -13,6 +13,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { DATA_ROOT, REMOTION_DIR, TRANSCRIPTS_DIR } from "@/lib/paths";
+import {
+  applyWizardOverrides,
+  type OverridableProject,
+} from "@/lib/apply-wizard-overrides";
 import { buildProjectForStyle, type BuildContext } from "@/lib/style-templates";
 import { pickTopKeywords, type TranscriptWord } from "@/lib/content-title";
 import { runProcess } from "@/lib/run-process";
@@ -37,6 +41,12 @@ export async function POST(req: NextRequest) {
       accentColor?: string;
       subtitleFont?: string;
       subtitleColor?: string;
+      /** Tema del estilo Editorial (mismo shape que en auto-build). */
+      editorialTheme?: { font?: string; background?: string; theme?: string };
+      /** Fondo animado de los estilos motion_* ("auto" no viaja). */
+      motionBackground?: "aurora" | "mesh" | "grid";
+      /** Intensidad de FX de los estilos hype/supreme ("normal" no viaja). */
+      fxIntensity?: "suave" | "max";
       /** true → clip de 3s EN MOVIMIENTO (mp4, ~60-120s) en vez de un still. */
       motion?: boolean;
     };
@@ -60,8 +70,13 @@ export async function POST(req: NextRequest) {
     await fs.mkdir(PREVIEWS_DIR, { recursive: true });
     const motion = body.motion === true;
     const ext = motion ? "mp4" : "png";
+    // Los overrides del wizard también forman parte de la clave: cambiar tema
+    // editorial / fondo animado / intensidad genera una vista previa nueva.
+    const themeKey = body.editorialTheme
+      ? `${body.editorialTheme.theme ?? ""}-${body.editorialTheme.font ?? ""}-${body.editorialTheme.background ?? ""}`
+      : "auto";
     const cacheKey = safe(
-      `${videoId}_${styleId}_${accentColor.replace("#", "")}_${body.subtitleFont ?? "auto"}_${(body.subtitleColor ?? "auto").replace("#", "")}${motion ? "_motion" : ""}`
+      `${videoId}_${styleId}_${accentColor.replace("#", "")}_${body.subtitleFont ?? "auto"}_${(body.subtitleColor ?? "auto").replace("#", "")}_${themeKey}_${body.motionBackground ?? "auto"}_${body.fxIntensity ?? "normal"}${motion ? "_motion" : ""}`
     );
     const outPng = path.join(PREVIEWS_DIR, `${cacheKey}.${ext}`);
     const url = `/api/editor/style-preview?file=${encodeURIComponent(`${cacheKey}.${ext}`)}`;
@@ -104,6 +119,17 @@ export async function POST(req: NextRequest) {
         ? { subtitleColor: body.subtitleColor }
         : {}),
     };
+    // Overrides del wizard (tema editorial / fondo animado / intensidad de FX):
+    // el MISMO helper que usa auto-build → la vista previa es honesta.
+    const overridable = project as unknown as OverridableProject;
+    applyWizardOverrides(overridable, {
+      editorialTheme: body.editorialTheme,
+      motionBackground: body.motionBackground,
+      fxIntensity: body.fxIntensity,
+    });
+    // El preview no depende del _cut.mp4 (quizá no existe aún): aunque la
+    // intensidad "max" prenda jump cuts en el video final, acá siguen apagados.
+    overridable.enableJumpCuts = false;
     const projectPath = path.join(PREVIEWS_DIR, `${cacheKey}.json`);
     await writeJsonFileAtomic(projectPath, project);
 

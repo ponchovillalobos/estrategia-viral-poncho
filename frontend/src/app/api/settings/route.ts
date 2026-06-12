@@ -39,7 +39,8 @@ function sanitize(s: UserSettings) {
       publicBaseUrl: s.instagram.publicBaseUrl,
     },
     pixabay: {
-      apiKey: s.pixabay?.apiKey ?? "",
+      // Nunca devolver la key cruda al cliente — solo el flag de existencia.
+      hasApiKey: Boolean(s.pixabay?.apiKey),
     },
   };
 }
@@ -110,7 +111,12 @@ export async function PUT(req: NextRequest) {
     }
     if (body.pixabay) {
       patch.pixabay = {
-        apiKey: body.pixabay.apiKey ?? current.pixabay?.apiKey ?? "",
+        // Vacío = "no cambiar" (preserva el existing) — mismo patrón que los secrets
+        // de tiktok/linkedin. Como GET ya no devuelve la key, la UI manda "" siempre
+        // que el usuario no escriba una nueva.
+        apiKey: body.pixabay.apiKey
+          ? body.pixabay.apiKey
+          : current.pixabay?.apiKey ?? "",
       };
     }
     const next = await writeSettings(patch);

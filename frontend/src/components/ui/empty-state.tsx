@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * detrás del icono, mensaje y CTA opcional. Ideal para "no hay X todavía", el
  * primer onboarding al entrar a una sección vacía.
  *
- * Si pasás `cta`, podés especificar `href` (Link) o `onClick` (button); preferí
+ * Si pasas `cta`, puedes especificar `href` (Link) o `onClick` (button); prefiere
  * href cuando la acción es "ir a otra pantalla".
  */
 export function EmptyState({

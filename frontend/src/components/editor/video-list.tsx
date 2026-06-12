@@ -12,7 +12,15 @@ import { Button } from "@/components/ui/button";
 import { RefreshCcw, FileVideo, CheckCircle2, Circle, Pencil, Archive, ArchiveRestore, Upload, Loader2, Trash2 } from "lucide-react";
 import { RenameDialog } from "@/components/editor/rename-dialog";
 import { HelpHint } from "@/components/ui/help-hint";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 
 interface VideoEntry {
   id: string;
@@ -44,6 +52,9 @@ export function VideoList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  // Video pendiente de borrado definitivo — abre el diálogo de confirmación propio.
+  const [deleting, setDeleting] = useState<VideoEntry | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,13 +72,15 @@ export function VideoList() {
           ok++;
         } else {
           const data = (await r.json().catch(() => ({}))) as { error?: string };
-          toast.error(`${file.name}: ${data.error ?? "no se pudo subir"}`);
+          toastError(data.error ?? `HTTP ${r.status}`, `No se pudo subir «${file.name}»`);
         }
       }
-      if (ok > 0) toast.success(`${ok} video(s) subido(s) ✓`);
+      if (ok > 0) {
+        toast.success(ok === 1 ? "1 video subido ✓" : `${ok} videos subidos ✓`);
+      }
       load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudieron subir tus videos");
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -80,59 +93,58 @@ export function VideoList() {
     try {
       const res = await fetch(`/api/videos/list?archived=${showArchived}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "load failed");
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setVideos(data.videos);
       setActiveCount(data.activeCount ?? 0);
       setArchivedCount(data.archivedCount ?? 0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudieron cargar tus videos");
+      setError("No se pudieron cargar tus videos. Revisa que la app siga abierta y toca «Recargar».");
     } finally {
       setLoading(false);
     }
   }
 
-  async function archive(videoId: string) {
-    if (!confirm(`Mover ${videoId} a "usados"? (los renders se conservan)`)) return;
+  async function archive(video: VideoEntry) {
+    if (!confirm(`¿Mover «${video.filename}» a "usados"?\n\nTus shorts ya generados se conservan; solo se oculta de la lista principal.`)) return;
     try {
-      const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}/archive`, { method: "POST" });
+      const res = await fetch(`/api/videos/${encodeURIComponent(video.id)}/archive`, { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "archive failed");
-      toast.success(`${videoId} movido a usados`);
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      toast.success(`«${video.filename}» movido a usados`);
       load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo mover el video a usados");
     }
   }
 
-  async function unarchive(videoId: string) {
+  async function unarchive(video: VideoEntry) {
     try {
-      const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}/archive`, { method: "DELETE" });
+      const res = await fetch(`/api/videos/${encodeURIComponent(video.id)}/archive`, { method: "DELETE" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "unarchive failed");
-      toast.success(`${videoId} restaurado`);
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      toast.success(`«${video.filename}» restaurado`);
       load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo restaurar el video");
     }
   }
 
   // Borrado DEFINITIVO: elimina el archivo del disco + sus derivados (proyectos,
-  // renders, etc.). Irreversible → confirmación explícita.
-  async function removeVideo(videoId: string) {
-    if (
-      !confirm(
-        `¿Borrar "${videoId}" para siempre?\n\nSe elimina el video del disco y todo lo generado a partir de él (shorts, subtítulos, etc.). Esto NO se puede deshacer.`
-      )
-    )
-      return;
+  // renders, etc.). Irreversible → diálogo de confirmación propio (ver JSX abajo).
+  async function removeVideo(video: VideoEntry) {
+    setDeletingBusy(true);
     try {
-      const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}/delete`, { method: "POST" });
+      const res = await fetch(`/api/videos/${encodeURIComponent(video.id)}/delete`, { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "delete failed");
-      toast.success(`${videoId} borrado`);
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      toast.success(`«${video.filename}» borrado`);
+      setDeleting(null);
       load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo borrar el video");
+    } finally {
+      setDeletingBusy(false);
     }
   }
 
@@ -205,11 +217,13 @@ export function VideoList() {
       {!loading && videos.length === 0 && !error && (
         <Card className="border-dashed border-border bg-card p-10 text-center">
           <FileVideo className="mx-auto mb-3 h-10 w-10 text-muted-foreground opacity-60" />
-          <p className="text-base font-medium text-foreground">Todavía no tenés videos</p>
+          <p className="text-base font-medium text-foreground">
+            Tu próximo short empieza aquí — sube cualquier video hablado y la IA hace el resto.
+          </p>
           <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-            Subí tu primer video desde la computadora. Después tocá{" "}
+            Sube tu primer video desde tu compu. Después toca{" "}
             <strong className="text-foreground">«Crear automático»</strong> y la IA lo edita
-            por vos: subtítulos, efectos, música y descripción listos para publicar.
+            por ti: subtítulos, efectos, música y descripción listos para publicar.
           </p>
           <Button
             className="mt-4"
@@ -272,7 +286,7 @@ export function VideoList() {
                       type="button"
                       onClick={(e) => {
                         e.preventDefault();
-                        unarchive(v.id);
+                        unarchive(v);
                       }}
                       className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-emerald-400"
                       title="Restaurar"
@@ -284,7 +298,7 @@ export function VideoList() {
                       type="button"
                       onClick={(e) => {
                         e.preventDefault();
-                        archive(v.id);
+                        archive(v);
                       }}
                       className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                       title="Mover a usados (conserva los shorts ya hechos)"
@@ -298,7 +312,7 @@ export function VideoList() {
                     type="button"
                     onClick={(e) => {
                       e.preventDefault();
-                      removeVideo(v.id);
+                      setDeleting(v);
                     }}
                     className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-400"
                     title="Borrar para siempre (del disco)"
@@ -331,6 +345,39 @@ export function VideoList() {
           }}
         />
       )}
+
+      {/* Confirmación de borrado definitivo — diálogo propio con el nombre del archivo. */}
+      <Dialog open={deleting !== null} onOpenChange={(o) => !o && !deletingBusy && setDeleting(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Borrar «{deleting?.filename}» para siempre?</DialogTitle>
+            <DialogDescription>
+              Se elimina el video y todo lo generado con él. No se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => setDeleting(null)}
+              disabled={deletingBusy}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleting && removeVideo(deleting)}
+              disabled={deletingBusy}
+            >
+              {deletingBusy ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Borrar para siempre
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Search, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import type { BRollClip } from "@/components/editor/workspace";
 
 interface PexelsVideo {
@@ -43,7 +44,7 @@ export function BrollPicker({ clips, onChange, currentTime }: Props) {
       if (!res.ok) throw new Error(data.error ?? "search failed");
       setResults(data.videos ?? []);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo buscar en Pexels");
     } finally {
       setLoading(false);
     }
@@ -105,7 +106,7 @@ export function BrollPicker({ clips, onChange, currentTime }: Props) {
       <div className="space-y-2">
         <Label className="text-xs">Clips agregados ({clips.length})</Label>
         {clips.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Buscá y agregá clips arriba.</p>
+          <p className="text-xs text-muted-foreground">Busca y agrega clips arriba.</p>
         ) : (
           <ul className="space-y-1.5">
             {clips.map((c, i) => (

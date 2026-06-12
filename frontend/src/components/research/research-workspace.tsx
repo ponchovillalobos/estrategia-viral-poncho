@@ -30,6 +30,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 import { cn } from "@/lib/utils";
 import { AdaptDialog } from "@/components/research/adapt-dialog";
 import { CookiesPanel } from "@/components/research/cookies-panel";
@@ -145,7 +146,7 @@ export function ResearchWorkspace() {
   async function addUrl() {
     const u = url.trim();
     if (!u) {
-      toast.error("Pegá una URL primero");
+      toast.error("Pega una URL primero");
       return;
     }
     setAdding(true);
@@ -161,7 +162,7 @@ export function ResearchWorkspace() {
       setUrl("");
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo agregar el video");
     } finally {
       setAdding(false);
     }
@@ -175,7 +176,7 @@ export function ResearchWorkspace() {
       if (selected?.id === id) setSelected(null);
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo eliminar el video");
     }
   }
 
@@ -188,7 +189,7 @@ export function ResearchWorkspace() {
       });
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo guardar la marca");
     }
   }
 
@@ -217,7 +218,7 @@ export function ResearchWorkspace() {
       <SectionHeader
         eyebrow="Inspiración · ideas que ya funcionaron"
         title="De un viral ajeno a tu propio guión"
-        description="Pegá el link de un video de TikTok, Instagram Reels o YouTube Shorts. El sistema lo descarga, saca el texto de lo que dice y los hashtags. Después, con «✨ Adaptar con IA», te genera una versión con tu propia voz para que la regrabes."
+        description="Pega el link de un video de TikTok, Instagram Reels o YouTube Shorts. El sistema lo descarga, saca el texto de lo que dice y los hashtags. Después, con «✨ Adaptar con IA», te genera una versión con tu propia voz para que la regrabes."
         color={SECTION_COLORS.research}
       />
 
@@ -331,7 +332,7 @@ export function ResearchWorkspace() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="buscar caption / autor / hashtag…"
+          placeholder="buscar descripción / autor / hashtag…"
           className="ml-auto h-7 max-w-xs text-xs"
         />
       </div>
@@ -359,7 +360,7 @@ export function ResearchWorkspace() {
           <Telescope className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             {items.length === 0
-              ? "Pegá tu primera URL arriba para empezar."
+              ? "Pega tu primera URL arriba para empezar."
               : "No hay items que coincidan con los filtros."}
           </p>
         </div>
@@ -729,6 +730,13 @@ function ResearchCard({
 
 type DetailTab = "transcript" | "caption" | "hashtags" | "comments";
 
+const DETAIL_TAB_LABEL: Record<DetailTab, string> = {
+  transcript: "transcripción",
+  caption: "descripción",
+  hashtags: "hashtags",
+  comments: "comentarios",
+};
+
 function ResearchDetailDialog({
   item,
   onClose,
@@ -753,7 +761,7 @@ function ResearchDetailDialog({
       await navigator.clipboard.writeText(text);
       setCopied(label);
       setTimeout(() => setCopied(null), 1500);
-      toast.success(`${label} copiado`);
+      toast.success(`Copiado: ${label}`);
     } catch {
       toast.error("No se pudo copiar");
     }
@@ -836,14 +844,14 @@ function ResearchDetailDialog({
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  {t}
+                  {DETAIL_TAB_LABEL[t]}
                 </button>
               ))}
               <button
                 type="button"
                 onClick={() => {
-                  if (tab === "transcript") copyText("Transcript", tText);
-                  else if (tab === "caption") copyText("Caption", item.metadata?.caption ?? "");
+                  if (tab === "transcript") copyText("Transcripción", tText);
+                  else if (tab === "caption") copyText("Descripción", item.metadata?.caption ?? "");
                   else if (tab === "hashtags") copyText("Hashtags", hashtagsText);
                 }}
                 className="ml-auto flex items-center gap-1 rounded p-1 font-mono-tab text-[10px] text-muted-foreground hover:bg-muted hover:text-emerald-400"
@@ -870,7 +878,7 @@ function ResearchDetailDialog({
               )}
               {tab === "caption" && (
                 <p className="whitespace-pre-wrap text-foreground/90">
-                  {item.metadata?.caption || "(sin caption)"}
+                  {item.metadata?.caption || "(sin descripción)"}
                 </p>
               )}
               {tab === "hashtags" && (
@@ -905,7 +913,7 @@ function ResearchDetailDialog({
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-xs italic text-muted-foreground">Sin comments extraídos.</p>
+                  <p className="text-xs italic text-muted-foreground">Sin comentarios extraídos.</p>
                 )
               )}
             </div>
@@ -917,7 +925,7 @@ function ResearchDetailDialog({
                 onClick={onAdapt}
                 disabled={item.status !== "ready"}
                 className="flex items-center gap-1.5 rounded-md border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-300 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                title={item.status !== "ready" ? "Esperá que termine la transcripción" : "Reescribir con Claude a tu voz"}
+                title={item.status !== "ready" ? "Espera a que termine la transcripción" : "Reescribir con Claude a tu voz"}
               >
                 <Sparkles className="h-3.5 w-3.5" />
                 {item.adaptedScript ? "Ver / editar adaptación" : "Adaptar con Claude"}
@@ -946,7 +954,7 @@ function ResearchDetailDialog({
                 )}
               >
                 <Star className="h-3.5 w-3.5" />
-                {item.userMarked === "save" ? "✓ Save" : "Save"}
+                {item.userMarked === "save" ? "✓ Guardado" : "Guardar"}
               </button>
               <button
                 type="button"

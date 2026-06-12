@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/toast-error";
 
 interface BatchProgress {
   batchId?: string;
@@ -77,7 +78,7 @@ export function BatchAdaptPanel({ readyWithoutAdapt, onComplete }: BatchAdaptPan
       toast.success(`Adaptando ${d.total} guiones...`);
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo iniciar la adaptación");
     } finally {
       setStarting(false);
     }
@@ -90,7 +91,7 @@ export function BatchAdaptPanel({ readyWithoutAdapt, onComplete }: BatchAdaptPan
       toast("Cancelado");
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      toastError(err, "No se pudo cancelar");
     }
   }
 
