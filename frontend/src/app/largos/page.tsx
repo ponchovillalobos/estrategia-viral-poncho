@@ -1,7 +1,7 @@
 import { LongFormWizard } from "@/components/largos/long-form-wizard";
 
 export const metadata = {
-  title: "Videos largos → clips icónicos · Estrategia Viral Poncho",
+  title: "Videos largos · Viralito",
 };
 
 export default function LargosPage() {

@@ -21,11 +21,11 @@ SetCompressor /SOLID lzma
 ; ----------------------------------------------------------------------------
 ; Constantes
 ; ----------------------------------------------------------------------------
-!define APP_NAME      "Estrategia Viral Studio"
+!define APP_NAME      "Viralito"
 !define APP_ID        "EstrategiaViralStudio"
 !define APP_VERSION   "0.3.0"
 !define APP_PUBLISHER "Poncho Robles"
-!define APP_URL       "https://github.com/ponchovillalobos/estrategia-viral-poncho"
+!define APP_URL       "https://github.com/ponchovillalobos/viralito"
 !define APP_EXE       "desktop.exe"
 !define ZIP_NAME      "EstrategiaViralStudio-v${APP_VERSION}.zip"
 !define BASE_URL      "${APP_URL}/releases/latest/download"

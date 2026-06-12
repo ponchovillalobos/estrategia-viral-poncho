@@ -288,7 +288,7 @@ pub fn run() {
                         Err(msg) => {
                             rfd::MessageDialog::new()
                                 .set_level(rfd::MessageLevel::Error)
-                                .set_title("Estrategia Viral Studio — no pudo arrancar")
+                                .set_title("Viralito — no pudo arrancar")
                                 .set_description(&msg)
                                 .set_buttons(rfd::MessageButtons::Ok)
                                 .show();

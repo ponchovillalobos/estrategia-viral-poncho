@@ -16,7 +16,7 @@ import { APP_VERSION } from "@/lib/app-version";
 export const dynamic = "force-dynamic";
 
 const RELEASES_URL =
-  "https://api.github.com/repos/ponchovillalobos/estrategia-viral-poncho/releases/latest";
+  "https://api.github.com/repos/ponchovillalobos/viralito/releases/latest";
 // 6 horas: las releases salen cada semanas/meses; más frecuente es desperdicio.
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 

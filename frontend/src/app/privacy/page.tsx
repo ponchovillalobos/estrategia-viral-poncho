@@ -2,7 +2,7 @@ import path from "node:path";
 import { DATA_ROOT, RAW_DIR } from "@/lib/paths";
 
 export const metadata = {
-  title: "Política de privacidad — Estrategia Viral Poncho",
+  title: "Política de privacidad — Viralito",
 };
 
 // Server component dinámico a propósito: las rutas se resuelven en runtime con
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
     <div className="prose prose-invert max-w-2xl space-y-4 py-6 text-sm">
       <h1 className="text-2xl font-semibold">Política de privacidad</h1>
       <p className="text-muted-foreground">
-        Estrategia Viral Poncho es una herramienta personal de uso individual. Esta
+        Viralito es una herramienta personal de uso individual. Esta
         política describe qué datos se procesan localmente en tu PC.
       </p>
 

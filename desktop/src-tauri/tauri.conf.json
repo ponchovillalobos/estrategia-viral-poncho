@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Estrategia Viral Studio",
+  "productName": "Viralito",
   "version": "0.3.0",
   "identifier": "com.estrategiaviral.studio",
   "build": {
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Estrategia Viral Studio",
+        "title": "Viralito",
         "width": 1320,
         "height": 880,
         "url": "about:blank"

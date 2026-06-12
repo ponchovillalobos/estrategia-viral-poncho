@@ -60,8 +60,15 @@ export function TabNav() {
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
       <nav className="mx-auto flex w-full max-w-7xl items-center gap-1 px-4 py-3 sm:px-6">
         <Link href="/" className="group mr-2 flex items-center gap-2 sm:mr-4">
-          <div className="h-6 w-6 rounded-full bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.5)] transition-transform group-hover:scale-110" />
-          <span className="text-sm font-semibold tracking-tight">Estrategia Viral</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/viralito-64.png"
+            alt="Viralito"
+            className="h-7 w-7 rounded-lg shadow-[0_0_18px_rgba(250,60,141,0.45)] transition-transform group-hover:scale-110"
+          />
+          <span className="bg-gradient-to-r from-[#fa3c8d] to-[#ad23ee] bg-clip-text text-sm font-bold tracking-tight text-transparent">
+            Viralito
+          </span>
         </Link>
 
         {/* Links inline (desktop) — cada tab con su color: icono tintado siempre,

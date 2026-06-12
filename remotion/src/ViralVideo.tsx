@@ -221,7 +221,7 @@ export const viralVideoSchema = z.object({
   editorialCutout: editorialCutoutSchema.nullable().default(null),
   // Ola 7 — globo con zoom al lugar mencionado en el transcript.
   editorialMap: editorialMapSchema.nullable().default(null),
-  // PRUEBA GRATUITA — pill discreto "PRUEBA GRATUITA · Estrategia Viral" encima de
+  // PRUEBA GRATUITA — pill discreto "PRUEBA GRATUITA · Viralito" encima de
   // todo. Lo inyectan los builders (.mjs) y /api/videos/render cuando NO hay
   // licencia activada. Opcional: props viejos sin el campo = render idéntico.
   trialWatermark: z.boolean().optional(),
@@ -1127,7 +1127,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
             pointerEvents: "none",
           }}
         >
-          PRUEBA GRATUITA · Estrategia Viral
+          PRUEBA GRATUITA · Viralito
         </div>
       )}
     </AbsoluteFill>

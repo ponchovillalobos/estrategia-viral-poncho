@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ResearchWorkspace } from "@/components/research/research-workspace";
 
 export const metadata = {
-  title: "Research Lab — Estrategia Viral Poncho",
+  title: "Inspiración — Viralito",
 };
 
 export default function ResearchPage() {

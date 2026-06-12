@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Términos de servicio — Estrategia Viral Poncho",
+  title: "Términos de servicio — Viralito",
 };
 
 export default function TermsPage() {
@@ -7,7 +7,7 @@ export default function TermsPage() {
     <div className="prose prose-invert max-w-2xl space-y-4 py-6 text-sm">
       <h1 className="text-2xl font-semibold">Términos de servicio</h1>
       <p className="text-muted-foreground">
-        Estrategia Viral Poncho es una herramienta personal sin garantías. Al usarla
+        Viralito es una herramienta personal sin garantías. Al usarla
         aceptas estos términos.
       </p>
 

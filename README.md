@@ -1,12 +1,14 @@
-# 🎬 Estrategia Viral Studio
-
-**El editor de videos virales con IA que corre 100% en TU computadora — gratis, en español, sin nube, sin API keys.**
-
 <div align="center">
 
-## [⬇️ &nbsp;DESCARGAR LA APP PARA WINDOWS&nbsp; ⬇️](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest)
+<img src="docs/img/viralito-icon.png" alt="Viralito" width="120" />
 
-**[👉 Bajar la última versión desde Releases 👈](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest)**
+# ⚡ Viralito
+
+**El editor de videos virales con IA que corre 100% en TU computadora — en español, sin nube, sin API keys, sin mensualidades.**
+
+## [⬇️ &nbsp;DESCARGAR LA APP PARA WINDOWS&nbsp; ⬇️](https://github.com/ponchovillalobos/viralito/releases/latest)
+
+**[👉 Bajar la última versión desde Releases 👈](https://github.com/ponchovillalobos/viralito/releases/latest)**
 
 *Windows 10/11 x64 · 8 GB RAM · ~6 GB libres en disco · no requiere instalar nada más*
 
@@ -14,32 +16,32 @@
 
 ### 🚀 Instalar en 2 pasos (con instalador)
 
-1. **Bajá** `EstrategiaViralStudio-Setup.exe` desde
-   [**Releases → latest**](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest) (~0.2 MB).
+1. **Baja** `EstrategiaViralStudio-Setup.exe` desde
+   [**Releases → latest**](https://github.com/ponchovillalobos/viralito/releases/latest) (~0.2 MB).
 2. **Doble clic** — el instalador revisa tu compu, descarga todo solo con barra
    de progreso, lo instala y te deja el **icono en el Escritorio**. La primera
    vez que abras la app baja el modelo de voz (~1.5 GB, una sola vez) y queda
-   lista. No necesitás Node, Python ni ffmpeg: todo va adentro.
+   lista. No necesitas Node, Python ni ffmpeg: todo va adentro.
 
 <details>
 <summary>📦 Alternativa sin instalador (zip portable)</summary>
 
-1. Bajá el `.zip` (p. ej. `EstrategiaViralStudio-v0.2.0.zip`) desde Releases.
-2. Descomprimilo en una carpeta fuera de OneDrive, p. ej. `C:\EstrategiaViralStudio`.
+1. Baja el `.zip` (p. ej. `EstrategiaViralStudio-v0.3.0.zip`) desde Releases.
+2. Descomprímelo en una carpeta fuera de OneDrive, p. ej. `C:\Viralito`.
 3. Doble clic en `desktop.exe`.
 
 </details>
 
-> Subís un video hablado → la IA lo transcribe, lo corta, le pone subtítulos
-> karaoke, efectos, música, gráficas animadas e ilustraciones según lo que decís,
+> Subes un video hablado → la IA lo transcribe, lo corta, le pone subtítulos
+> karaoke, efectos, música, gráficas animadas e ilustraciones según lo que dices,
 > y te genera la descripción perfecta para cada red. Lo que Opus Clip y Submagic
-> cobran $19-39 USD/mes — acá es tuyo, local y de código abierto (MIT).
+> cobran $19-39 USD/mes — aquí es tuyo, local y de código abierto (MIT).
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
-│  🎬 Estrategia Viral Studio                              ─ □ ✕  │
+│  ⚡ Viralito                                              ─ □ ✕  │
 ├──────────────────────────────────────────────────────────────────┤
-│  📁 Soltá tu video acá          │  🎨 Estilo: 👑 Premium        │
+│  📁 Suelta tu video aquí        │  🎨 Estilo: 👑 Premium        │
 │  ─────────────────────────────  │  🔤 Fuente: Bangers · 🟡      │
 │  mi-video-curso.mp4  (12:34)    │  🎵 Música: auto (ducking)    │
 │                                 │  🧠 Director emocional: ON    │
@@ -56,7 +58,7 @@
 
 ## 📸 Así se ve
 
-![Inicio de Estrategia Viral Studio](docs/img/app-inicio.png)
+![Inicio de Viralito](docs/img/app-inicio.png)
 
 | Crear un video corto | De un video largo a clips |
 |---|---|
@@ -144,19 +146,19 @@ El único costo es tu electricidad.
 ## 🔄 Actualizaciones
 
 La app **avisa sola** cuando hay una versión nueva: te muestra un aviso adentro
-de la app con el link a la descarga. Actualizar es bajar el `.zip` nuevo de
-[Releases](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest)
-y reemplazar la carpeta — tus videos y ajustes no se tocan (viven fuera de la app).
+de la app con el link directo al instalador de
+[Releases](https://github.com/ponchovillalobos/viralito/releases/latest)
+— tus videos y ajustes no se tocan (viven fuera de la app).
 
 ## 🤝 Contribuir / Donar
 
-- ⭐ Dale una estrella al repo — ayuda más de lo que pensás
+- ⭐ Dale una estrella al repo — ayuda más de lo que piensas
 - 🐛 Issues y PRs bienvenidos
-- 💛 Donaciones: activá el botón Sponsor (ver `.github/FUNDING.yml`)
+- 💛 Donaciones: activa el botón Sponsor (ver `.github/FUNDING.yml`)
 
 ## 📄 Licencia
 
-[MIT](./LICENSE) © 2026 Poncho Robles — usalo, modificalo, vendé tus videos con él.
+[MIT](./LICENSE) © 2026 Poncho Robles — úsalo, modifícalo, vende tus videos con él.
 Los fondos animados están inspirados en [remotion-scenes](https://github.com/lifeprompt-team/remotion-scenes) (MIT), reescritos para este proyecto.
 
 ---
@@ -164,7 +166,7 @@ Los fondos animados están inspirados en [remotion-scenes](https://github.com/li
 ## 🛠️ Para desarrolladores (el código de la app)
 
 > **Si solo quieres USAR la app, no necesitas nada de esto.**
-> Bajá el `.zip` de [Releases](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest) y listo (3 pasos, arriba).
+> Baja el `.zip` de [Releases](https://github.com/ponchovillalobos/viralito/releases/latest) y listo (3 pasos, arriba).
 > Lo de abajo es el código fuente con el que se CONSTRUYE la app
 > (`frontend/` es el motor, `remotion/` el render, `python/` la IA, `desktop/` el launcher).
 
@@ -173,8 +175,8 @@ Los fondos animados están inspirados en [remotion-scenes](https://github.com/li
 Requisitos: Windows 10/11 x64, Node 18+, Python 3.11, ~10 GB libres.
 
 ```bash
-git clone https://github.com/ponchovillalobos/estrategia-viral-poncho
-cd estrategia-viral-poncho
+git clone https://github.com/ponchovillalobos/viralito
+cd viralito
 
 # 1. Python (pipeline de IA)
 cd python && python -m venv venv && venv\Scripts\activate

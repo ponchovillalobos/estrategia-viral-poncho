@@ -3,7 +3,7 @@ import { TikTokSetupClient } from "@/components/setup/tiktok-setup-client";
 import { PUBLISHING_ENABLED } from "@/lib/app-mode";
 
 export const metadata = {
-  title: "Conectar TikTok — Estrategia Viral Poncho",
+  title: "Conectar TikTok — Viralito",
 };
 
 export default function TikTokSetupPage() {

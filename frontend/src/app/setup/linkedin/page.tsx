@@ -3,7 +3,7 @@ import { LinkedInSetupClient } from "@/components/setup/linkedin-setup-client";
 import { PUBLISHING_ENABLED } from "@/lib/app-mode";
 
 export const metadata = {
-  title: "Conectar LinkedIn — Estrategia Viral Poncho",
+  title: "Conectar LinkedIn — Viralito",
 };
 
 export default function LinkedInSetupPage() {

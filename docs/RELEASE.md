@@ -78,7 +78,7 @@ gh release create $v `
 
 ## 7. Después de publicar
 
-- [ ] Abre [Releases → latest](https://github.com/ponchovillalobos/estrategia-viral-poncho/releases/latest)
+- [ ] Abre [Releases → latest](https://github.com/ponchovillalobos/viralito/releases/latest)
   y verifica que el zip se baje y el nombre/versión sean correctos (el Setup
   descarga `EstrategiaViralStudio-v{APP_VERSION}.zip` de latest — si el nombre
   no coincide, el instalador de esa versión muere).

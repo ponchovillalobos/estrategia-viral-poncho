@@ -25,7 +25,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Estrategia Viral Poncho",
+  title: "Viralito",
   description:
     "Convierte tus videos en shorts virales — 100% en tu compu, sin saber editar.",
 };

@@ -3,7 +3,7 @@ import { InstagramSetupClient } from "@/components/setup/instagram-setup-client"
 import { PUBLISHING_ENABLED } from "@/lib/app-mode";
 
 export const metadata = {
-  title: "Conectar Instagram — Estrategia Viral Poncho",
+  title: "Conectar Instagram — Viralito",
 };
 
 export default function InstagramSetupPage() {

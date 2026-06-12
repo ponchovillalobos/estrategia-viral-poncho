@@ -20,7 +20,7 @@ import { DATA_ROOT } from "@/lib/paths";
 export const dynamic = "force-dynamic";
 
 const MANIFEST_URL =
-  "https://raw.githubusercontent.com/ponchovillalobos/estrategia-viral-poncho/main/presets/manifest.json";
+  "https://raw.githubusercontent.com/ponchovillalobos/viralito/main/presets/manifest.json";
 // 6 horas: las plantillas curadas salen cada semanas; más frecuente es desperdicio.
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
