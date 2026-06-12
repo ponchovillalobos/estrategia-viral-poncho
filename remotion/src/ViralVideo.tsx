@@ -221,6 +221,10 @@ export const viralVideoSchema = z.object({
   editorialCutout: editorialCutoutSchema.nullable().default(null),
   // Ola 7 — globo con zoom al lugar mencionado en el transcript.
   editorialMap: editorialMapSchema.nullable().default(null),
+  // PRUEBA GRATUITA — pill discreto "PRUEBA GRATUITA · Estrategia Viral" encima de
+  // todo. Lo inyectan los builders (.mjs) y /api/videos/render cuando NO hay
+  // licencia activada. Opcional: props viejos sin el campo = render idéntico.
+  trialWatermark: z.boolean().optional(),
 });
 
 type ViralVideoProps = z.infer<typeof viralVideoSchema>;
@@ -281,6 +285,7 @@ export const defaultProps: ViralVideoProps = {
   editorialCards: [],
   editorialCutout: null,
   editorialMap: null,
+  trialWatermark: false,
 };
 
 export const ViralVideo: React.FC<ViralVideoProps> = ({
@@ -337,6 +342,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   editorialCards,
   editorialCutout,
   editorialMap,
+  trialWatermark,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
   //   - subtitleStyle="cinematic" explícito (toggle "Subtítulos cine"), O
@@ -1097,6 +1103,32 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       {/* B6 — Marca de agua (handle/logo) sutil en una esquina, todo el video. Aditivo. */}
       {brandKit && (brandKit.handle || brandKit.logoUrl) && (
         <BrandWatermarkLayer config={brandKit} fontFamily={fontFamily} />
+      )}
+
+      {/* PRUEBA GRATUITA — pill discreto encima de TODO. Estático a propósito
+          (sin animación = barato de render). Posición relativa al AbsoluteFill
+          raíz, así se ve igual en 9:16 y 16:9. */}
+      {trialWatermark && (
+        <div
+          style={{
+            position: "absolute",
+            left: 24,
+            bottom: 24,
+            padding: "10px 22px",
+            background: "rgba(0,0,0,0.45)",
+            borderRadius: 999,
+            color: "rgba(255,255,255,0.7)",
+            fontSize: 26,
+            fontFamily:
+              "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+            fontWeight: 600,
+            letterSpacing: 0.5,
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+          }}
+        >
+          PRUEBA GRATUITA · Estrategia Viral
+        </div>
       )}
     </AbsoluteFill>
   );

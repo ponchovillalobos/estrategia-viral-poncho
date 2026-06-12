@@ -49,6 +49,16 @@ CTA_WORDS = {
     "parte 2", "parte dos", "siguiente video",
 }
 
+# Puntos máximos de cada factor (para normalizar el desglose a 0-100 en la UI).
+FACTOR_MAX = {
+    "hook": 30.0,
+    "emotion": 20.0,
+    "data": 15.0,
+    "pace": 15.0,
+    "length": 10.0,
+    "cta": 10.0,
+}
+
 
 def _norm(s: str) -> str:
     return s.lower().strip()
@@ -130,15 +140,20 @@ def score_clip(words: list[dict], start: float, end: float, hook: str = "") -> d
     total = hook_score + emo_score + data_score + pace_score + len_score + cta_score
     score = int(round(max(1, min(100, total))))
 
+    factors = {
+        "hook": round(hook_score, 1),
+        "emotion": round(emo_score, 1),
+        "data": round(data_score, 1),
+        "pace": round(pace_score, 1),
+        "length": round(len_score, 1),
+        "cta": round(cta_score, 1),
+    }
     return {
         "score": score,
-        "factors": {
-            "hook": round(hook_score, 1),
-            "emotion": round(emo_score, 1),
-            "data": round(data_score, 1),
-            "pace": round(pace_score, 1),
-            "length": round(len_score, 1),
-            "cta": round(cta_score, 1),
+        "factors": factors,
+        # Desglose normalizado 0-100 por factor (para barras en la UI).
+        "factors100": {
+            k: int(round(min(100.0, v / FACTOR_MAX[k] * 100))) for k, v in factors.items()
         },
         "reasons": reasons[:3],
     }
@@ -166,6 +181,9 @@ def score_proposals_file(proposals_path: Path, transcript_path: Path) -> dict[st
         c["viralityScore"] = res["score"]
         c["viralityReasons"] = res["reasons"]
         c["viralityFactors"] = res["factors"]
+        # Desglose 0-100 por factor — lo que lee la UI para las barras de
+        # "¿Por qué este clip?". Proposals viejos sin este campo siguen funcionando.
+        c["factors"] = res["factors100"]
         scored += 1
 
     # Reordenar de más viral a menos viral (mantiene mejores arriba en la UI).

@@ -4,6 +4,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { REMOTION_DIR, RENDERS_DIR, RAW_DIR } from "@/lib/paths";
 import { humanizeError } from "@/lib/humanize-error";
+import { canRender, registerRender } from "@/lib/license";
 import {
   acquireRenderLock,
   releaseRenderLock,
@@ -28,6 +29,14 @@ interface RenderRequest {
 
 export async function POST(req: NextRequest) {
   try {
+    // PRUEBA GRATUITA — gate: si la prueba terminó y no hay licencia, no se
+    // generan más videos. Esta ruta recibe props directos (no pasa por los
+    // builders .mjs), así que la marca de agua también se inyecta aquí abajo.
+    const lic = canRender();
+    if (!lic.allowed) {
+      return NextResponse.json({ error: lic.reason }, { status: 403 });
+    }
+
     let body: RenderRequest;
     try {
       body = (await req.json()) as RenderRequest;
@@ -98,6 +107,11 @@ export async function POST(req: NextRequest) {
       if (typeof fullProps.musicUrl === "string" && fullProps.musicUrl.startsWith("/")) {
         fullProps.musicUrl = `${apiHost}${fullProps.musicUrl}`;
       }
+      // PRUEBA GRATUITA — esta ruta no pasa por build-props.mjs, así que la
+      // marca de agua se inyecta directo en los props del render.
+      if (lic.watermark) {
+        fullProps.trialWatermark = true;
+      }
 
       const args = [
         "remotion",
@@ -161,6 +175,10 @@ export async function POST(req: NextRequest) {
       // Render OK → publicar atómicamente el archivo final (con retry ante locks
       // transitorios de OneDrive/antivirus sobre el archivo).
       await renameWithRetry(outFile, finalOut);
+
+      // PRUEBA GRATUITA — contar 1 video generado con éxito (solo afecta el
+      // tope de la prueba; con licencia activa no descuenta nada).
+      registerRender();
 
       return NextResponse.json({
         ok: true,

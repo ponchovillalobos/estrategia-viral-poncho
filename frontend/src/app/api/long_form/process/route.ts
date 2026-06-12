@@ -18,6 +18,7 @@ import {
   type LongFormStepKey,
 } from "@/lib/long-form-job-store";
 import { enqueue } from "@/lib/job-queue";
+import { canRender, registerRender } from "@/lib/license";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 3600; // 1 hora — pipelines con render pueden tardar
@@ -268,6 +269,11 @@ async function processJob(
         if (currentStep) {
           updateLongFormStep(jobId, currentStep, { status: "ok" });
         }
+        // PRUEBA GRATUITA — contar UNA sola vez por corrida exitosa del pipeline
+        // (los largos generan muchos clips de un jalón; 1 por corrida es lo justo
+        // para la prueba). Solo si se pidió render: una corrida de puro análisis
+        // no genera videos. Con licencia activa no descuenta nada.
+        if (body.render) registerRender();
         try {
           // Match sobre la ÚLTIMA línea JSON del stdout completo (la del resumen final).
           const jsonLine = fullStdout
@@ -313,6 +319,13 @@ async function processJob(
 
 export async function POST(req: NextRequest) {
   try {
+    // PRUEBA GRATUITA — gate: si la prueba terminó y no hay licencia, no se
+    // procesan más videos. La marca de agua la inyecta build-clip-props.mjs.
+    const lic = canRender();
+    if (!lic.allowed) {
+      return NextResponse.json({ error: lic.reason }, { status: 403 });
+    }
+
     const body = (await req.json()) as ProcessBody;
 
     // Normalizar a array: si vino videoIds[] usar ese; si no, fallback a videoId singular

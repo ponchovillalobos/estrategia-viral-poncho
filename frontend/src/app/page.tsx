@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Scissors, FolderKanban, Share2, ArrowRight, Upload, Wand2, Sparkles, Send, Telescope, Film } from "lucide-react";
 import { GettingStarted } from "@/components/home/getting-started";
+import { OnboardingModal, OnboardingTourLink } from "@/components/home/onboarding-modal";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,13 @@ const SECONDARY = [
 
 export default function Home() {
   return (
-    <div className="space-y-10">
+    <>
+      {/* Tour de bienvenida (solo la primera vez; client component que se abre solo).
+          Va FUERA del div space-y-10 para que su overlay fixed no herede márgenes
+          ni desplace el layout al aparecer. */}
+      <OnboardingModal />
+
+      <div className="space-y-10">
       {/* Hero */}
       <header className="relative space-y-3 pt-4">
         {/* Resplandor sutil detrás del título — eleva el "preciosa visualmente" sin distraer. */}
@@ -142,6 +149,12 @@ export default function Home() {
           </Link>
         ))}
       </div>
-    </div>
+
+      {/* Pie discreto: volver a ver el tour de bienvenida */}
+      <div className="flex justify-center pb-2">
+        <OnboardingTourLink />
+      </div>
+      </div>
+    </>
   );
 }

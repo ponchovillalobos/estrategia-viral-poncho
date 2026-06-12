@@ -12,6 +12,7 @@ import {
   FFMPEG_EXE,
 } from "@/lib/paths";
 import { humanizeError } from "@/lib/humanize-error";
+import { canRender, registerRender } from "@/lib/license";
 import { applyWizardOverrides } from "@/lib/apply-wizard-overrides";
 import {
   buildProjectForStyle,
@@ -504,6 +505,9 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // (con retry ante locks transitorios de antivirus/indexador sobre el archivo)
       await renameWithRetry(outPath, finalOut);
       updateStep(job.id, styleId, { status: "ok", progress: 100, output: finalOut });
+      // PRUEBA GRATUITA — contar 1 video generado por estilo exitoso (solo
+      // afecta el tope de la prueba; con licencia activa no descuenta nada).
+      registerRender();
     } catch (err) {
       // Si quedó un temporal a medias por la excepción, limpiarlo (projectId ya resuelto).
       await fs.rm(path.join(RENDERS_DIR, `${projectId}.__rendering.mp4`), { force: true }).catch(() => {});
@@ -516,6 +520,13 @@ async function processJob(job: Job, body: AutoBuildRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // PRUEBA GRATUITA — gate: si la prueba terminó y no hay licencia, no se
+  // generan más videos. La marca de agua la inyecta build-props.mjs.
+  const lic = canRender();
+  if (!lic.allowed) {
+    return NextResponse.json({ error: lic.reason }, { status: 403 });
+  }
+
   const body = (await req.json()) as AutoBuildRequest;
   const { videoId, videoIds, styles, accentColor } = body;
 

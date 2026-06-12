@@ -21,6 +21,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildProjectForStyle } from "./style-templates.mjs";
+import { needsTrialWatermark } from "./license-check.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -186,6 +187,11 @@ if (editorialThemeArg && project.editorialLayout) {
   if (themeBg) project.editorialLayout.background = themeBg;
   if (subTheme) project.editorialLayout.theme = subTheme;
 }
+
+// PRUEBA GRATUITA — marcar el project si no hay licencia activada. El props
+// builder (build-clip-props.mjs) re-chequea la licencia al armar props.json,
+// así que esto es redundancia deliberada (belt & braces); nunca rompe el build.
+if (needsTrialWatermark()) project.trialWatermark = true;
 
 writeFileSync(outPath, JSON.stringify(project, null, 2), "utf-8");
 console.log(

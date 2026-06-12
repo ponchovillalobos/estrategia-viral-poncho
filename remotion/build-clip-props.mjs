@@ -17,6 +17,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveEditorialCardIcons } from "./editorial-icons.mjs";
+import { needsTrialWatermark } from "./license-check.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { existsSync as _existsSync } from "node:fs";
@@ -200,6 +201,10 @@ if (_existsSync(graphicsPath)) {
     console.error(`[graphics] no pude leer ${graphicsPath}: ${e.message}`);
   }
 }
+
+// PRUEBA GRATUITA — sin licencia activada, el clip sale con marca de agua.
+// (ver license-check.mjs: nunca rompe el build; en duda, sin marca.)
+if (needsTrialWatermark()) props.trialWatermark = true;
 
 const outFile = path.join(__dirname, path.basename(outName));
 writeFileSync(outFile, JSON.stringify(props, null, 2), "utf-8");

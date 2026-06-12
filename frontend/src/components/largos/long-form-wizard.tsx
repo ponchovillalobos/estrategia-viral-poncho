@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import {
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -172,6 +173,10 @@ interface ProposalClip {
   duration?: number;
   viralityScore?: number;
   viralityReasons?: string[];
+  /** Desglose 0-100 por factor (gancho/emoción/datos/ritmo/duración/CTA). Proposals viejos no lo traen. */
+  factors?: Record<string, number>;
+  /** Explicación corta de la IA local: por qué puede pegar + título sugerido. */
+  whyViral?: string;
 }
 
 interface ProposalsResponse {
@@ -1763,66 +1768,9 @@ function JobView({
           </div>
 
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {proposals.clips.slice(0, 12).map((c, i) => {
-              const idx = c.index ?? i + 1;
-              return (
-              <div key={idx} className="rounded-md border border-border bg-muted/30 p-3">
-                <div className="flex items-start gap-2">
-                  {/* Miniatura del momento exacto donde arranca el clip (frame en t=inicio). */}
-                  <div className="relative h-16 w-10 shrink-0 overflow-hidden rounded border border-border bg-muted/40">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`/api/videos/${encodeURIComponent(job.videoId)}/thumbnail?source=long_form&t=${Math.max(0, Math.round(c.start))}`}
-                      alt=""
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                    <FileVideo className="absolute left-1/2 top-1/2 -z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-muted-foreground" />
-                  </div>
-                  <span className="rounded bg-violet-500/20 px-1.5 py-0.5 font-mono-tab text-[10px] text-violet-300">
-                    c{idx.toString().padStart(2, "0")}
-                  </span>
-                  {typeof c.viralityScore === "number" && (
-                    <span
-                      title={`Potencial viral: ${c.viralityScore}/100${c.viralityReasons?.length ? " — " + c.viralityReasons.join(" · ") : ""}`}
-                      className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono-tab text-[10px] font-semibold"
-                      style={{
-                        background:
-                          c.viralityScore >= 70 ? "#10b98122" : c.viralityScore >= 45 ? "#f59e0b22" : "#71717a22",
-                        color:
-                          c.viralityScore >= 70 ? "#34d399" : c.viralityScore >= 45 ? "#fbbf24" : "#a1a1aa",
-                      }}
-                    >
-                      🔥 {c.viralityScore}
-                    </span>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {c.title || c.slug || `Clip ${idx}`}
-                    </p>
-                    <p className="font-mono-tab text-[10px] text-muted-foreground">
-                      {fmtTime(c.start)} → {fmtTime(c.end)}
-                      {c.duration && ` · ${Math.round(c.duration)}s`}
-                    </p>
-                    {c.hook && (
-                      <p className="mt-1 text-[11px] text-foreground/80">
-                        <Sparkles className="mr-1 inline h-2.5 w-2.5 text-amber-400" />
-                        {c.hook}
-                      </p>
-                    )}
-                    {c.viralityReasons && c.viralityReasons.length > 0 && (
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        {c.viralityReasons.join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              );
-            })}
+            {proposals.clips.slice(0, 12).map((c, i) => (
+              <ProposalClipCard key={c.index ?? i + 1} clip={c} idx={c.index ?? i + 1} videoId={job.videoId} />
+            ))}
           </div>
 
           <Link
@@ -1861,6 +1809,142 @@ function JobView({
         </div>
       )}
     </Card>
+  );
+}
+
+// Etiquetas humanas (mexicano) de los factores del score viral — espejo de
+// python/virality.py: hook/emotion/data/pace/length/cta.
+const FACTOR_LABELS: { key: string; label: string }[] = [
+  { key: "hook", label: "Gancho" },
+  { key: "emotion", label: "Emoción" },
+  { key: "data", label: "Datos concretos" },
+  { key: "pace", label: "Ritmo" },
+  { key: "length", label: "Duración ideal" },
+  { key: "cta", label: "Llamado a la acción" },
+];
+
+function ProposalClipCard({
+  clip: c,
+  idx,
+  videoId,
+}: {
+  clip: ProposalClip;
+  idx: number;
+  videoId: string;
+}) {
+  // "¿Por qué este clip?" — el badge 🔥 se expande solo si el proposal trae el
+  // desglose de factores (los viejos no lo tienen y el badge queda como antes).
+  const [open, setOpen] = useState(false);
+  const score = c.viralityScore;
+  const factorRows = c.factors
+    ? FACTOR_LABELS.filter((f) => typeof c.factors?.[f.key] === "number")
+    : [];
+  const expandable = typeof score === "number" && factorRows.length > 0;
+  const badgeStyle =
+    typeof score === "number"
+      ? {
+          background: score >= 70 ? "#10b98122" : score >= 45 ? "#f59e0b22" : "#71717a22",
+          color: score >= 70 ? "#34d399" : score >= 45 ? "#fbbf24" : "#a1a1aa",
+        }
+      : undefined;
+
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-3">
+      <div className="flex items-start gap-2">
+        {/* Miniatura del momento exacto donde arranca el clip (frame en t=inicio). */}
+        <div className="relative h-16 w-10 shrink-0 overflow-hidden rounded border border-border bg-muted/40">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/videos/${encodeURIComponent(videoId)}/thumbnail?source=long_form&t=${Math.max(0, Math.round(c.start))}`}
+            alt=""
+            loading="lazy"
+            className="h-full w-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <FileVideo className="absolute left-1/2 top-1/2 -z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-muted-foreground" />
+        </div>
+        <span className="rounded bg-violet-500/20 px-1.5 py-0.5 font-mono-tab text-[10px] text-violet-300">
+          c{idx.toString().padStart(2, "0")}
+        </span>
+        {typeof score === "number" &&
+          (expandable ? (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              title={`Potencial viral: ${score}/100 — ¿Por qué este clip? Haz clic para ver el desglose`}
+              className="flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 font-mono-tab text-[10px] font-semibold transition-all hover:brightness-125"
+              style={badgeStyle}
+            >
+              🔥 {score}
+              <ChevronDown className={cn("h-2.5 w-2.5 transition-transform", open && "rotate-180")} />
+            </button>
+          ) : (
+            <span
+              title={`Potencial viral: ${score}/100${c.viralityReasons?.length ? " — " + c.viralityReasons.join(" · ") : ""}`}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono-tab text-[10px] font-semibold"
+              style={badgeStyle}
+            >
+              🔥 {score}
+            </span>
+          ))}
+        <div className="flex-1 min-w-0">
+          <p className="truncate text-sm font-medium">
+            {c.title || c.slug || `Clip ${idx}`}
+          </p>
+          <p className="font-mono-tab text-[10px] text-muted-foreground">
+            {fmtTime(c.start)} → {fmtTime(c.end)}
+            {c.duration && ` · ${Math.round(c.duration)}s`}
+          </p>
+          {c.hook && (
+            <p className="mt-1 text-[11px] text-foreground/80">
+              <Sparkles className="mr-1 inline h-2.5 w-2.5 text-amber-400" />
+              {c.hook}
+            </p>
+          )}
+          {c.viralityReasons && c.viralityReasons.length > 0 && (
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {c.viralityReasons.join(" · ")}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {expandable && open && (
+        <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+          <p className="font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
+            ¿Por qué este clip?
+          </p>
+          {factorRows.map((f) => {
+            const v = Math.max(0, Math.min(100, Math.round(c.factors![f.key])));
+            return (
+              <div key={f.key} className="flex items-center gap-2">
+                <span className="w-32 shrink-0 text-[10px] text-muted-foreground">{f.label}</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${v}%`,
+                      background: v >= 70 ? "#34d399" : v >= 45 ? "#fbbf24" : "#71717a",
+                    }}
+                  />
+                </div>
+                <span className="w-7 shrink-0 text-right font-mono-tab text-[10px] text-muted-foreground">
+                  {v}
+                </span>
+              </div>
+            );
+          })}
+          {c.whyViral && (
+            <p className="pt-1 text-[11px] italic text-foreground/80">
+              <Sparkles className="mr-1 inline h-3 w-3 text-amber-400" />
+              {c.whyViral}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

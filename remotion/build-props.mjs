@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveEditorialCardIcons } from "./editorial-icons.mjs";
+import { needsTrialWatermark } from "./license-check.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const VIDEO_ID = process.argv[2] || "D01_test_01";
@@ -251,6 +252,10 @@ const props = {
   autoReframe: project.autoReframe ?? false,
   sourceAspect: project.sourceAspect ?? 16 / 9,
 };
+
+// PRUEBA GRATUITA — sin licencia activada, el video sale con marca de agua.
+// (ver license-check.mjs: nunca rompe el build; en duda, sin marca.)
+if (needsTrialWatermark()) props.trialWatermark = true;
 
 const outFile = path.join(__dirname, path.basename(OUT_NAME));
 writeFileSync(outFile, JSON.stringify(props, null, 2), "utf-8");

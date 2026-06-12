@@ -26,6 +26,8 @@ import {
 import { toast } from "sonner";
 import { toastError } from "@/lib/toast-error";
 import { PUBLISHING_ENABLED } from "@/lib/app-mode";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { LicensePanel } from "@/components/layout/license-panel";
 
 interface Handles {
   tiktok: string;
@@ -229,34 +231,26 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> cargando…
           </div>
         ) : (
-          <div className="space-y-6">
-            {/* ── VERIFICAR INSTALACIÓN ──────────────────── */}
-            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
-                  Estado de la instalación
-                </h3>
-                <Button type="button" variant="outline" size="sm" onClick={runDoctor} disabled={doctorLoading}>
-                  {doctorLoading ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  {doctorLoading ? "Verificando…" : "Verificar instalación"}
-                </Button>
-              </div>
-              {doctorChecks && (
-                <ul className="space-y-1 text-xs">
-                  {doctorChecks.map((c) => (
-                    <li key={c.id} className={c.ok ? "text-emerald-300" : "text-amber-300"}>
-                      {c.ok ? "✓" : "✗"} {c.label}
-                      {!c.ok && c.fix && <span className="block pl-4 text-[11px] text-muted-foreground">{c.fix}</span>}
-                    </li>
-                  ))}
-                </ul>
+          <Tabs defaultValue="marca" className="w-full">
+            <TabsList className="w-full">
+              <TabsTrigger value="marca" className="flex-1">
+                🎨 Mi marca
+              </TabsTrigger>
+              <TabsTrigger value="licencia" className="flex-1">
+                🔑 Licencia
+              </TabsTrigger>
+              <TabsTrigger value="sistema" className="flex-1">
+                💻 Mi sistema
+              </TabsTrigger>
+              {PUBLISHING_ENABLED && (
+                <TabsTrigger value="redes" className="flex-1">
+                  🔌 Redes
+                </TabsTrigger>
               )}
-            </section>
+            </TabsList>
 
+            {/* ── 🎨 MI MARCA ───────────────────────────── */}
+            <TabsContent value="marca" className="mt-4 space-y-6">
             {/* ── TU FIRMA (handles) ────────────────────── */}
             <section className="space-y-3">
               <h3 className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
@@ -285,15 +279,22 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                 );
               })}
             </section>
+            </TabsContent>
 
-            {/* ── AVANZADO (colapsado): credenciales para publicar.
+            {/* ── 🔑 LICENCIA ───────────────────────────── */}
+            <TabsContent value="licencia" className="mt-4">
+              <LicensePanel />
+            </TabsContent>
+
+            {/* ── 🔌 REDES: credenciales OAuth para publicar.
                 Solo existe con PUBLISHING_ENABLED — la versión pública es editor puro. */}
             {PUBLISHING_ENABLED && (
-            <details className="rounded-md border border-border bg-muted/20">
-              <summary className="cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground">
-                Avanzado: publicar en redes desde la app (opcional)
-              </summary>
-              <div className="space-y-6 border-t border-border p-3">
+            <TabsContent value="redes" className="mt-4">
+              <p className="pb-3 text-[11px] text-muted-foreground">
+                Publicar en redes desde la app (opcional). Lo básico de la app funciona sin
+                esto.
+              </p>
+              <div className="space-y-6">
 
             {/* ── TIKTOK API CREDENTIALS ─────────────────── */}
             <section className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
@@ -500,8 +501,37 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
               </div>
             </section>
               </div>
-            </details>
+            </TabsContent>
             )}
+
+            {/* ── 💻 MI SISTEMA: instalación + pack de audio ── */}
+            <TabsContent value="sistema" className="mt-4 space-y-6">
+            {/* ── VERIFICAR INSTALACIÓN ──────────────────── */}
+            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
+                  Estado de la instalación
+                </h3>
+                <Button type="button" variant="outline" size="sm" onClick={runDoctor} disabled={doctorLoading}>
+                  {doctorLoading ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {doctorLoading ? "Verificando…" : "Verificar instalación"}
+                </Button>
+              </div>
+              {doctorChecks && (
+                <ul className="space-y-1 text-xs">
+                  {doctorChecks.map((c) => (
+                    <li key={c.id} className={c.ok ? "text-emerald-300" : "text-amber-300"}>
+                      {c.ok ? "✓" : "✗"} {c.label}
+                      {!c.ok && c.fix && <span className="block pl-4 text-[11px] text-muted-foreground">{c.fix}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
             {/* ──────── Pixabay API (SFX + música para modo cinematográfico) ──────── */}
             <section className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
@@ -582,7 +612,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                 </Button>
               )}
             </section>
-          </div>
+            </TabsContent>
+          </Tabs>
         )}
 
         <div className="flex justify-end gap-2 pt-2">

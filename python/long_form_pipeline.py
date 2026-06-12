@@ -241,6 +241,99 @@ def step_score_virality(video_id: str, proposals_path: Path) -> None:
         print(f"[virality] no pude scorear (sigo sin score): {e}", file=sys.stderr)
 
 
+def _ollama_explain(text: str, model: str | None = None, timeout: float = 20.0) -> str | None:
+    """UNA llamada corta a Ollama local para explicar por qué un clip puede pegar.
+
+    Devuelve el texto (2 frases) o None si Ollama no responde / tarda más de
+    `timeout` segundos — el caller skipea SILENCIOSO, sin error ni campo.
+    """
+    import urllib.request
+
+    try:
+        from config import OLLAMA_MODEL, OLLAMA_URL
+    except ImportError:
+        return None
+    prompt = (
+        "En 2 frases: por qué este clip puede pegar en redes y qué título le pondrías. "
+        f"Texto del clip: {text}"
+    )
+    payload = json.dumps({
+        "model": model or OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.4, "num_predict": 140},
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{OLLAMA_URL}/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        out = str(data.get("response", "")).strip()
+        return out or None
+    except Exception:
+        # Ollama apagado, modelo no descargado o timeout: skip silencioso.
+        return None
+
+
+def step_explain_virality(
+    video_id: str, proposals_path: Path, model: str | None = None, top_n: int = 15
+) -> None:
+    """Explicación humana del score: "whyViral" por clip vía Ollama local.
+
+    Solo los primeros `top_n` clips por viralityScore. Best-effort total: si
+    Ollama no está o un clip tarda >20s, ese clip queda SIN el campo y seguimos.
+    Tras 2 fallos seguidos asumimos que Ollama no está y dejamos de intentar.
+    """
+    try:
+        proposals = json.loads(proposals_path.read_text(encoding="utf-8"))
+        clips = proposals.get("clips") if isinstance(proposals, dict) else proposals
+        if not isinstance(clips, list) or not clips:
+            return
+        words: list[dict] = []
+        tp = LF_TRANSCRIPTS / f"{video_id}.json"
+        if tp.exists():
+            words = json.loads(tp.read_text(encoding="utf-8")).get("words", [])
+        if not words:
+            return  # sin transcript (p.ej. modo clips rápidos) no hay texto que explicar
+
+        ranked = sorted(clips, key=lambda c: -int(c.get("viralityScore", 0) or 0))[:top_n]
+        explained = 0
+        consecutive_fails = 0
+        for c in ranked:
+            if c.get("whyViral"):
+                continue  # ya explicado (re-corrida)
+            try:
+                start = float(c.get("start", 0))
+                end = float(c.get("end", start + 30))
+            except (ValueError, TypeError):
+                continue
+            seg = [w for w in words if start - 0.2 <= float(w.get("start", 0)) <= end + 0.2]
+            text = " ".join(str(w.get("word", "")) for w in seg).strip()
+            if len(text) < 40:
+                continue  # muy poco texto, no vale la llamada
+            why = _ollama_explain(text[:1500], model=model)
+            if why:
+                c["whyViral"] = why
+                explained += 1
+                consecutive_fails = 0
+            else:
+                consecutive_fails += 1
+                if consecutive_fails >= 2:
+                    break  # Ollama no está respondiendo: no quemamos 20s × clip
+        if explained:
+            out_obj = proposals if isinstance(proposals, dict) else clips
+            proposals_path.write_text(
+                json.dumps(out_obj, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            print(f"[whyViral] {explained} clips explicados con IA local", file=sys.stderr)
+    except Exception:
+        # Best-effort: cualquier falla aquí NO rompe el job ni mete ruido.
+        pass
+
+
 def step_graphics(clip_id: str, use_llm: bool = True) -> None:
     """Modo Gráficos: genera charts + titulares para un clip (best-effort, no rompe el job)."""
     cmd = [str(VENV_PYTHON), str(PYTHON_DIR / "generate_graphics.py"), clip_id]
@@ -728,6 +821,11 @@ def main() -> int:
     # Virality Score (0-100) por clip — reordena de más a menos viral.
     print("\n========== Virality Score ==========", file=sys.stderr)
     step_score_virality(args.video_id, proposals_path)
+
+    # "¿Por qué este clip?" — explicación corta con IA local (solo modo inteligente,
+    # top 15 por score; si Ollama no está, sigue sin el campo y sin error).
+    if not args.use_heuristic:
+        step_explain_virality(args.video_id, proposals_path, model=args.model)
 
     # Step 6: extract clips (con aspect ratio + face tracking opcional)
     print("\n========== STEP 6: extract clips ==========", file=sys.stderr)
