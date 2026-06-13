@@ -30,6 +30,10 @@ interface Check {
   /** Si ok=false: qué hacer, en lenguaje simple. */
   fix?: string;
   detail?: string;
+  /** true = su ausencia ROMPE la instalación (la UI muestra alarma). false =
+   *  opcional/informativo (modelo de voz, IA local): nunca dispara la alarma.
+   *  El front filtra por ESTA bandera, para no desincronizarse de aquí. */
+  critical: boolean;
 }
 
 // Cache del import-test de Python (caro: ~10-40s importa torch). Sobrevive
@@ -65,6 +69,7 @@ export async function GET(req: NextRequest) {
     id: "python",
     label: "Motor de procesamiento (Python)",
     ok: pythonOk,
+    critical: true,
     detail: PYTHON_EXE,
     fix: pythonOk ? undefined : "Reinstala la app (falta la carpeta python del paquete).",
   });
@@ -77,6 +82,7 @@ export async function GET(req: NextRequest) {
         id: "python-imports",
         label: "Componentes de IA (WhisperX, MediaPipe, librosa)",
         ok: cached.ok,
+        critical: false,
         detail: cached.detail,
         fix: cached.ok ? undefined : "Reinstala la app o corre bootstrap.ps1 para reparar los paquetes.",
       });
@@ -95,6 +101,7 @@ export async function GET(req: NextRequest) {
         id: "python-imports",
         label: "Componentes de IA (WhisperX, MediaPipe, librosa)",
         ok,
+        critical: false,
         detail,
         fix: ok ? undefined : "Reinstala la app o corre bootstrap.ps1 para reparar los paquetes.",
       });
@@ -108,6 +115,7 @@ export async function GET(req: NextRequest) {
     id: "ffmpeg",
     label: "Procesador de video (ffmpeg)",
     ok: ffmpegOk && ffprobeOk,
+    critical: true,
     detail: FFMPEG_EXE,
     fix: ffmpegOk && ffprobeOk ? undefined : "Reinstala la app (falta la carpeta tools/ffmpeg del paquete).",
   });
@@ -118,6 +126,7 @@ export async function GET(req: NextRequest) {
     id: "remotion",
     label: "Generador de videos (Remotion)",
     ok: remotionOk,
+    critical: true,
     fix: remotionOk ? undefined : "Reinstala la app (la carpeta remotion del paquete está incompleta).",
   });
 
@@ -136,6 +145,7 @@ export async function GET(req: NextRequest) {
     id: "data",
     label: "Carpeta de videos",
     ok: dataOk,
+    critical: true,
     detail: DATA_ROOT,
     fix: dataOk ? undefined : "Windows no deja escribir en la carpeta de datos. Muévela a Documentos o a tu carpeta de usuario.",
   });
@@ -146,6 +156,7 @@ export async function GET(req: NextRequest) {
     id: "whisper-model",
     label: "Modelo de voz (transcripción)",
     ok: modelReady,
+    critical: false, // tiene su propia UI (botón «Preparar la app»), no alarma
     fix: modelReady ? undefined : "Toca «Preparar la app»: descarga el modelo una sola vez (~1.5 GB).",
   });
 
@@ -165,6 +176,7 @@ export async function GET(req: NextRequest) {
     id: "ollama",
     label: "IA local (opcional)",
     ok: ollamaOk,
+    critical: false, // OPCIONAL: su ausencia jamás bloquea ni marca como rota
     detail: ollamaOk
       ? "Ollama está activa. Solo se usa para el modo inteligente de videos largos."
       : "Solo se usa para el modo inteligente de videos largos. Sin ella, todo lo demás funciona.",

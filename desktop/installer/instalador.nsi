@@ -381,8 +381,8 @@ redescargar_hash:
   ; 3) EXTRACCIÓN (miles de archivos; muestra progreso en el detalle)
   ; --------------------------------------------------------------------------
 extraer:
-  DetailPrint "Instalando archivos (son miles, puede tardar varios minutos)..."
-  !insertmacro Estado "Instalando archivos|Son miles; ya casi está lista..."
+  DetailPrint "Configurando Viralito en tu equipo..."
+  !insertmacro Estado "Configurando Viralito en tu equipo|Dejando todo listo para ti, un momento..."
   ; OJO: el placeholder del parametro Sums es "none", NO "-". powershell.exe -File
   ; interpreta un guion suelto como inicio de parametro, falla el binding y muere
   ; con codigo != 0 antes de correr el script (bug que tumbaba la extraccion).

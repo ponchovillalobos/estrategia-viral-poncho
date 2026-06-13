@@ -58,105 +58,97 @@ try {
         New-Item -ItemType Directory -Force -Path $Destino | Out-Null
       }
 
-      # ANTES de extraer: cerrar cualquier proceso que corra DESDE la carpeta de
-      # instalacion (desktop.exe, y sus hijos node.exe/python.exe de una version
-      # abierta). Esos tienen .pyd/.dll cargados y BLOQUEADOS; sin esto la
-      # extraccion no puede sobrescribirlos ("el archivo esta siendo utilizado en
-      # otro proceso") — exactamente lo que rompia un reinstalar/actualizar.
-      # Filtra por ruta: solo toca procesos de ESTA carpeta, jamas node/python
-      # ajenos del sistema (p.ej. los de Program Files).
-      # OJO: usamos Get-CimInstance (ExecutablePath), NO (Get-Process).Path: el
-      # instalador NSIS es de 32 bits y desde PowerShell de 32 bits .Path NO puede
-      # leer el modulo de procesos de 64 bits (node/python son 64-bit) -> devolvia
-      # null y no detectaba a nadie. CIM si lo lee cross-bitness.
       $destFull = $Destino.TrimEnd('\')
       try { $rp = (Resolve-Path -LiteralPath $Destino -ErrorAction Stop).Path; if ($rp) { $destFull = $rp.TrimEnd('\') } } catch {}
       $prefijo = $destFull + '\'
-      $bloqueadores = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-          $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefijo, [System.StringComparison]::OrdinalIgnoreCase)
-        })
-      foreach ($b in $bloqueadores) {
-        W ("Cerrando proceso que bloquea archivos: $($b.Name) (PID $($b.ProcessId))")
-        try { Stop-Process -Id $b.ProcessId -Force -ErrorAction Stop } catch { W ("  no se pudo cerrar: " + $_.Exception.Message) }
-      }
-      if ($bloqueadores.Count -gt 0) {
-        W ("Cerre $($bloqueadores.Count) proceso(s) de una version abierta; sigo con la extraccion.")
-        Start-Sleep -Seconds 3
+
+      # Cierra procesos que corren DESDE la carpeta de instalacion (node/python
+      # de una version abierta) que dejan .pyd/.dll BLOQUEADOS y rompen la
+      # sobrescritura. CIM = lee ExecutablePath cross-bitness (NSIS 32-bit no
+      # podria con (Get-Process).Path sobre procesos 64-bit). Solo toca ESTA
+      # carpeta; jamas node/python ajenos del sistema.
+      function Cerrar-Bloqueadores {
+        $b = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+            $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefijo, [System.StringComparison]::OrdinalIgnoreCase)
+          })
+        foreach ($x in $b) {
+          W ("Cerrando proceso que bloquea archivos: $($x.Name) (PID $($x.ProcessId))")
+          try { Stop-Process -Id $x.ProcessId -Force -ErrorAction Stop } catch { W ("  no se pudo cerrar: " + $_.Exception.Message) }
+        }
+        if ($b.Count -gt 0) { W ("Cerre $($b.Count) proceso(s) de una version abierta."); Start-Sleep -Seconds 3 }
       }
 
-      # METODO 1: tar.exe nativo de Windows (10 1803+). Binario del sistema
-      # firmado por Microsoft: los antivirus no lo bloquean (a PowerShell
-      # escribiendo miles de archivos si lo llegan a matar) y maneja zip64
-      # y rutas largas sin depender de .NET.
-      $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
-      if (Test-Path -LiteralPath $tar) {
-        W 'Extrayendo con la herramienta del sistema (tar)...'
+      # METODO 1: tar.exe del sistema (firmado por MS, los AV no lo bloquean;
+      # maneja zip64 y rutas largas). Devuelve $true si extrajo bien.
+      function Extraer-Tar {
+        $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+        if (-not (Test-Path -LiteralPath $tar)) { W 'tar.exe no esta en este Windows; uso el metodo alternativo...'; return $false }
+        W 'Configurando los archivos de Viralito...'
         $errFile = Join-Path $env:TEMP ('evs-tar-' + [Guid]::NewGuid().ToString('N') + '.log')
-        $p = Start-Process -FilePath $tar `
-          -ArgumentList ('-xf "' + $Zip + '" -C "' + $Destino + '"') `
-          -NoNewWindow -PassThru -RedirectStandardError $errFile
-        $null = $p.Handle   # sin esto PS 5.1 no cachea el handle y ExitCode llega null
+        $p = Start-Process -FilePath $tar -ArgumentList ('-xf "' + $Zip + '" -C "' + $Destino + '"') -NoNewWindow -PassThru -RedirectStandardError $errFile
+        $null = $p.Handle   # PS 5.1 no cachea el handle sin esto y ExitCode llega null
         $min = 0
         while (-not $p.HasExited) {
           Start-Sleep -Seconds 20
           $min += 0.33
-          W ('Extrayendo... sigue trabajando ({0:N0} min; son miles de archivos)' -f $min)
+          W ('Configurando... seguimos trabajando ({0:N0} min)' -f $min)
         }
         $p.WaitForExit()
-        $codigo = $p.ExitCode
-        if ($null -eq $codigo) { $codigo = -1 }
-        if ($codigo -eq 0) {
-          Remove-Item -LiteralPath $errFile -Force -ErrorAction SilentlyContinue
-          W 'Extraccion completa.'
-          exit 0
-        }
+        $codigo = $p.ExitCode; if ($null -eq $codigo) { $codigo = -1 }
         $detalle = ''
-        if (Test-Path -LiteralPath $errFile) {
-          $detalle = (Get-Content -LiteralPath $errFile -TotalCount 5) -join ' | '
-          Remove-Item -LiteralPath $errFile -Force -ErrorAction SilentlyContinue
-        }
-        W ("tar fallo (codigo $codigo): $detalle")
-        W 'Probando metodo alternativo de extraccion...'
-      }
-      else {
-        W 'tar.exe no esta en este Windows; usando metodo alternativo...'
+        if (Test-Path -LiteralPath $errFile) { $detalle = (Get-Content -LiteralPath $errFile -TotalCount 5) -join ' | '; Remove-Item -LiteralPath $errFile -Force -ErrorAction SilentlyContinue }
+        if ($codigo -eq 0) { return $true }
+        W ("tar no termino (codigo $codigo): $detalle")
+        return $false
       }
 
-      # METODO 2 (respaldo): .NET, con progreso por porcentaje.
-      Add-Type -AssemblyName System.IO.Compression.FileSystem
-      $archivo = [IO.Compression.ZipFile]::OpenRead($Zip)
-      try {
-        $total = $archivo.Entries.Count
-        $i = 0
-        $paso = [Math]::Max(1, [int][Math]::Floor($total / 20))
-        W "Extrayendo $total archivos..."
-        foreach ($e in $archivo.Entries) {
-          $i++
-          $rel = $e.FullName -replace '/', '\'
-          if ($rel -match '\.\.') { continue }   # guardia zip-slip
-          $script:entradaActual = $rel
-          $ruta = Join-Path $Destino $rel
-          if ($rel.EndsWith('\') -or $e.Name -eq '') {
-            # entrada de carpeta
-            [IO.Directory]::CreateDirectory('\\?\' + $ruta) | Out-Null
-          }
-          else {
-            $dir = Split-Path $ruta
-            [IO.Directory]::CreateDirectory('\\?\' + $dir) | Out-Null
-            # prefijo \\?\ = soporta rutas mas largas que MAX_PATH (torch/node_modules)
-            [IO.Compression.ZipFileExtensions]::ExtractToFile($e, '\\?\' + $ruta, $true)
-          }
-          if ($i % $paso -eq 0) {
-            $pct = [int](100 * $i / $total)
-            W ("Extrayendo... {0}% ({1} de {2})" -f $pct, $i, $total)
+      # METODO 2 (respaldo): .NET con prefijo \\?\ (rutas largas). Lanza si falla.
+      function Extraer-Net {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archivo = [IO.Compression.ZipFile]::OpenRead($Zip)
+        try {
+          $total = $archivo.Entries.Count; $i = 0; $paso = [Math]::Max(1, [int][Math]::Floor($total / 20))
+          W "Metodo alternativo: configurando $total archivos..."
+          foreach ($e in $archivo.Entries) {
+            $i++
+            $rel = $e.FullName -replace '/', '\'
+            if ($rel -match '\.\.') { continue }
+            $script:entradaActual = $rel
+            $ruta = Join-Path $Destino $rel
+            if ($rel.EndsWith('\') -or $e.Name -eq '') { [IO.Directory]::CreateDirectory('\\?\' + $ruta) | Out-Null }
+            else {
+              $dir = Split-Path $ruta
+              [IO.Directory]::CreateDirectory('\\?\' + $dir) | Out-Null
+              [IO.Compression.ZipFileExtensions]::ExtractToFile($e, '\\?\' + $ruta, $true)
+            }
+            if ($i % $paso -eq 0) { W ("Configurando... {0}%" -f ([int](100 * $i / $total))) }
           }
         }
+        finally { $archivo.Dispose() }
       }
-      finally {
-        $archivo.Dispose()
+
+      # Hasta 3 intentos: cada uno re-cierra bloqueadores y prueba tar, luego
+      # .NET. Resiste bloqueos TRANSITORIOS (un antivirus escaneando un .pyd un
+      # instante, handles que tardan en liberarse) — la causa mas comun de que
+      # "fallara la extraccion" en maquinas ajenas.
+      $maxIntentos = 3
+      for ($intento = 1; $intento -le $maxIntentos; $intento++) {
+        if ($intento -gt 1) { W ("Reintentando (intento $intento de $maxIntentos)..."); Start-Sleep -Seconds 6 }
+        Cerrar-Bloqueadores
+        if (Extraer-Tar) { W 'Extraccion completa.'; exit 0 }
+        try {
+          Extraer-Net
+          W 'Extraccion completa.'
+          exit 0
+        } catch {
+          $script:ultimoError = $_.Exception.Message
+          W ("Intento $intento no pudo: " + $_.Exception.Message)
+          if ($_.Exception.InnerException) { W ("  Causa: " + $_.Exception.InnerException.Message) }
+          if ($script:entradaActual) { W ("  Archivo en curso: " + $script:entradaActual) }
+        }
       }
-      W 'Extraccion completa.'
-      exit 0
+      W ("No se pudo configurar tras $maxIntentos intentos. Ultimo error: " + $script:ultimoError)
+      exit 3
     }
 
     default {

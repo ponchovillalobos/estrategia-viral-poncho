@@ -18,6 +18,8 @@ interface DoctorCheck {
   ok: boolean;
   fix?: string;
   detail?: string;
+  /** El backend marca cuáles son críticos; solo esos disparan la alarma. */
+  critical?: boolean;
 }
 
 export function SetupBanner() {
@@ -70,7 +72,12 @@ export function SetupBanner() {
   }
 
   if (!doctor || dismissed) return null;
-  const broken = doctor.checks.filter((c) => !c.ok && c.id !== "whisper-model");
+  // Solo los checks CRÍTICOS disparan la alarma "necesita un arreglo". Los
+  // opcionales (IA local / Ollama) e informativos (modelo de voz) NO — el
+  // backend ya los marca con critical:false. Antes el banner solo excluía
+  // whisper-model, así que la ausencia de Ollama (opcional) mostraba una falsa
+  // alarma de "instalación rota".
+  const broken = doctor.checks.filter((c) => !c.ok && c.critical);
   const needsModel = !doctor.modelReady;
   if (broken.length === 0 && !needsModel) return null;
 

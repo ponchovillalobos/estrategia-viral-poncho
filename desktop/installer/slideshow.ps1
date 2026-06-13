@@ -1,4 +1,4 @@
-# slideshow.ps1 - Ventana visual que acompana la instalacion de Viralito.
+﻿# slideshow.ps1 - Ventana visual que acompana la instalacion de Viralito.
 # La lanza el instalador NSIS como proceso SEPARADO (tiene su propio message
 # loop, asi anima aunque NSIS este bloqueado bajando/extrayendo).
 #
@@ -31,12 +31,12 @@ $tenue  = [System.Drawing.Color]::FromArgb(150, 156, 180)
 
 # --- Slides: imagen + titulo + frase ---------------------------------------
 $slides = @(
-  @{ img = 'slide1.png'; t = 'Tu estudio viral, 100% en tu compu'; d = 'Sin nube, sin mensualidades, sin API keys.' },
-  @{ img = 'slide2.png'; t = 'Crea shorts virales desde cualquier video'; d = 'Subtitulos karaoke, efectos y musica, automaticos.' },
+  @{ img = 'slide1.png'; t = 'Tu estudio viral, 100% en tu compu'; d = 'Sin nube, sin mensualidades, sin claves de API.' },
+  @{ img = 'slide2.png'; t = 'Crea shorts virales desde cualquier video'; d = 'Subtítulos karaoke, efectos y música, automáticos.' },
   @{ img = 'slide3.png'; t = 'De un video largo a clips virales'; d = 'La IA encuentra los mejores momentos y los corta.' },
   @{ img = 'slide4.png'; t = '17 estilos editoriales'; d = 'Del MrBeast intenso al documental tipo revista.' },
-  @{ img = 'slide5.png'; t = 'Graficas animadas de datos'; d = 'Dices "el 70%" y aparece la grafica sola.' },
-  @{ img = 'slide6.png'; t = 'Ilustraciones y mapas que aparecen solos'; d = 'Segun lo que dices, con IA local.' }
+  @{ img = 'slide5.png'; t = 'Gráficas animadas de datos'; d = 'Dices "el 70%" y aparece la gráfica sola.' },
+  @{ img = 'slide6.png'; t = 'Ilustraciones y mapas que aparecen solos'; d = 'Según lo que dices, con IA local.' }
 )
 
 # --- Ventana ---------------------------------------------------------------
@@ -166,6 +166,26 @@ function Mostrar-Slide([int]$i) {
 
 function Fmt-MB([long]$b) { return ('{0:N0} MB' -f ($b / 1MB)) }
 
+# Lee la primera linea del archivo de estado decodificando bien la codificacion.
+# CLAVE: NSIS (Unicode True) escribe ese archivo en UTF-16LE; leerlo como ANSI
+# mostraba simbolos raros (mojibake que parecia virus). Detectamos UTF-16 por
+# los bytes nulos y, si no, UTF-8. Asi el texto (con acentos) se ve perfecto.
+function Leer-Estado([string]$path) {
+  try {
+    $bytes = [System.IO.File]::ReadAllBytes($path)
+    if (-not $bytes -or $bytes.Length -eq 0) { return '' }
+    $nulos = 0; $lim = [Math]::Min($bytes.Length, 40)
+    for ($i = 1; $i -lt $lim; $i += 2) { if ($bytes[$i] -eq 0) { $nulos++ } }
+    if ($nulos -gt 3) {
+      $txt = [System.Text.Encoding]::Unicode.GetString($bytes)
+    } else {
+      $txt = [System.Text.Encoding]::UTF8.GetString($bytes)
+    }
+    $txt = $txt.TrimStart([char]0xFEFF)               # quita BOM si lo hay
+    return (($txt -split "`n")[0] -replace "`r", '').Trim()
+  } catch { return '' }
+}
+
 # Timer 1: avanzar slide cada 3.5s
 $tSlide = New-Object System.Windows.Forms.Timer
 $tSlide.Interval = 3500
@@ -183,7 +203,7 @@ $tEstado.Add_Tick({
   $fase = ''; $detalle = ''
   if (Test-Path $Estado) {
     $script:vistoEstado = $true
-    $linea = (Get-Content -LiteralPath $Estado -TotalCount 1 -ErrorAction SilentlyContinue)
+    $linea = Leer-Estado $Estado
     if ($linea) {
       if ($linea -eq 'FIN') { $f.Close(); return }
       $partes = $linea -split '\|', 2
@@ -199,7 +219,7 @@ $tEstado.Add_Tick({
   if ($fase) { $lblFase.Text = $fase }
   # Durante la descarga, mostrar MB en vivo leyendo el tamano del zip parcial
   if ($fase -like 'Descargando*' -and $Zip -and (Test-Path $Zip)) {
-    try { $len = (Get-Item -LiteralPath $Zip).Length; $lblDet.Text = 'Descargado: ' + (Fmt-MB $len) + '  —  no cierres esta ventana' } catch {}
+    try { $len = (Get-Item -LiteralPath $Zip).Length; $lblDet.Text = 'Descargado: ' + (Fmt-MB $len) + '   ·   puedes seguir trabajando mientras tanto' } catch {}
   }
   elseif ($detalle) { $lblDet.Text = $detalle }
 })
