@@ -68,6 +68,17 @@ VIAddVersionKey /LANG=1034 "LegalCopyright"  "${APP_PUBLISHER} (MIT)"
 ${StrStr}            ; declara la función StrStr (instalador)
 ${StrTrimNewLines}   ; declara StrTrimNewLines (instalador)
 
+; Escribe la fase actual al archivo que lee el slideshow (formato "titulo|detalle").
+; "FIN" hace que el slideshow se cierre solo.
+!macro Estado texto
+  ClearErrors
+  FileOpen $8 "$PLUGINSDIR\slide-estado.txt" w
+  ${IfNot} ${Errors}
+    FileWrite $8 "${texto}"
+    FileClose $8
+  ${EndIf}
+!macroend
+
 ; ----------------------------------------------------------------------------
 ; Interfaz (MUI2) en español
 ; ----------------------------------------------------------------------------
@@ -282,6 +293,24 @@ Section "Instalar ${APP_NAME}" SecInstalar
   InitPluginsDir
   File "/oname=$PLUGINSDIR\instalar-helper.ps1" "instalar-helper.ps1"
 
+  ; --------------------------------------------------------------------------
+  ; Slideshow: ventana visual con capturas + funciones mientras se instala.
+  ; Corre como proceso SEPARADO (su propio message loop), asi anima aunque el
+  ; instalador este bloqueado bajando/extrayendo. Se cierra solo al leer "FIN".
+  ; Es ADITIVO: si por lo que sea no abre, la instalacion procede igual.
+  ; --------------------------------------------------------------------------
+  File "/oname=$PLUGINSDIR\slideshow.ps1" "slideshow.ps1"
+  File "/oname=$PLUGINSDIR\slide1.png" "assets\slide1.png"
+  File "/oname=$PLUGINSDIR\slide2.png" "assets\slide2.png"
+  File "/oname=$PLUGINSDIR\slide3.png" "assets\slide3.png"
+  File "/oname=$PLUGINSDIR\slide4.png" "assets\slide4.png"
+  File "/oname=$PLUGINSDIR\slide5.png" "assets\slide5.png"
+  File "/oname=$PLUGINSDIR\slide6.png" "assets\slide6.png"
+  File "/oname=$PLUGINSDIR\app.ico" "assets\app.ico"
+
+  !insertmacro Estado "Preparando la instalación...|"
+  Exec '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\slideshow.ps1" -Carpeta "$PLUGINSDIR" -Estado "$PLUGINSDIR\slide-estado.txt" -Zip "$INSTDIR\${ZIP_NAME}"'
+
   CreateDirectory "$INSTDIR"
   SetOutPath "$INSTDIR"
 
@@ -290,6 +319,7 @@ Section "Instalar ${APP_NAME}" SecInstalar
   ; --------------------------------------------------------------------------
 descargar:
   DetailPrint "Descargando ${APP_NAME} (~1 GB) desde GitHub..."
+  !insertmacro Estado "Descargando Viralito (~1 GB)|"
   inetc::get /CAPTION "${APP_NAME} — descargando" \
     /BANNER "Bajando la app (~1 GB). Esto puede tardar varios minutos según tu internet..." \
     /CANCELTEXT "Cancelar" \
@@ -305,6 +335,7 @@ descargar:
   IntCmp $IntentosDescarga 3 0 reintentar_descarga 0
   ; /SD = respuesta por defecto en modo silencioso (sin ella, /S se cuelga esperando clic)
   MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "No se pudo descargar la app (motivo: $0).$\r$\n$\r$\nRevisa que tengas internet y vuelve a intentar." /SD IDCANCEL IDRETRY descargar
+  !insertmacro Estado "FIN"
   Abort "Instalación cancelada: falló la descarga."
 reintentar_descarga:
   DetailPrint "La descarga falló ($0); reintentando en 5 segundos (intento $IntentosDescarga de 3)..."
@@ -316,6 +347,7 @@ reintentar_descarga:
   ; --------------------------------------------------------------------------
 verificar:
   DetailPrint "Verificando que la descarga esté completa y sin alterar..."
+  !insertmacro Estado "Verificando la descarga|Comprobando que llegó completa y sin alterar..."
   inetc::get /SILENT "${SUMS_URL}" "$PLUGINSDIR\SHA256SUMS.txt" /END
   Pop $0
   WriteINIStr "$INSTDIR\instalar-debug.ini" pasos sums "$0"
@@ -323,6 +355,7 @@ verificar:
   IntOp $IntentosSums $IntentosSums + 1
   IntCmp $IntentosSums 3 0 reintentar_sums 0
   MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "No se pudo descargar el archivo de verificación (SHA256SUMS.txt).$\r$\n$\r$\nRevisa tu internet y vuelve a intentar." /SD IDCANCEL IDRETRY verificar
+  !insertmacro Estado "FIN"
   Abort "Instalación cancelada: no se pudo verificar la descarga."
 reintentar_sums:
   DetailPrint "No bajó el archivo de verificación ($0); reintentando en 5 segundos (intento $IntentosSums de 3)..."
@@ -338,6 +371,7 @@ verificar_hash:
   IntOp $IntentosDescarga $IntentosDescarga + 1
   IntCmp $IntentosDescarga 3 0 redescargar_hash 0
   MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "La descarga llegó dañada o incompleta (la huella SHA256 no coincide).$\r$\n$\r$\nVamos a descargarla de nuevo." /SD IDCANCEL IDRETRY descargar
+  !insertmacro Estado "FIN"
   Abort "Instalación cancelada: la descarga no pasó la verificación."
 redescargar_hash:
   DetailPrint "La verificación no pasó (código $0); descargando de nuevo (intento $IntentosDescarga de 3)..."
@@ -348,6 +382,7 @@ redescargar_hash:
   ; --------------------------------------------------------------------------
 extraer:
   DetailPrint "Instalando archivos (son miles, puede tardar varios minutos)..."
+  !insertmacro Estado "Instalando archivos|Son miles; ya casi está lista..."
   ; OJO: el placeholder del parametro Sums es "none", NO "-". powershell.exe -File
   ; interpreta un guion suelto como inicio de parametro, falla el binding y muere
   ; con codigo != 0 antes de correr el script (bug que tumbaba la extraccion).
@@ -356,10 +391,12 @@ extraer:
   WriteINIStr "$INSTDIR\instalar-debug.ini" pasos extraer "$0"
   StrCmp $0 "0" +3
   MessageBox MB_ICONSTOP|MB_OK "No se pudieron extraer los archivos (código $0).$\r$\n$\r$\nCierra otros programas, asegúrate de tener espacio libre y corre el instalador de nuevo. El detalle del error está en el log de arriba." /SD IDOK
+  !insertmacro Estado "FIN"
   Abort "Instalación cancelada: falló la extracción."
 
   IfFileExists "$INSTDIR\${APP_EXE}" +3 0
   MessageBox MB_ICONSTOP|MB_OK "La extracción terminó pero falta el programa principal (${APP_EXE}).$\r$\n$\r$\nDescarga de nuevo el instalador y vuelve a intentar." /SD IDOK
+  !insertmacro Estado "FIN"
   Abort "Instalación cancelada: instalación incompleta."
 
   Delete "$INSTDIR\${ZIP_NAME}"   ; el zip ya no hace falta (libera ~1 GB)
@@ -394,6 +431,7 @@ extraer:
   StrCpy $0 3600000   ; fallback ~3.5 GB si no se pudo medir
   WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" $0
 
+  !insertmacro Estado "FIN"   ; cierra el slideshow
   DetailPrint "¡Listo! ${APP_NAME} quedó instalado en $INSTDIR"
 SectionEnd
 
