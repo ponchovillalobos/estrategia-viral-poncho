@@ -63,6 +63,15 @@ export function toastError(err: unknown, contexto: string, opts?: ToastErrorOpts
   // Si la causa mapeada es el propio contexto (no hubo match), mostramos solo el contexto.
   const esGenerico = causa === contexto;
   console.warn(`[detalle técnico] ${contexto}:`, raw);
+  // Telemetría: registra el error (best-effort, no bloquea el toast) para que quede
+  // en el log de Diagnóstico y dejemos de estar a ciegas con lo que falla.
+  try {
+    void fetch("/api/telemetry/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ origen: "frontend/toast", mensaje: contexto, detalle: raw, ctx: { url: location?.pathname } }),
+    }).catch(() => {});
+  } catch {}
   toast.error(contexto, {
     description: esGenerico ? undefined : causa,
     id: opts?.id,

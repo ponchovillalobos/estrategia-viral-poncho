@@ -103,6 +103,45 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
     }
   }
 
+  // Diagnóstico: ver cuántos errores hubo + enviar el reporte al soporte.
+  const [erroresCount, setErroresCount] = useState<number | null>(null);
+  const [enviandoReporte, setEnviandoReporte] = useState(false);
+  async function cargarDiagnostico() {
+    try {
+      const r = await fetch("/api/telemetry", { cache: "no-store" });
+      const d = await r.json();
+      setErroresCount(d.errores ?? 0);
+    } catch {
+      setErroresCount(null);
+    }
+  }
+  async function enviarReporte() {
+    setEnviandoReporte(true);
+    try {
+      const r = await fetch("/api/telemetry", { method: "POST" });
+      const d = (await r.json()) as { url?: string | null; reporte?: string };
+      if (d.url) {
+        try {
+          await navigator.clipboard.writeText(d.url);
+        } catch {}
+        toast.success(`Reporte enviado. Link copiado: ${d.url}`);
+      } else if (d.reporte) {
+        const blob = new Blob([d.reporte], { type: "text/plain" });
+        const u = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = u;
+        a.download = `viralito-reporte-${Date.now()}.txt`;
+        a.click();
+        URL.revokeObjectURL(u);
+        toast.success("Reporte descargado — envíalo al soporte.");
+      }
+    } catch {
+      toast.error("No se pudo generar el reporte de diagnóstico.");
+    } finally {
+      setEnviandoReporte(false);
+    }
+  }
+
   // "Configurar todo": descarga modelos de IA + librerías de assets de una vez.
   const [setupRunning, setSetupRunning] = useState(false);
   const [setupLine, setSetupLine] = useState("");
@@ -570,6 +609,37 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
               {setupRunning && setupLine && (
                 <p className="truncate font-mono-tab text-[11px] text-brand-pink/80">{setupLine}</p>
               )}
+            </section>
+
+            {/* ── DIAGNÓSTICO / REPORTAR PROBLEMA ──────────── */}
+            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
+                    Diagnóstico
+                  </h3>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {erroresCount === null
+                      ? "La app registra cada error para poder ayudarte."
+                      : erroresCount === 0
+                        ? "Sin errores registrados. Todo bien."
+                        : `${erroresCount} error(es) registrado(s). Envía el reporte si algo no funciona.`}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={cargarDiagnostico}>
+                    Revisar
+                  </Button>
+                  <Button type="button" size="sm" onClick={enviarReporte} disabled={enviandoReporte}>
+                    {enviandoReporte ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <AlertCircle className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    {enviandoReporte ? "Enviando…" : "Enviar reporte"}
+                  </Button>
+                </div>
+              </div>
             </section>
 
             {/* ── VERIFICAR INSTALACIÓN ──────────────────── */}

@@ -14,11 +14,19 @@
  * timeout vienen como `ok:false` con detalle en `stderr` — más simple para callers.
  */
 import { spawn } from "node:child_process";
+import path from "node:path";
+import { logProcesoPython } from "./telemetry";
 
 export interface RunProcessResult {
   ok: boolean;
   stdout: string;
   stderr: string;
+}
+
+/** Nombre legible del proceso para el log (el script .py o el binario). */
+function nombreProceso(cmd: string, args: string[]): string {
+  const script = args.find((a) => /\.(py|mjs|js)$/i.test(a));
+  return script ? path.basename(script) : path.basename(cmd);
 }
 
 export function runProcess(
@@ -86,7 +94,19 @@ export function runProcess(
     });
     proc.on("close", (code) => {
       clearTimers();
-      resolve({ ok: !timedOut && code === 0, stdout, stderr });
+      const ok = !timedOut && code === 0;
+      // Telemetría: cada proceso que falla queda registrado con su stderr, para
+      // que dejemos de estar a ciegas con lo que falla en la máquina del usuario.
+      if (!ok) {
+        try {
+          logProcesoPython(nombreProceso(cmd, args), stderr || `exit code ${code}`, {
+            cmd: path.basename(cmd),
+            timedOut,
+            code,
+          });
+        } catch {}
+      }
+      resolve({ ok, stdout, stderr });
     });
     proc.on("error", (err) => {
       clearTimers();
@@ -96,6 +116,9 @@ export function runProcess(
         (err as NodeJS.ErrnoException).code === "ENOENT"
           ? `[runProcess] ENOENT: no existe el ejecutable "${cmd}" — instalación incompleta`
           : `[runProcess] ${String(err)}`;
+      try {
+        logProcesoPython(nombreProceso(cmd, args), `${stderr}\n${detail}`, { cmd: path.basename(cmd), spawnError: true });
+      } catch {}
       resolve({ ok: false, stdout, stderr: `${stderr}\n${detail}` });
     });
   });
