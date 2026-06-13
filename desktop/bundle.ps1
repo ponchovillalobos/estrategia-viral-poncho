@@ -76,6 +76,38 @@ New-Item -ItemType Directory -Force "$out\tools\ffmpeg\bin" | Out-Null
 Copy-Item "$($ff.FullName)\bin\ffmpeg.exe" "$out\tools\ffmpeg\bin\" -Force
 Copy-Item "$($ff.FullName)\bin\ffprobe.exe" "$out\tools\ffmpeg\bin\" -Force
 
+# 5.5) PODA de peso muerto que NO se usa en runtime: acelera la descarga y la
+#      instalación (menos archivos = menos I/O y menos escaneo de antivirus) SIN
+#      cambiar funcionalidad. Quita ~1 GB y ~16k archivos. Lo que se poda:
+#       - torch\include (headers C++) y torch\lib\*.lib (libs de ENLACE): solo
+#         sirven para COMPILAR extensiones; nunca se cargan al correr.
+#       - tests/test de los paquetes Python: código de prueba, jamás corre.
+#       - remotion *.map (mapas de depuración) y *.md (docs).
+Write-Host "[6/6] podando peso muerto (no-runtime)..."
+$emptyP = "$env:TEMP\__poda_vacia"
+New-Item -ItemType Directory -Force $emptyP | Out-Null
+function Remove-DirLong($d) {
+  # robocopy /MIR vacía árboles con rutas > MAX_PATH (Remove-Item no puede).
+  if (Test-Path -LiteralPath $d) {
+    robocopy $emptyP $d /MIR /NFL /NDL /NJH /NJS /R:1 /W:1 | Out-Null
+    & cmd.exe /c "rmdir /s /q `"$d`"" 2>$null
+  }
+}
+function Remove-FilesByPattern($root, $pattern) {
+  if (-not (Test-Path -LiteralPath $root)) { return }
+  Get-ChildItem -LiteralPath $root -Recurse -File -Filter $pattern -ErrorAction SilentlyContinue | ForEach-Object {
+    try { [System.IO.File]::Delete('\\?\' + $_.FullName) } catch {}
+  }
+}
+$sp = "$out\python\runtime\Lib\site-packages"
+Remove-DirLong "$sp\torch\include"
+Remove-FilesByPattern "$sp\torch\lib" "*.lib"
+Get-ChildItem -LiteralPath $sp -Recurse -Directory -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -in 'tests', 'test' } | ForEach-Object { Remove-DirLong $_.FullName }
+Remove-FilesByPattern "$out\remotion" "*.map"
+Remove-FilesByPattern "$out\remotion" "*.md"
+Remove-Item $emptyP -Force -ErrorAction SilentlyContinue
+
 $size = (Get-ChildItem $out -Recurse -File | Measure-Object Length -Sum).Sum / 1GB
 Write-Host ("== Payload listo: {0:N1} GB" -f $size)
 
