@@ -10,7 +10,11 @@
 param(
   [Parameter(Mandatory = $true)][string]$Accion,
   [Parameter(Mandatory = $true)][string]$Zip,
-  [Parameter(Mandatory = $true)][string]$Sums,
+  # NO obligatorio: 'extraer' no usa Sums. Si fuera Mandatory y el binding
+  # fallara (p.ej. un arg raro desde powershell.exe -File), PowerShell intenta
+  # preguntar interactivamente y, sin consola, muere con codigo != 0 ANTES de
+  # correr el script — exactamente el bug que tumbaba la extraccion.
+  [string]$Sums = '',
   [Parameter(Mandatory = $true)][string]$Destino
 )
 

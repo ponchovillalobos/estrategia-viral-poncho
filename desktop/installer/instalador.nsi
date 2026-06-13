@@ -330,7 +330,7 @@ reintentar_sums:
   Goto verificar
 
 verificar_hash:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\instalar-helper.ps1" verificar "$INSTDIR\${ZIP_NAME}" "$PLUGINSDIR\SHA256SUMS.txt" "$INSTDIR"'
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\instalar-helper.ps1" verificar "$INSTDIR\${ZIP_NAME}" "$PLUGINSDIR\SHA256SUMS.txt" "$INSTDIR"'
   Pop $0
   WriteINIStr "$INSTDIR\instalar-debug.ini" pasos verificar "$0"
   StrCmp $0 "0" extraer
@@ -348,7 +348,10 @@ redescargar_hash:
   ; --------------------------------------------------------------------------
 extraer:
   DetailPrint "Instalando archivos (son miles, puede tardar varios minutos)..."
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\instalar-helper.ps1" extraer "$INSTDIR\${ZIP_NAME}" "-" "$INSTDIR"'
+  ; OJO: el placeholder del parametro Sums es "none", NO "-". powershell.exe -File
+  ; interpreta un guion suelto como inicio de parametro, falla el binding y muere
+  ; con codigo != 0 antes de correr el script (bug que tumbaba la extraccion).
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\instalar-helper.ps1" extraer "$INSTDIR\${ZIP_NAME}" "none" "$INSTDIR"'
   Pop $0
   WriteINIStr "$INSTDIR\instalar-debug.ini" pasos extraer "$0"
   StrCmp $0 "0" +3
