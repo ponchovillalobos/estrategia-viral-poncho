@@ -389,16 +389,23 @@ extraer:
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\instalar-helper.ps1" extraer "$INSTDIR\${ZIP_NAME}" "none" "$INSTDIR"'
   Pop $0
   WriteINIStr "$INSTDIR\instalar-debug.ini" pasos extraer "$0"
-  StrCmp $0 "0" +3
+  ; OJO: usamos ETIQUETAS, NO saltos relativos (+3). El macro Estado "FIN"
+  ; expande a varias instrucciones y un +3 caeria DENTRO del macro/Abort aun
+  ; con exito (extraer=0) -> la instalacion abortaba justo despues de extraer
+  ; (sin accesos directos, sin desinstalador, sin ARP). Bug real en maquina
+  ; limpia; lo ocultaban las pruebas sobre una instalacion previa.
+  StrCmp $0 "0" extraccion_ok
   MessageBox MB_ICONSTOP|MB_OK "No se pudieron extraer los archivos (código $0).$\r$\n$\r$\nCierra otros programas, asegúrate de tener espacio libre y corre el instalador de nuevo. El detalle del error está en el log de arriba." /SD IDOK
   !insertmacro Estado "FIN"
   Abort "Instalación cancelada: falló la extracción."
 
-  IfFileExists "$INSTDIR\${APP_EXE}" +3 0
+extraccion_ok:
+  IfFileExists "$INSTDIR\${APP_EXE}" programa_ok 0
   MessageBox MB_ICONSTOP|MB_OK "La extracción terminó pero falta el programa principal (${APP_EXE}).$\r$\n$\r$\nDescarga de nuevo el instalador y vuelve a intentar." /SD IDOK
   !insertmacro Estado "FIN"
   Abort "Instalación cancelada: instalación incompleta."
 
+programa_ok:
   Delete "$INSTDIR\${ZIP_NAME}"   ; el zip ya no hace falta (libera ~1 GB)
 
   ; --------------------------------------------------------------------------
@@ -446,9 +453,12 @@ FunctionEnd
 Section "Uninstall"
   SetDetailsPrint both
 
-  ; Cerrar la app si está corriendo
-  nsExec::Exec 'taskkill /F /IM ${APP_EXE}'
+  ; Cerrar la app si está corriendo. /T = mata también el ÁRBOL (los hijos
+  ; node.exe/python.exe del payload), que si no quedan bloqueando archivos y
+  ; el borrado deja miles de archivos sin quitar.
+  nsExec::Exec 'taskkill /F /IM ${APP_EXE} /T'
   Pop $0
+  Sleep 1500
 
   ; Accesos directos
   SetShellVarContext all
@@ -457,9 +467,11 @@ Section "Uninstall"
 
   ; La carpeta tiene rutas MUY largas (node_modules/torch) que RMDir no puede
   ; borrar. Truco robocopy: espejar una carpeta vacía la vacía siempre.
-  DetailPrint "Borrando archivos (miles, puede tardar un par de minutos)..."
+  ; OJO: /R:1 /W:1 — sin esto robocopy reintenta 1 millón de veces (30s c/u)
+  ; sobre cualquier archivo bloqueado y el desinstalador se cuelga para siempre.
+  DetailPrint "Borrando archivos (puede tardar un par de minutos)..."
   CreateDirectory "$TEMP\evs_vacia"
-  nsExec::ExecToLog 'robocopy "$TEMP\evs_vacia" "$INSTDIR" /MIR /NFL /NDL /NJH /NJS'
+  nsExec::ExecToLog 'robocopy "$TEMP\evs_vacia" "$INSTDIR" /MIR /NFL /NDL /NJH /NJS /R:1 /W:1'
   Pop $0
   RMDir /r "$INSTDIR"
   RMDir "$TEMP\evs_vacia"
