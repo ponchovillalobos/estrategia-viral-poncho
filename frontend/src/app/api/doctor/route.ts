@@ -44,19 +44,43 @@ const IMPORTS_TTL = 30 * 60 * 1000;
 /** ¿El modelo Whisper ya está descargado? (cache de HuggingFace en el perfil).
  *  Si HF_HOME está seteado, manda ÉL (es donde whisperx va a buscar/descargar). */
 function whisperModelReady(): boolean {
-  const roots = process.env.HF_HOME
+  // Transcribir necesita DOS modelos. Antes solo se chequeaba el de voz: si el de
+  // alineación no se había descargado, el doctor decía "listo" y la transcripción
+  // fallaba sin avisar. Ahora exigimos AMBOS.
+
+  // 1) Modelo de voz (faster-whisper) — caché de HuggingFace.
+  const hfRoots = process.env.HF_HOME
     ? [path.join(process.env.HF_HOME, "hub")]
     : [path.join(os.homedir(), ".cache", "huggingface", "hub")];
-  for (const root of roots) {
+  let vozOk = false;
+  for (const root of hfRoots) {
     try {
       if (!existsSync(root)) continue;
-      const entries = readdirSync(root);
-      if (entries.some((e) => e.toLowerCase().includes("faster-whisper"))) return true;
+      if (readdirSync(root).some((e) => e.toLowerCase().includes("faster-whisper"))) {
+        vozOk = true;
+        break;
+      }
     } catch {
       /* sigue */
     }
   }
-  return false;
+
+  // 2) Modelo de alineación (wav2vec2/voxpopuli) — caché de torchaudio.
+  const torchRoot = process.env.TORCH_HOME
+    ? path.join(process.env.TORCH_HOME, "hub", "checkpoints")
+    : path.join(os.homedir(), ".cache", "torch", "hub", "checkpoints");
+  let alineacionOk = false;
+  try {
+    if (existsSync(torchRoot)) {
+      alineacionOk = readdirSync(torchRoot).some(
+        (e) => e.toLowerCase().includes("voxpopuli") || e.toLowerCase().includes("wav2vec2")
+      );
+    }
+  } catch {
+    /* sin caché torch */
+  }
+
+  return vozOk && alineacionOk;
 }
 
 export async function GET(req: NextRequest) {

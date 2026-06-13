@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Loader2, Wrench, Download } from "lucide-react";
 
 /**
@@ -41,6 +41,19 @@ export function SetupBanner() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadDoctor();
   }, []);
+
+  // Auto-descarga: si faltan los modelos de voz, EMPIEZA la descarga sola (con
+  // progreso) en vez de esperar a que el usuario encuentre el botón. Así la app
+  // "se prepara sola" la primera vez. Solo una vez por sesión; el usuario puede
+  // descartar el aviso si no quiere bajarlos ahora.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (doctor && !doctor.modelReady && !preparing && !dismissed && !autoStarted.current) {
+      autoStarted.current = true;
+      void prepare();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctor, preparing, dismissed]);
 
   async function prepare() {
     setPreparing(true);

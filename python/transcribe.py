@@ -254,11 +254,40 @@ def transcribe_chunked(
 
 
 def download_model(model_size: str) -> None:
+    """Descarga los DOS modelos que necesita transcribir (voz + alineación) con
+    REINTENTOS. Sin esto, un corte de internet a media descarga dejaba el caché
+    incompleto y la transcripción fallaba después — la causa #1 de "no transcribe".
+    """
+    import time
+
     import whisperx
-    print(f"[download] descargando whisperx model '{model_size}'...")
-    whisperx.load_model(model_size, device="cpu", compute_type=WHISPER_COMPUTE_TYPE, language=WHISPER_LANGUAGE)
-    print("[download] descargando alignment model 'es'...")
-    whisperx.load_align_model(language_code=WHISPER_LANGUAGE, device="cpu")
+
+    fases = [
+        (
+            f"modelo de voz '{model_size}'",
+            lambda: whisperx.load_model(
+                model_size, device="cpu", compute_type=WHISPER_COMPUTE_TYPE, language=WHISPER_LANGUAGE
+            ),
+        ),
+        (
+            "modelo de alineación (timestamps por palabra)",
+            lambda: whisperx.load_align_model(language_code=WHISPER_LANGUAGE, device="cpu"),
+        ),
+    ]
+    intentos = 4
+    for nombre, cargar in fases:
+        for i in range(1, intentos + 1):
+            try:
+                print(f"[download] descargando {nombre} (intento {i}/{intentos})...", flush=True)
+                cargar()
+                break
+            except Exception as e:  # red caída, HF temporalmente abajo, etc.
+                if i >= intentos:
+                    print(f"[download] no se pudo descargar {nombre} tras {intentos} intentos: {e}", flush=True)
+                    raise
+                espera = min(30, 5 * i)
+                print(f"[download] falló ({e}); reintento en {espera}s...", flush=True)
+                time.sleep(espera)
     print("OK")
 
 
