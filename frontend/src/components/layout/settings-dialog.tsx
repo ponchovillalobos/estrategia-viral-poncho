@@ -21,6 +21,7 @@ import {
   Key,
   LogIn,
   AlertCircle,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { toastError } from "@/lib/toast-error";
@@ -99,6 +100,38 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
       toast.error("No se pudo verificar la instalación");
     } finally {
       setDoctorLoading(false);
+    }
+  }
+
+  // "Configurar todo": descarga modelos de IA + librerías de assets de una vez.
+  const [setupRunning, setSetupRunning] = useState(false);
+  const [setupLine, setSetupLine] = useState("");
+  async function configurarTodo() {
+    setSetupRunning(true);
+    setSetupLine("Iniciando…");
+    try {
+      await fetch("/api/setup/full", { method: "POST" });
+      const poll = async (): Promise<void> => {
+        const r = await fetch("/api/setup/full", { cache: "no-store" });
+        const s = (await r.json()) as { running: boolean; ok: boolean; lastLine: string };
+        setSetupLine(s.lastLine || "Descargando…");
+        if (s.running) {
+          await new Promise((res) => setTimeout(res, 1500));
+          return poll();
+        }
+        setSetupRunning(false);
+        if (s.ok) {
+          setSetupLine("");
+          toast.success("Todo configurado: la app ya tiene modelos y assets.");
+          runDoctor();
+        } else {
+          toast.error("Algo falló en la configuración — revisa tu conexión y reintenta.");
+        }
+      };
+      await poll();
+    } catch {
+      setSetupRunning(false);
+      toast.error("Error de conexión durante la configuración.");
     }
   }
 
@@ -507,6 +540,38 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
 
             {/* ── 💻 MI SISTEMA: instalación + pack de audio ── */}
             <TabsContent value="sistema" className="mt-4 space-y-6">
+            {/* ── CONFIGURAR TODO ──────────────────── */}
+            <section className="space-y-2 rounded-md border border-brand-pink/30 bg-brand-pink/5 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-mono-tab text-xs uppercase tracking-wider text-brand-pink">
+                    Configurar todo
+                  </h3>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Descarga de una vez los modelos de voz y las librerías (música, iconos, efectos)
+                    para que la app funcione completa, igual que en cualquier otra PC.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={configurarTodo}
+                  disabled={setupRunning}
+                  className="shrink-0 bg-brand-gradient text-white hover:opacity-90"
+                >
+                  {setupRunning ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {setupRunning ? "Configurando…" : "Configurar todo"}
+                </Button>
+              </div>
+              {setupRunning && setupLine && (
+                <p className="truncate font-mono-tab text-[11px] text-brand-pink/80">{setupLine}</p>
+              )}
+            </section>
+
             {/* ── VERIFICAR INSTALACIÓN ──────────────────── */}
             <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
               <div className="flex items-center justify-between gap-2">
