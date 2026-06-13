@@ -26,7 +26,7 @@
 <details>
 <summary>📦 Alternativa sin instalador (zip portable)</summary>
 
-1. Baja el `.zip` (p. ej. `EstrategiaViralStudio-v0.3.0.zip`) desde Releases.
+1. Baja el `.zip` (p. ej. `EstrategiaViralStudio-v0.3.1.zip`) desde Releases.
 2. Descomprímelo en una carpeta fuera de OneDrive, p. ej. `C:\Viralito`.
 3. Doble clic en `desktop.exe`.
 
@@ -84,16 +84,31 @@
 
 ---
 
-### ⚠️ Si Windows muestra "Windows protegió su PC" (SmartScreen)
+### ⚠️ Si Windows muestra "Windows protegió tu PC" (SmartScreen)
 
-Es normal en apps nuevas sin firma digital paga — **no** significa virus:
+**Es normal y NO significa virus.** Windows muestra ese cartel azul con CUALQUIER
+programa nuevo que todavía no descargó mucha gente — tenga o no firma digital de
+pago. Es un tema de "reputación", no de seguridad: a medida que más personas
+bajan Viralito, el aviso desaparece solo. Mientras tanto, para abrirlo:
 
-1. Tocá **"Más información"** en el cartel azul.
-2. Tocá **"Ejecutar de todas formas"**.
+1. Haz clic en **"Más información"** (el texto chiquito en el cartel azul).
+2. Aparece el botón **"Ejecutar de todas formas"** — haz clic ahí.
 
-Podés verificar la integridad de la descarga comparando el SHA256 publicado en
-cada release con `Get-FileHash desktop.exe` en PowerShell (cada release incluye
-su `SHA256SUMS.txt`).
+Eso es todo. Lo haces una vez y listo.
+
+**¿Quieres verificar que la descarga es la auténtica?** Cada release incluye un
+`SHA256SUMS.txt` con la huella de cada archivo. Compárala en PowerShell:
+
+```powershell
+Get-FileHash EstrategiaViralStudio-Setup.exe -Algorithm SHA256
+```
+
+Si la huella coincide con la del `SHA256SUMS.txt`, el archivo está intacto y es
+el oficial.
+
+> 💡 **¿El navegador dice "no se descarga con frecuencia / podría ser peligroso"?**
+> Es el mismo tema de reputación. En Chrome/Edge: flecha junto a la descarga →
+> **"Conservar"** → **"Conservar de todos modos"**.
 
 ---
 
