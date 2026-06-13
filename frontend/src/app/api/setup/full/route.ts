@@ -43,8 +43,9 @@ export async function POST() {
   };
   g.__setupFull = state;
 
-  // En background. Sin timeout total (puede tardar mucho en conexión lenta); el
-  // idle-timeout de 5 min detecta cuelgues reales (la descarga viva emite progreso).
+  // En background. Sin timeout total (puede tardar mucho: assets + torch CUDA de
+  // ~2.5GB en GPU); el idle-timeout de 15 min detecta cuelgues reales sin matar
+  // descargas/instalaciones lentas que quedan en silencio (pip CUDA tarda).
   void runProcess(
     PYTHON_EXE,
     [path.join(PYTHON_DIR, "setup_all.py")],
@@ -58,7 +59,7 @@ export async function POST() {
       if (line) state.lastLine = line.replace(/^\[setup\]\s*/, "").slice(0, 160);
     },
     undefined,
-    5 * 60 * 1000
+    15 * 60 * 1000
   ).then((r) => {
     state.running = false;
     state.done = true;

@@ -43,8 +43,8 @@ export async function POST() {
   g.__doctorPrepare = state;
 
   // En background (no bloquea la response). Sin timeout total: una descarga de
-  // 1.5 GB en conexión lenta puede tardar 30+ min; el idle-timeout de 5 min
-  // detecta cuelgues reales (descarga viva = emite progreso).
+  // 1.5 GB en conexión lenta puede tardar 30+ min; el idle-timeout de 15 min
+  // detecta cuelgues reales sin matar descargas lentas que quedan en silencio.
   void runProcess(
     PYTHON_EXE,
     [path.join(PYTHON_DIR, "transcribe.py"), "--download-model", "small"],
@@ -58,7 +58,7 @@ export async function POST() {
       if (line) state.lastLine = line.slice(0, 160);
     },
     undefined,
-    5 * 60 * 1000
+    15 * 60 * 1000
   ).then((r) => {
     state.running = false;
     state.done = true;

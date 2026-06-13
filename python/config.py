@@ -69,11 +69,24 @@ OLLAMA_MODEL = os.environ.get("VIRAL_OLLAMA_MODEL", "qwen3:1.7b")
 
 
 def _detect_ffmpeg(binary: str) -> Path:
-    env_var = f"VIRAL_{binary.upper()}_PATH"
-    override = os.environ.get(env_var)
-    if override and Path(override).exists():
-        return Path(override)
+    # 1) Override por env. ACEPTA ambos nombres: el NUEVO _EXE (el que exporta el
+    #    launcher desktop.exe → lib.rs) y el LEGACY _PATH. ESTE mismatch (launcher
+    #    seteaba VIRAL_FFMPEG_EXE pero config leía VIRAL_FFMPEG_PATH) hacía que
+    #    Python NO encontrara ffmpeg → FileNotFoundError [WinError 2] al extraer el
+    #    audio → "no transcribe". Era el bug bloqueante real.
+    for env_var in (f"VIRAL_{binary.upper()}_EXE", f"VIRAL_{binary.upper()}_PATH"):
+        override = os.environ.get(env_var)
+        if override and Path(override).exists():
+            return Path(override)
 
+    # 2) Layout BUNDLEADO del paquete: <payload>/tools/ffmpeg/bin/<binary>.exe
+    #    (sin sufijo de versión). config.py vive en <payload>/python/, así que el
+    #    ffmpeg está al lado. Cubre los entry points que corren SIN el env del launcher.
+    bundled = Path(__file__).resolve().parent.parent / "tools" / "ffmpeg" / "bin" / f"{binary}.exe"
+    if bundled.exists():
+        return bundled
+
+    # 3) Layout viejo de dev: C:\...\tools\ffmpeg-<ver>\bin\<binary>.exe
     tools_dir = DATA_ROOT.parent / "tools"
     if tools_dir.exists():
         for entry in tools_dir.iterdir():

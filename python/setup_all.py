@@ -47,6 +47,51 @@ def _run(nombre: str, args: list[str], critico: bool = False, reintentos: int = 
     return False
 
 
+def _hay_gpu_nvidia() -> bool:
+    """¿Hay GPU NVIDIA? (nvidia-smi responde)."""
+    try:
+        r = subprocess.run(["nvidia-smi"], capture_output=True, timeout=10)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _torch_ya_es_cuda() -> bool:
+    try:
+        r = subprocess.run(
+            [PY, "-c", "import torch; print(torch.cuda.is_available())"],
+            capture_output=True, text=True, timeout=120,
+        )
+        return "True" in (r.stdout or "")
+    except Exception:
+        return False
+
+
+def _configurar_segun_equipo() -> None:
+    """Adapta la app al HARDWARE: si hay GPU NVIDIA, instala torch CUDA para que
+    la transcripción corra en GPU (5-10x más rápido) en vez de CPU. El bundle trae
+    torch CPU-only (chico y universal); esto lo actualiza SOLO en máquinas con GPU.
+    pip instala de forma atómica: si falla, el torch CPU sigue funcionando.
+    """
+    if not _hay_gpu_nvidia():
+        print("[setup] Sin GPU NVIDIA: la app usa CPU (correcto para este equipo).", flush=True)
+        return
+    if _torch_ya_es_cuda():
+        print("[setup] GPU NVIDIA con torch CUDA ya configurado.", flush=True)
+        return
+    print("[setup] GPU NVIDIA detectada — instalando aceleración (torch CUDA, ~2.5 GB, una sola vez)...", flush=True)
+    _run(
+        "aceleración GPU (torch CUDA)",
+        ["-m", "pip", "install", "--upgrade", "--no-cache-dir",
+         "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cu121"],
+        reintentos=2,
+    )
+    if _torch_ya_es_cuda():
+        print("[setup] Aceleración GPU lista: la transcripción ahora usa tu tarjeta.", flush=True)
+    else:
+        print("[setup] No se pudo activar la GPU; la app sigue en CPU (funciona igual, más lento).", flush=True)
+
+
 def main() -> int:
     ensure_dirs()
     print("[setup] Configurando Viralito: modelos de IA + librerías de assets...", flush=True)
@@ -71,6 +116,9 @@ def main() -> int:
         "efectos de sonido",
         ["download_sfx_library.py", "download", "--out-dir", str(ASSETS_SFX)],
     )
+
+    # 3) SEGÚN EL EQUIPO — si hay GPU NVIDIA, baja la aceleración (torch CUDA).
+    _configurar_segun_equipo()
 
     if voz_ok:
         print("[setup] ¡Listo! La app puede transcribir y tiene las librerías de assets.", flush=True)
