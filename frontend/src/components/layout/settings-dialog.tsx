@@ -18,6 +18,7 @@ import {
   ThumbsUp,
   Loader2,
   CheckCircle2,
+  XCircle,
   Key,
   LogIn,
   AlertCircle,
@@ -61,10 +62,135 @@ interface SettingsResponse {
   };
 }
 
+// Forma de GET /api/doctor/diagnose. Solo tipamos lo que la UI consume.
+interface DiagAssetCheck {
+  ok: boolean;
+  count: number;
+  min: number;
+}
+interface DiagnoseResponse {
+  ok: boolean;
+  generatedAt: string;
+  versionApp: string;
+  checks: {
+    dataRoot: { ok: boolean; path: string; writable?: boolean; error?: string };
+    ffmpeg: { ok: boolean; path: string; version: string | null; nvenc: boolean; error?: string };
+    ffprobe: { ok: boolean; path: string; error?: string };
+    python: { ok: boolean; version: string | null; error?: string };
+    whisperModel: { ok: boolean; cached: boolean; sizeMb: number | null; error?: string };
+    alignmentModel: { ok: boolean; cached: boolean; path: string | null; error?: string };
+    ollama: { ok: boolean; url: string; model: string | null; reachable: boolean; error?: string };
+    torch: { ok: boolean; version: string | null; cuda: boolean; gpu: string | null; error?: string };
+    assets: {
+      music: DiagAssetCheck;
+      sfx: DiagAssetCheck;
+      lottie: DiagAssetCheck;
+      icons: DiagAssetCheck;
+      fonts: DiagAssetCheck;
+      luts: DiagAssetCheck;
+    };
+  };
+}
+
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved?: (handles: Handles) => void;
+}
+
+/** Aplana los checks del diagnóstico a filas para la UI. `repair:true` =
+ *  tiene botón "Reparar" (POST /api/setup/full vía configurarTodo). */
+function diagnoseRows(c: DiagnoseResponse["checks"]) {
+  const rows: { id: string; label: string; ok: boolean; detail?: string; error?: string; repair?: boolean }[] = [
+    {
+      id: "dataRoot",
+      label: "Carpeta de datos (escribible)",
+      ok: c.dataRoot.ok,
+      detail: c.dataRoot.path,
+      error: c.dataRoot.error,
+    },
+    {
+      id: "ffmpeg",
+      label: "Procesador de video (ffmpeg)",
+      ok: c.ffmpeg.ok,
+      detail: [c.ffmpeg.version ?? c.ffmpeg.path, c.ffmpeg.nvenc ? "NVENC ✓" : "sin NVENC"]
+        .filter(Boolean)
+        .join(" · "),
+      error: c.ffmpeg.error,
+    },
+    {
+      id: "ffprobe",
+      label: "Analizador de video (ffprobe)",
+      ok: c.ffprobe.ok,
+      detail: c.ffprobe.path,
+      error: c.ffprobe.error,
+    },
+    {
+      id: "python",
+      label: "Motor de procesamiento (Python)",
+      ok: c.python.ok,
+      detail: c.python.version ? `Python ${c.python.version}` : undefined,
+      error: c.python.error,
+    },
+    {
+      id: "whisperModel",
+      label: "Modelo de voz (transcripción)",
+      ok: c.whisperModel.ok,
+      detail: c.whisperModel.sizeMb ? `${c.whisperModel.sizeMb} MB en caché` : "no descargado",
+      error: c.whisperModel.error,
+    },
+    {
+      id: "alignmentModel",
+      label: "Modelo de alineación (subtítulos al ritmo)",
+      ok: c.alignmentModel.ok,
+      detail: c.alignmentModel.cached ? "descargado" : "no descargado",
+      error: c.alignmentModel.error,
+    },
+    {
+      id: "ollama",
+      label: "IA local (Ollama — opcional)",
+      ok: c.ollama.ok,
+      detail: c.ollama.reachable
+        ? c.ollama.model
+          ? `${c.ollama.model} en ${c.ollama.url}`
+          : `activo en ${c.ollama.url}`
+        : `no responde en ${c.ollama.url}`,
+      error: c.ollama.error,
+    },
+    {
+      id: "torch",
+      label: "PyTorch (procesamiento de IA)",
+      ok: c.torch.ok,
+      detail: [
+        c.torch.version ? `v${c.torch.version}` : null,
+        c.torch.cuda ? "CUDA ✓" : "CPU",
+        c.torch.gpu,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      error: c.torch.error,
+    },
+  ];
+
+  const assetLabels: Record<string, string> = {
+    music: "Música",
+    sfx: "Efectos de sonido",
+    lottie: "Animaciones (Lottie)",
+    icons: "Iconos",
+    fonts: "Tipografías",
+    luts: "Filtros de color (LUTs)",
+  };
+  for (const [key, label] of Object.entries(assetLabels)) {
+    const a = c.assets[key as keyof DiagnoseResponse["checks"]["assets"]];
+    rows.push({
+      id: `asset-${key}`,
+      label: `Librería: ${label}`,
+      ok: a.ok,
+      detail: `${a.count} / ${a.min} mínimo`,
+      repair: true,
+    });
+  }
+  return rows;
 }
 
 export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogProps) {
@@ -100,6 +226,23 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
       toast.error("No se pudo verificar la instalación");
     } finally {
       setDoctorLoading(false);
+    }
+  }
+
+  // "Diagnosticar todo": chequeo en vivo y estructurado de cada componente
+  // (GET /api/doctor/diagnose). Distinto de "Verificar instalación" (texto guiado).
+  const [diag, setDiag] = useState<DiagnoseResponse | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  async function diagnosticarTodo() {
+    setDiagLoading(true);
+    try {
+      const r = await fetch("/api/doctor/diagnose", { cache: "no-store" });
+      const d = (await r.json()) as DiagnoseResponse;
+      setDiag(d);
+    } catch {
+      toast.error("No se pudo diagnosticar el sistema");
+    } finally {
+      setDiagLoading(false);
     }
   }
 
@@ -608,6 +751,92 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
               </div>
               {setupRunning && setupLine && (
                 <p className="truncate font-mono-tab text-[11px] text-brand-pink/80">{setupLine}</p>
+              )}
+            </section>
+
+            {/* ── DIAGNOSTICAR TODO (chequeo en vivo, estructurado) ── */}
+            <section className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
+                    Diagnosticar todo
+                  </h3>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Revisa AHORA que cada pieza esté en su lugar: video, motor, modelos de
+                    voz, IA local y librerías.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={diagnosticarTodo}
+                  disabled={diagLoading}
+                  className="shrink-0"
+                >
+                  {diagLoading ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {diagLoading ? "Diagnosticando…" : "Diagnosticar todo"}
+                </Button>
+              </div>
+
+              {diag && (
+                <div className="space-y-2 pt-1">
+                  {diag.ok && (
+                    <div className="flex items-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      Todo listo · revisado{" "}
+                      {new Date(diag.generatedAt).toLocaleTimeString("es")}
+                    </div>
+                  )}
+                  <ul className="space-y-1.5 text-xs">
+                    {diagnoseRows(diag.checks).map((row) => (
+                      <li key={row.id} className="space-y-0.5">
+                        <div className="flex items-start gap-1.5">
+                          {row.ok ? (
+                            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                          ) : (
+                            <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <span className={row.ok ? "text-emerald-200" : "text-red-200"}>
+                              {row.label}
+                            </span>
+                            {row.detail && (
+                              <span className="block text-[11px] text-muted-foreground">
+                                {row.detail}
+                              </span>
+                            )}
+                            {row.error && (
+                              <span className="mt-0.5 block break-all rounded bg-muted/60 px-1.5 py-0.5 font-mono-tab text-[10px] text-red-300/80">
+                                {row.error}
+                              </span>
+                            )}
+                          </div>
+                          {row.repair && !row.ok && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 shrink-0 px-2 text-[10px]"
+                              disabled={setupRunning}
+                              onClick={configurarTodo}
+                            >
+                              {setupRunning ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "Reparar"
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </section>
 

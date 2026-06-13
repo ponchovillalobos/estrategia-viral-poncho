@@ -3,8 +3,13 @@ import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { SFX_DIR } from "@/lib/paths";
+import { countFiles, fireRepair } from "@/lib/self-heal-assets";
 
 export const dynamic = "force-dynamic";
+
+// Self-heal: si la librería de SFX quedó por debajo del mínimo, re-descargar en
+// background sin bloquear el request.
+const SFX_MIN_FILES = 200;
 
 // CORS: el visualizador de audio de Remotion (useWindowedAudioData) lee el track
 // con fetch() desde el bundle del render (otro origen) — sin estos headers, el
@@ -46,7 +51,20 @@ export async function GET(req: NextRequest) {
       // sigue
     }
   }
-  if (!filePath) return new Response("not found", { status: 404, headers: CORS_HEADERS });
+  // Self-heal: contar la librería de SFX (recursivo sobre .../sfx). Si está corta,
+  // disparar repair en background; si no hay NADA que servir, 503 + repair.
+  const sfxCount = await countFiles(SFX_BASE, true);
+  if (sfxCount < SFX_MIN_FILES) fireRepair("sfx");
+  if (!filePath) {
+    if (sfxCount === 0) {
+      fireRepair("sfx");
+      return new Response(
+        JSON.stringify({ ok: false, error: "Esta librería se está re-descargando — intentá en 1-2 minutos" }),
+        { status: 503, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404, headers: CORS_HEADERS });
+  }
   try {
     const stat = await fs.stat(filePath);
     const ext = path.extname(file).toLowerCase();

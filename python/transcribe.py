@@ -32,8 +32,11 @@ from config import (
 # whisperx cae a otro decoder igual. No afecta la transcripción.
 import warnings
 
+warnings.filterwarnings(
+    "ignore", message=r".*torchcodec is not installed correctly.*", category=UserWarning
+)
 warnings.filterwarnings("ignore", module="pyannote.audio.core.io")
-warnings.filterwarnings("ignore", message=".*torchcodec.*")
+warnings.filterwarnings("ignore", message=r".*torchcodec.*", category=UserWarning)
 
 
 def extract_audio(video_path: Path, out_wav: Path) -> None:

@@ -3,8 +3,13 @@ import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { MUSIC_DIR } from "@/lib/paths";
+import { countFiles, fireRepair } from "@/lib/self-heal-assets";
 
 export const dynamic = "force-dynamic";
+
+// Self-heal: si la carpeta de música quedó por debajo del mínimo, re-descargar en
+// background. Sin bloquear el request: sirve lo que haya mientras se repara.
+const MUSIC_MIN_FILES = 50;
 
 // CORS: el visualizador de audio de Remotion (useWindowedAudioData) lee el track
 // con fetch() desde el bundle del render (otro origen) — sin estos headers, el
@@ -60,7 +65,21 @@ export async function GET(req: NextRequest) {
       // sin resultados
     }
   }
-  if (!filePath) return new Response("not found", { status: 404, headers: CORS_HEADERS });
+  // Self-heal: contar la librería (recursivo). Si está corta, disparar repair en
+  // background. Si NO hay nada que servir (archivo no resuelto Y carpeta vacía),
+  // 503 + repair; si hay algo, seguimos sirviendo mientras se re-descarga.
+  const musicCount = await countFiles(MUSIC_DIR, true);
+  if (musicCount < MUSIC_MIN_FILES) fireRepair("music");
+  if (!filePath) {
+    if (musicCount === 0) {
+      fireRepair("music");
+      return new Response(
+        JSON.stringify({ ok: false, error: "Esta librería se está re-descargando — intentá en 1-2 minutos" }),
+        { status: 503, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404, headers: CORS_HEADERS });
+  }
   try {
     const stat = await fs.stat(filePath);
     const ext = path.extname(file).toLowerCase();
