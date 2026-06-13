@@ -506,6 +506,12 @@ def main() -> int:
     used_fallback = False
     if not valid_clips:
         print(
+            "[analyze_clips] OLLAMA NO DISPONIBLE o sin clips válidos; usando modo "
+            "heurístico — los resultados serán de menor calidad",
+            file=sys.stderr,
+            flush=True,
+        )
+        print(
             "[fallback] LLM no produjo clips válidos — generando "
             "clips heurísticos (~45s uniformes) para que el pipeline continúe",
             file=sys.stderr,

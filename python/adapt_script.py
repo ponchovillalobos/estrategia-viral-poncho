@@ -367,6 +367,12 @@ def call_llm_adapt(transcript_text: str, provider: str, model: str | None) -> di
     else:
         # Ollama fallback — usar el call_ollama original con nuestro prompt
         # Hack: passing transcript_text as if it were transcript words
+        print(
+            "[adapt_script] OLLAMA es el proveedor de fallback (sin Claude/Codex CLI); "
+            "usando modo heurístico/local — los resultados serán de menor calidad",
+            file=sys.stderr,
+            flush=True,
+        )
         return call_ollama(transcript_text, video_id="adapt", model=model or "qwen3:1.7b")
 
 

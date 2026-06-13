@@ -47,6 +47,12 @@ RENDERS_DIR = DATA_ROOT / "renders"
 PROJECTS_DIR = DATA_ROOT / "projects"
 ASSETS_BROLL = DATA_ROOT / "assets" / "broll"
 ASSETS_MUSIC = DATA_ROOT / "assets" / "music"
+# Carpetas de assets que las APIs/scripts esperan pero ensure_dirs() no creaba →
+# paneles vacíos o error al primer uso si la descarga nunca corrió (audit B2).
+ASSETS_SFX = DATA_ROOT / "assets" / "sfx"
+ASSETS_LOTTIE = DATA_ROOT / "assets" / "lottie" / "noto"
+ASSETS_ICONS = DATA_ROOT / "assets" / "icons"
+ASSETS_OVERLAYS = DATA_ROOT / "assets" / "overlays"
 
 LONG_FORM_ROOT = DATA_ROOT / "long_form"
 LF_ROOT = LONG_FORM_ROOT  # alias: varios scripts importan LF_ROOT
@@ -117,7 +123,10 @@ SILENCE_PAD_MS = int(os.environ.get("VIRAL_SILENCE_PAD_MS", "100"))
 
 
 def ensure_dirs() -> None:
-    for d in [RAW_DIR, TRANSCRIPTS_DIR, CUTS_DIR, RENDERS_DIR, PROJECTS_DIR, ASSETS_BROLL, ASSETS_MUSIC]:
+    for d in [
+        RAW_DIR, TRANSCRIPTS_DIR, CUTS_DIR, RENDERS_DIR, PROJECTS_DIR,
+        ASSETS_BROLL, ASSETS_MUSIC, ASSETS_SFX, ASSETS_LOTTIE, ASSETS_ICONS, ASSETS_OVERLAYS,
+    ]:
         d.mkdir(parents=True, exist_ok=True)
 
 

@@ -25,21 +25,39 @@ export async function GET(req: NextRequest) {
   if (!file || file.includes("..") || file.includes("/") || file.includes("\\")) {
     return new Response("bad request", { status: 400 });
   }
-  // Priorizar subcarpetas de proveedor (pixabay/freesound/github) sobre MUSIC_DIR raíz
-  const candidates = [
+  // Resolver el archivo de forma RECURSIVA: puede estar en MUSIC_DIR raíz o en
+  // cualquier subcarpeta de proveedor (pixabay/freesound/github/...). Primero el
+  // caso rápido (raíz + subcarpetas conocidas); si falla, búsqueda recursiva por
+  // nombre de archivo en todo el árbol de MUSIC_DIR.
+  let filePath: string | null = null;
+  const fast = [
+    path.join(MUSIC_DIR, file),
     path.join(MUSIC_DIR, "pixabay", file),
     path.join(MUSIC_DIR, "freesound", file),
     path.join(MUSIC_DIR, "github", file),
-    path.join(MUSIC_DIR, file),
   ];
-  let filePath: string | null = null;
-  for (const c of candidates) {
+  for (const c of fast) {
     try {
       await fs.stat(c);
       filePath = c;
       break;
     } catch {
       // sigue
+    }
+  }
+  if (!filePath) {
+    try {
+      const entries = await fs.readdir(MUSIC_DIR, { withFileTypes: true, recursive: true });
+      for (const entry of entries) {
+        if (!entry.isFile() || entry.name !== file) continue;
+        const parent = (entry as unknown as { parentPath?: string; path?: string }).parentPath
+          ?? (entry as unknown as { path?: string }).path
+          ?? MUSIC_DIR;
+        filePath = path.join(parent, entry.name);
+        break;
+      }
+    } catch {
+      // sin resultados
     }
   }
   if (!filePath) return new Response("not found", { status: 404, headers: CORS_HEADERS });

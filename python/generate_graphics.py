@@ -1248,7 +1248,12 @@ def _enrich_cards_llm(cards: list[dict], words: list[dict]) -> list[dict]:
         # Probe corto: si Ollama no está levantado, fallback inmediato (no
         # esperamos el timeout largo de generación).
         if not _ollama_alive():
-            print("[editorial] Ollama no disponible — tarjetas heurísticas", file=sys.stderr)
+            print(
+                "[generate_graphics] OLLAMA NO DISPONIBLE; usando modo heurístico "
+                "(tarjetas sin reescritura) — los resultados serán de menor calidad",
+                file=sys.stderr,
+                flush=True,
+            )
             return cards
         # Pull-quotes EXCLUIDAS: la cita es textual (palabra por palabra con
         # timestamps), reescribirla rompería el sync y la honestidad de la cita.

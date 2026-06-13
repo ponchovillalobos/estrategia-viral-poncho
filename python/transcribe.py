@@ -27,6 +27,14 @@ from config import (
     ensure_dirs,
 )
 
+# Silencia ~15 líneas de ruido cosmético al importar whisperx: torchcodec no
+# carga (libtorchcodec_coreN.dll) porque el ffmpeg bundleado es estático, y
+# whisperx cae a otro decoder igual. No afecta la transcripción.
+import warnings
+
+warnings.filterwarnings("ignore", module="pyannote.audio.core.io")
+warnings.filterwarnings("ignore", message=".*torchcodec.*")
+
 
 def extract_audio(video_path: Path, out_wav: Path) -> None:
     """Extrae pista de audio a WAV mono 16kHz (formato preferido por Whisper).

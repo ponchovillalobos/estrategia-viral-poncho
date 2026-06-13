@@ -209,8 +209,54 @@ export async function GET(req: NextRequest) {
       : "Opcional: si quieres el modo inteligente de videos largos, la app te guía para activarla. Todo lo demás funciona sin ella.",
   });
 
+  // 8. Bibliotecas de assets (música, SFX, Lottie, iconos) — TODAS informativas:
+  // su ausencia jamás bloquea ni marca la instalación como rota (critical:false).
+  // Se descargan con «Configurar todo» en Mi sistema; no vienen en el paquete base.
+  function countFiles(dir: string, exts: string[], recursive: boolean): number {
+    if (!existsSync(dir)) return 0;
+    let total = 0;
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return 0;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (recursive) total += countFiles(full, exts, recursive);
+      } else if (exts.some((ext) => entry.name.toLowerCase().endsWith(ext))) {
+        total++;
+      }
+    }
+    return total;
+  }
+
+  const assetsRoot = path.join(DATA_ROOT, "assets");
+  const assetChecks: Array<{ id: string; label: string; dir: string; exts: string[]; recursive: boolean }> = [
+    // música: *.mp3 bajo assets/music (recursivo, incluye subcarpeta github)
+    { id: "assets-music", label: "Biblioteca de música", dir: path.join(assetsRoot, "music"), exts: [".mp3"], recursive: true },
+    // sfx: archivos de audio bajo assets/sfx (recursivo)
+    { id: "assets-sfx", label: "Biblioteca de efectos de sonido", dir: path.join(assetsRoot, "sfx"), exts: [".mp3", ".wav", ".ogg", ".m4a", ".flac", ".aac"], recursive: true },
+    // lottie: *.json bajo assets/lottie/noto
+    { id: "assets-lottie", label: "Biblioteca de animaciones (Lottie)", dir: path.join(assetsRoot, "lottie", "noto"), exts: [".json"], recursive: false },
+    // icons: *.svg bajo assets/icons (recursivo)
+    { id: "assets-icons", label: "Biblioteca de iconos", dir: path.join(assetsRoot, "icons"), exts: [".svg"], recursive: true },
+  ];
+  for (const a of assetChecks) {
+    const count = countFiles(a.dir, a.exts, a.recursive);
+    checks.push({
+      id: a.id,
+      label: a.label,
+      ok: count > 0,
+      critical: false,
+      detail: `${count} archivos`,
+      fix: count > 0 ? undefined : "Toca «Configurar todo» en Mi sistema para descargarlos.",
+    });
+  }
+
   const critical = checks.filter(
-    (c) => c.id !== "whisper-model" && c.id !== "python-imports" && c.id !== "ollama"
+    (c) => c.critical && c.id !== "whisper-model" && c.id !== "python-imports" && c.id !== "ollama"
   );
   return NextResponse.json({
     ok: critical.every((c) => c.ok),

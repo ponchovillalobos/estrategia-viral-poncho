@@ -107,14 +107,22 @@ def main() -> int:
     # 2) MEJORAS — no abortan el setup si fallan (la app funciona sin ellas).
     _run("fuentes tipográficas", ["download_fonts.py"])
     _run("iconos editoriales", ["download_editorial_icons.py"])
-    _run("ilustraciones animadas", ["download_animated_icons.py", "--all"])
+    # Ilustraciones animadas: hay DOS sets y NO son acumulativos. Sin --all baja el
+    # set CURADO por concepto (noto/*.json: money, rocket, fire…) que es lo que el
+    # render busca en ASSETS_LOTTIE; con --all baja el CATÁLOGO completo (noto/catalog).
+    # Corremos ambos para tener los curados Y el catálogo (audit I1 / hallazgo E).
+    _run("ilustraciones animadas (curadas)", ["download_animated_icons.py"])
+    _run("ilustraciones animadas (catálogo)", ["download_animated_icons.py", "--all"])
+    # Música: el out-dir DEBE terminar en \github — así los mp3 caen donde los
+    # scanners de runtime (pickRandomMusicTrack, /api/music/stream) los buscan, y el
+    # manifest queda en assets/music/manifest_music_library.json (hallazgo E).
     _run(
         "biblioteca de música",
-        ["download_music_library.py", "download", "--out-dir", str(ASSETS_MUSIC), "--chosic", "30"],
+        ["download_music_library.py", "download", "--out-dir", str(ASSETS_MUSIC / "github"), "--chosic", "30"],
     )
     _run(
         "efectos de sonido",
-        ["download_sfx_library.py", "download", "--out-dir", str(ASSETS_SFX)],
+        ["download_sfx_library.py", "download", "--out-dir", str(ASSETS_SFX / "github")],
     )
 
     # 3) SEGÚN EL EQUIPO — si hay GPU NVIDIA, baja la aceleración (torch CUDA).

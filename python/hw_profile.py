@@ -118,8 +118,10 @@ def detect(force: bool = False) -> dict:
     try:
         _CACHE.parent.mkdir(parents=True, exist_ok=True)
         _CACHE.write_text(json.dumps(prof, indent=2), encoding="utf-8")
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as e:  # noqa: BLE001
+        # Visible en stderr: si no cachea, cada proceso re-detecta (~1-2s extra) y
+        # conviene saber por qué (audit B3).
+        print(f"[hw_profile] no se pudo cachear el perfil: {e}", file=sys.stderr)
     _profile = prof
     return prof
 
