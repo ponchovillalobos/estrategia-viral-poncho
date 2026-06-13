@@ -36,6 +36,9 @@ import { toast } from "sonner";
 // ── Shape de GET /api/doctor/diagnose (T3) ──────────────────────────────────────
 interface CheckOk {
   ok: boolean;
+  /** Solo ffmpeg/ffprobe/python: true = el binario EXISTE en disco. Distingue
+   *  "falta → reinstalar" de "está pero no respondió → transitorio". */
+  present?: boolean;
 }
 interface AssetsChecks {
   music: CheckOk;
@@ -92,8 +95,13 @@ const REVALIDATE_MS = 10 * 60 * 1000; // 10 minutos
 function classify(d: Diagnose): "ok" | "repairable" | "fatal" {
   if (d.ok) return "ok";
   const c = d.checks;
-  // Núcleo del sistema: si algo de esto está roto, no hay descarga que lo arregle.
-  if (!c.dataRoot.ok || !c.ffmpeg.ok || !c.ffprobe.ok || !c.python.ok) {
+  // FATAL solo si de verdad FALTA un binario del sistema (present===false) o la
+  // carpeta de datos no se puede escribir. Si ffmpeg/python EXISTEN pero `-version`
+  // falló (entorno enfermo, antivirus, DLL transitoria), NO encerramos al usuario en
+  // "reinstala": es reparable/transitorio. Evita el falso "Necesitas reinstalar" en
+  // una PC sana (riesgo de reembolso detectado en QA).
+  const falta = (chk: CheckOk) => chk.present === false;
+  if (!c.dataRoot.ok || falta(c.ffmpeg) || falta(c.ffprobe) || falta(c.python)) {
     return "fatal";
   }
   return "repairable";

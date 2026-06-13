@@ -1,21 +1,27 @@
 /**
- * GET /api/sfx/list — lista SFX disponibles en SFX_DIR.
+ * GET /api/sfx/list — lista SFX disponibles bajo assets/sfx.
  *
  * COMBINA `manifest.json` (si existe, generado por python/synth_sfx.py — aporta
- * `category`) CON un scan recursivo de los archivos reales bajo assets/sfx
- * (curated/, github/, pixabay/). Dedup por nombre de archivo: el manifest gana en
- * metadata, el scan agrega cualquier SFX real que el manifest no liste (p.ej. los
- * descargados a /github después de generar el manifest).
+ * `category`) CON el ÍNDICE CACHEADO de SFX (frontend/src/lib/sfx-index.ts), que
+ * escanea assets/sfx UNA vez (recursivo, podando `.git`/ocultos y junk `._*`) y se
+ * cachea con TTL. ANTES esta ruta hacía un scan recursivo de ~4992 archivos EN CADA
+ * REQUEST (incluido el `.git` de la PC de dev) → se colgaba 40-90s.
+ *
+ * Dedup por RUTA RELATIVA ÚNICA (no por basename): hay colisiones de nombre entre
+ * packs. La `url` que se emite para cada efecto es exactamente la que
+ * /api/sfx/stream sabe resolver (consistencia list↔stream, igual que music).
  */
 import { NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { SFX_DIR } from "@/lib/paths";
+import { getSfxIndex } from "@/lib/sfx-index";
 
 export const dynamic = "force-dynamic";
 
 interface SfxEntry {
   name: string;
+  /** Ruta relativa única (POSIX) — clave de dedup y param del stream. */
   filename: string;
   category?: string;
   sizeBytes?: number;
@@ -26,13 +32,7 @@ export async function GET() {
   try {
     await fs.mkdir(SFX_DIR, { recursive: true });
 
-    // Carpetas a escanear (priority orden): github > curated > pixabay
-    // github tiene los 67 SFX reales descargados de rse/soundfx (CC0/CC-BY)
-    // curated tiene los 28 sintéticos como fallback
-    const GITHUB_DIR = path.join(SFX_DIR, "github");
-    await fs.mkdir(GITHUB_DIR, { recursive: true });
-
-    // Intentar leer manifest.json (más rico: incluye category)
+    // Intentar leer manifest.json (más rico: incluye category y sizeBytes).
     let manifest: { name: string; category: string; sizeBytes: number }[] | null = null;
     try {
       const raw = await fs.readFile(path.join(SFX_DIR, "manifest.json"), "utf-8");
@@ -41,56 +41,44 @@ export async function GET() {
       manifest = null;
     }
 
-    // La lista COMBINA dos fuentes (dedup por nombre de archivo):
+    // La lista COMBINA dos fuentes, deduplicando por RUTA RELATIVA ÚNICA:
     //   1. manifest.json (si existe): más rico, trae `category` y `sizeBytes`.
-    //   2. scan RECURSIVO de archivos reales bajo .../assets/sfx/.
-    // ANTES el branch del manifest hacía `return` temprano y TAPABA el scan: si
-    // el manifest existía pero NO listaba los SFX de /github (descargados luego),
-    // esos archivos reales no aparecían en la lista. Ahora el manifest siembra el
-    // mapa primero (gana en metadata) y el scan AGREGA todo archivo real que el
-    // manifest no incluya. El stream resuelve por nombre de archivo, así que la
-    // clave de dedup es el filename.
-    const byFilename = new Map<string, SfxEntry>();
+    //      Sus `name` son basenames de SFX curated → su ruta relativa es
+    //      "curated/<name>" (SFX_DIR = .../assets/sfx/curated).
+    //   2. el ÍNDICE CACHEADO: todo audio real bajo assets/sfx (recursivo).
+    // El manifest siembra el mapa primero (gana en metadata); el índice AGREGA todo
+    // archivo real que el manifest no incluya. El stream resuelve por la misma clave.
+    const byRel = new Map<string, SfxEntry>();
 
     if (manifest && Array.isArray(manifest)) {
       for (const m of manifest) {
         if (!m || !m.name) continue;
-        byFilename.set(m.name, {
+        const rel = `curated/${m.name}`;
+        byRel.set(rel, {
           name: path.basename(m.name, path.extname(m.name)).replace(/[_-]/g, " "),
-          filename: m.name,
+          filename: rel,
           category: m.category,
           sizeBytes: m.sizeBytes,
-          url: `/api/sfx/stream?file=${encodeURIComponent(m.name)}`,
+          url: `/api/sfx/stream?file=${encodeURIComponent(rel)}`,
         });
       }
     }
 
-    // Escanear de forma RECURSIVA desde la RAÍZ de sfx (no SFX_DIR).
-    // SFX_DIR apunta a .../assets/sfx/curated, pero los SFX descargados caen en
-    // carpetas HERMANAS: .../assets/sfx/github/*.ogg, .../assets/sfx/pixabay/...
-    // (igual que resuelve sfx/stream con SFX_BASE = dirname(SFX_DIR)). Escanear
-    // solo SFX_DIR o su nivel raíz dejaría esos archivos invisibles.
-    // withFileTypes + recursive recorre curated/, github/, pixabay/ y la raíz.
-    const SFX_BASE = path.dirname(SFX_DIR); // .../assets/sfx/
-    let entries: import("node:fs").Dirent[] = [];
-    try {
-      entries = await fs.readdir(SFX_BASE, { withFileTypes: true, recursive: true });
-    } catch {
-      entries = [];
-    }
-    for (const e of entries) {
-      if (!e.isFile() || !/\.(mp3|wav|m4a|ogg)$/i.test(e.name)) continue;
-      // El manifest ya lo cubre (con mejor metadata) → no lo pisamos.
-      if (byFilename.has(e.name)) continue;
-      byFilename.set(e.name, {
-        name: path.basename(e.name, path.extname(e.name)).replace(/[_-]/g, " "),
-        filename: e.name,
-        category: e.name.split("-")[0] || "other",
-        url: `/api/sfx/stream?file=${encodeURIComponent(e.name)}`,
+    const idx = await getSfxIndex();
+    for (const entry of idx.byRel.values()) {
+      if (byRel.has(entry.relPath)) continue; // el manifest ya lo cubre con mejor metadata
+      // Categoría heurística: primer segmento de carpeta (pack/proveedor) o prefijo.
+      const segs = entry.relPath.split("/");
+      const category = segs.length > 1 ? segs[0] : entry.filename.split(/[-_]/)[0] || "other";
+      byRel.set(entry.relPath, {
+        name: path.basename(entry.filename, path.extname(entry.filename)).replace(/[_-]/g, " "),
+        filename: entry.relPath,
+        category,
+        url: `/api/sfx/stream?file=${encodeURIComponent(entry.relPath)}`,
       });
     }
 
-    const sfx: SfxEntry[] = [...byFilename.values()].sort((a, b) =>
+    const sfx: SfxEntry[] = [...byRel.values()].sort((a, b) =>
       a.filename.localeCompare(b.filename)
     );
     const source = manifest && Array.isArray(manifest) ? "manifest+scan" : "scan";

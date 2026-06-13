@@ -19,13 +19,17 @@ interface Props {
 
 export function MusicPicker({ selected, volume, onSelect, onVolumeChange }: Props) {
   const [tracks, setTracks] = useState<MusicTrack[]>([]);
+  const [musicDir, setMusicDir] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     fetch("/api/music/list")
       .then((r) => r.json())
-      .then((d) => setTracks(d.tracks ?? []))
+      .then((d) => {
+        setTracks(d.tracks ?? []);
+        setMusicDir(typeof d.dir === "string" ? d.dir : null);
+      })
       .catch(() => setTracks([]));
   }, []);
 
@@ -67,7 +71,11 @@ export function MusicPicker({ selected, volume, onSelect, onVolumeChange }: Prop
         {tracks.length === 0 ? (
           <div className="rounded-md border border-dashed border-border bg-card/50 p-4 text-xs text-muted-foreground">
             Sin tracks. Pega MP3 en{" "}
-            <span className="font-mono-tab">C:\viral-data\videos\assets\music\</span>
+            {musicDir ? (
+              <span className="font-mono-tab">{musicDir}</span>
+            ) : (
+              <span className="font-mono-tab">la carpeta assets\music de tus datos</span>
+            )}
           </div>
         ) : (
           <ul className="space-y-1.5">

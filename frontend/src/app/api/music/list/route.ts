@@ -44,7 +44,9 @@ export async function GET() {
               : "curated",
       });
     }
-    return NextResponse.json({ tracks, count: tracks.length });
+    // `dir`: ruta REAL de la carpeta de música (derivada de DATA_ROOT), para que la
+    // UI muestre dónde pegar MP3 sin hardcodear la marca vieja `C:\viral-data\...`.
+    return NextResponse.json({ tracks, count: tracks.length, dir: MUSIC_DIR });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },

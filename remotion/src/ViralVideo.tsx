@@ -9,16 +9,8 @@ import {
   interpolate,
 } from "remotion";
 import { z } from "zod";
-import { loadFont as loadBebas } from "@remotion/google-fonts/BebasNeue";
-import { loadFont as loadAnton } from "@remotion/google-fonts/Anton";
-import { loadFont as loadMontserrat } from "@remotion/google-fonts/Montserrat";
-import { loadFont as loadPoppins } from "@remotion/google-fonts/Poppins";
-import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
-import { loadFont as loadBangers } from "@remotion/google-fonts/Bangers";
-import { loadFont as loadLuckiest } from "@remotion/google-fonts/LuckiestGuy";
-import { loadFont as loadArchivo } from "@remotion/google-fonts/ArchivoBlack";
-import { loadFont as loadTeko } from "@remotion/google-fonts/Teko";
-import { loadFont as loadRighteous } from "@remotion/google-fonts/Righteous";
+import { staticFile } from "remotion";
+import { loadFont } from "@remotion/fonts";
 import { CameraMotionBlur } from "@remotion/motion-blur";
 import {
   ImageOverlayLayer,
@@ -68,22 +60,69 @@ import {
 } from "./layers/editorial-texture";
 import { resolveEditorialLook, isDarkCanvas, duotonePairFor } from "./layers/editorial-themes";
 
-const { fontFamily: BEBAS } = loadBebas();
-const { fontFamily: ANTON } = loadAnton();
+// FUENTES DE TITULAR — bundle LOCAL (cero red en render). Antes se bajaban de
+// fonts.gstatic.com vía @remotion/google-fonts en CADA render: la app es un
+// editor OFFLINE, así que sin internet los títulos fallaban o caían a la fuente
+// del sistema. Ahora los .ttf viven en remotion/public/fonts (OFL/Apache, libres
+// para uso comercial) y se cargan con @remotion/fonts + staticFile.
+//
+// Los `family` deben coincidir EXACTO con el string que devolvía google-fonts
+// (es el mismo nombre CSS) para no cambiar la apariencia: FONT_MAP/BEBAS/ANTON
+// y los fontFamily de los estilos siguen siendo idénticos.
+const TTF = (
+  file: string,
+  family: string,
+  weight?: string
+): void => {
+  loadFont({
+    family,
+    url: staticFile(`fonts/${file}`),
+    format: "truetype",
+    ...(weight ? { weight } : {}),
+  }).catch(() => {
+    // Offline-first: si algo falla, el navegador cae a la fuente del sistema en
+    // vez de tirar el render. No debería pasar — los .ttf están bundleados.
+  });
+};
 
-// Más fuentes para variedad de subtítulos (todas Google Fonts, gratis). El proyecto
-// elige una vía `subtitleFont`; "auto" usa la del estilo (bebas/anton).
+const BEBAS = "Bebas Neue";
+const ANTON = "Anton";
+
+// Display de un solo peso (400) — un .ttf cada una.
+TTF("BebasNeue-Regular.ttf", BEBAS);
+TTF("Anton-Regular.ttf", ANTON);
+TTF("Bangers-Regular.ttf", "Bangers");
+TTF("LuckiestGuy-Regular.ttf", "Luckiest Guy");
+TTF("ArchivoBlack-Regular.ttf", "Archivo Black");
+TTF("Righteous-Regular.ttf", "Righteous");
+
+// Fuentes variables [wght] — UN .ttf cubre todos los pesos (igual que el
+// loadFont() sin args de antes, que bajaba toda la familia).
+TTF("Montserrat-var.ttf", "Montserrat");
+TTF("Oswald-var.ttf", "Oswald");
+TTF("Teko-var.ttf", "Teko");
+
+// Poppins es estática por peso en el repo de Google Fonts: se registran los
+// pesos que el editor usa bajo el MISMO family ("Poppins").
+TTF("Poppins-Regular.ttf", "Poppins", "400");
+TTF("Poppins-SemiBold.ttf", "Poppins", "600");
+TTF("Poppins-Bold.ttf", "Poppins", "700");
+TTF("Poppins-ExtraBold.ttf", "Poppins", "800");
+TTF("Poppins-Black.ttf", "Poppins", "900");
+
+// Más fuentes para variedad de subtítulos (todas locales/OFL, gratis). El
+// proyecto elige una vía `subtitleFont`; "auto" usa la del estilo (bebas/anton).
 const FONT_MAP: Record<string, string> = {
   bebas: BEBAS,
   anton: ANTON,
-  montserrat: loadMontserrat().fontFamily,
-  poppins: loadPoppins().fontFamily,
-  oswald: loadOswald().fontFamily,
-  bangers: loadBangers().fontFamily,
-  luckiest: loadLuckiest().fontFamily,
-  archivo: loadArchivo().fontFamily,
-  teko: loadTeko().fontFamily,
-  righteous: loadRighteous().fontFamily,
+  montserrat: "Montserrat",
+  poppins: "Poppins",
+  oswald: "Oswald",
+  bangers: "Bangers",
+  luckiest: "Luckiest Guy",
+  archivo: "Archivo Black",
+  teko: "Teko",
+  righteous: "Righteous",
 };
 
 import {

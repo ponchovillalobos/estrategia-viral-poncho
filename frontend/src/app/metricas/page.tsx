@@ -6,6 +6,7 @@ import { MetricsInsights } from "@/components/metricas/metrics-insights";
 import { LinkedInSyncButton } from "@/components/metricas/linkedin-sync-button";
 import { SectionHeader } from "@/components/ui/section-header";
 import { SECTION_COLORS } from "@/lib/section-colors";
+import { PUBLISHING_ENABLED } from "@/lib/app-mode";
 
 export default function MetricasPage() {
   return (
@@ -23,7 +24,9 @@ export default function MetricasPage() {
         description="Anota aquí cómo le fue a cada video que publicaste (vistas, likes, comentarios). Con eso el sistema aprende qué hooks y descripciones te funcionan mejor. Si publicaste en LinkedIn desde la app, el botón «Sincronizar LinkedIn» trae los números solo."
         color={SECTION_COLORS.metricas}
       >
-        <LinkedInSyncButton />
+        {/* La build vendida lleva la publicación apagada (PUBLISHING_ENABLED=false):
+            sin esto, el botón «Sincronizar LinkedIn» aparece pero no hace nada. */}
+        {PUBLISHING_ENABLED && <LinkedInSyncButton />}
       </SectionHeader>
 
       {/* Las instrucciones van PRIMERO: sin saber de dónde copiar los números,

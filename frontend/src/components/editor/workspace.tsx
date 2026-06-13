@@ -408,7 +408,7 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
             </TabsContent>
 
             <TabsContent value="export" className="mt-4">
-              <ExportPanel project={project} />
+              <ExportPanel project={project} videoDurationSec={videoDuration} />
             </TabsContent>
           </Tabs>
         </Card>

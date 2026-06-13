@@ -2,8 +2,8 @@ import { NextRequest } from "next/server";
 import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { SFX_DIR } from "@/lib/paths";
-import { countFiles, fireRepair } from "@/lib/self-heal-assets";
+import { getSfxIndex, resolveSfx } from "@/lib/sfx-index";
+import { fireRepair } from "@/lib/self-heal-assets";
 
 export const dynamic = "force-dynamic";
 
@@ -27,33 +27,25 @@ export async function OPTIONS() {
 
 export async function GET(req: NextRequest) {
   const file = req.nextUrl.searchParams.get("file");
-  if (!file || file.includes("..") || file.includes("/") || file.includes("\\")) {
+  // Aceptamos RUTAS RELATIVAS (ej. "github/pop.ogg" o "source/<pack>/x.wav") porque
+  // muchos SFX viven anidados y list↔stream se comunican por ruta relativa única.
+  // Sólo bloqueamos traversal (".."): el índice resuelve dentro de assets/sfx, así
+  // que no hay forma de escaparse de la carpeta aunque el path tenga subcarpetas.
+  if (!file || file.includes("..")) {
     return new Response("bad request", { status: 400 });
   }
-  // Buscar el archivo en 3 carpetas hermanas:
-  //   .../sfx/github/  → 67 SFX reales descargados de rse/soundfx (CC0/CC-BY)
-  //   .../sfx/pixabay/ → si el user descarga del pack Pixabay
-  //   .../sfx/curated/ → 28 SFX sintéticos legacy (SFX_DIR apunta aquí)
-  const SFX_BASE = path.dirname(SFX_DIR); // .../sfx/
-  const candidates = [
-    path.join(SFX_BASE, "github", file),
-    path.join(SFX_BASE, "pixabay", file),
-    path.join(SFX_DIR, file),
-    path.join(SFX_BASE, file), // fallback raíz
-  ];
-  let filePath: string | null = null;
-  for (const c of candidates) {
-    try {
-      await fs.stat(c);
-      filePath = c;
-      break;
-    } catch {
-      // sigue
-    }
-  }
-  // Self-heal: contar la librería de SFX (recursivo sobre .../sfx). Si está corta,
-  // disparar repair en background; si no hay NADA que servir, 503 + repair.
-  const sfxCount = await countFiles(SFX_BASE, true);
+
+  // Resolver via el ÍNDICE CACHEADO (frontend/src/lib/sfx-index.ts): match por ruta
+  // relativa exacta y, como fallback, por basename (refs del pipeline de render /
+  // SFX_POOL de templates, que usan nombres planos como "swoosh.wav"). El índice
+  // escanea assets/sfx UNA vez y se cachea con TTL — no re-escanea por request.
+  const filePath = await resolveSfx(file);
+
+  // Self-heal: el conteo viene del índice CACHEADO (no un readdir recursivo por
+  // request — eso es justo lo que colgaba el endpoint). Si está corto, repair en
+  // background; si no hay NADA que servir, 503 + repair.
+  const idx = await getSfxIndex();
+  const sfxCount = idx.count;
   if (sfxCount < SFX_MIN_FILES) fireRepair("sfx");
   if (!filePath) {
     if (sfxCount === 0) {
@@ -67,7 +59,7 @@ export async function GET(req: NextRequest) {
   }
   try {
     const stat = await fs.stat(filePath);
-    const ext = path.extname(file).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
     const types: Record<string, string> = {
       ".mp3": "audio/mpeg",
       ".wav": "audio/wav",

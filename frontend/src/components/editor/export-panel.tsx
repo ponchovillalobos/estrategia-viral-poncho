@@ -10,9 +10,12 @@ import type { Project } from "@/components/editor/workspace";
 
 interface Props {
   project: Project;
+  /** Duración real del video (segundos), del <video> en workspace. Antes estaba
+   *  hardcodeada en 30 → cualquier video >30s se truncaba al exportar. */
+  videoDurationSec?: number;
 }
 
-export function ExportPanel({ project }: Props) {
+export function ExportPanel({ project, videoDurationSec }: Props) {
   const [rendering, setRendering] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
   const [quality, setQuality] = useState<"preview" | "final">("preview");
@@ -22,7 +25,10 @@ export function ExportPanel({ project }: Props) {
     setOutput(null);
     try {
       const props = {
-        videoDurationSec: 30,
+        // Duración real del video. Fallback a 30s solo si los metadatos aún no
+        // cargaron (videoDurationSec llega en 0): mejor un default que truncar a 0.
+        videoDurationSec:
+          videoDurationSec && videoDurationSec > 0 ? videoDurationSec : 30,
         words: project.manualSubtitles,
         bRoll: project.bRoll,
         // URL RELATIVA a propósito: la app instalada corre en un puerto 3100+,

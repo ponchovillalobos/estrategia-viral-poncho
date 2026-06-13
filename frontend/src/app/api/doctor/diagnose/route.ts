@@ -159,9 +159,13 @@ async function checkDataRoot() {
 }
 
 async function checkFfmpeg() {
+  // `present` = el binario EXISTE en disco (existsSync). Se reporta aparte de `ok`
+  // (que exige que `-version` corra) para que el gate distinga "falta el binario →
+  // reinstalar" de "está pero no respondió → transitorio/ambiental, NO encerrar".
+  const present = existsSync(FFMPEG_EXE);
   try {
-    if (!existsSync(FFMPEG_EXE)) {
-      return { ok: false, path: FFMPEG_EXE, version: null, nvenc: false, error: "ffmpeg no encontrado" };
+    if (!present) {
+      return { ok: false, present: false, path: FFMPEG_EXE, version: null, nvenc: false, error: "ffmpeg no encontrado" };
     }
     const [ver, enc] = await Promise.all([
       spawnExe(FFMPEG_EXE, ["-version"], 5000),
@@ -173,43 +177,46 @@ async function checkFfmpeg() {
     const nvenc = enc.ok && /h264_nvenc/.test(enc.stdout);
     return {
       ok: ver.ok,
+      present: true,
       path: FFMPEG_EXE,
       version,
       nvenc,
       ...(ver.ok ? {} : { error: ver.stderr.slice(-300) || "ffmpeg -version falló" }),
     };
   } catch (e) {
-    return { ok: false, path: FFMPEG_EXE, version: null, nvenc: false, error: String(e) };
+    return { ok: false, present, path: FFMPEG_EXE, version: null, nvenc: false, error: String(e) };
   }
 }
 
 async function checkFfprobe() {
+  const present = existsSync(FFPROBE_EXE);
   try {
-    if (!existsSync(FFPROBE_EXE)) {
-      return { ok: false, path: FFPROBE_EXE, error: "ffprobe no encontrado" };
+    if (!present) {
+      return { ok: false, present: false, path: FFPROBE_EXE, error: "ffprobe no encontrado" };
     }
     const r = await spawnExe(FFPROBE_EXE, ["-version"], 5000);
     return r.ok
-      ? { ok: true, path: FFPROBE_EXE }
-      : { ok: false, path: FFPROBE_EXE, error: r.stderr.slice(-300) || "ffprobe -version falló" };
+      ? { ok: true, present: true, path: FFPROBE_EXE }
+      : { ok: false, present: true, path: FFPROBE_EXE, error: r.stderr.slice(-300) || "ffprobe -version falló" };
   } catch (e) {
-    return { ok: false, path: FFPROBE_EXE, error: String(e) };
+    return { ok: false, present, path: FFPROBE_EXE, error: String(e) };
   }
 }
 
 async function checkPython() {
+  const present = existsSync(PYTHON_EXE);
   try {
-    if (!existsSync(PYTHON_EXE)) {
-      return { ok: false, version: null, error: "python no encontrado" };
+    if (!present) {
+      return { ok: false, present: false, version: null, error: "python no encontrado" };
     }
     const r = await spawnExe(PYTHON_EXE, ["--version"], 5000);
     const out = `${r.stdout}${r.stderr}`;
     const version = r.ok ? (out.match(/Python (\S+)/)?.[1] ?? null) : null;
     return r.ok
-      ? { ok: true, version }
-      : { ok: false, version: null, error: r.stderr.slice(-300) || "python --version falló" };
+      ? { ok: true, present: true, version }
+      : { ok: false, present: true, version: null, error: r.stderr.slice(-300) || "python --version falló" };
   } catch (e) {
-    return { ok: false, version: null, error: String(e) };
+    return { ok: false, present, version: null, error: String(e) };
   }
 }
 

@@ -119,7 +119,15 @@ export async function GET(req: NextRequest) {
         120_000
       );
       const ok = r.ok && r.stdout.includes("ok");
-      const detail = ok ? "todos los componentes presentes" : r.stderr.slice(-300);
+      // Si el import-test falla con stderr vacío (p.ej. el proceso muere sin escribir
+      // nada), el detail quedaba en "" y la UI decía "Componentes de IA rotos" sin
+      // explicar. runProcess NO expone el exit code (solo ok/stdout/stderr), así que
+      // como respaldo mostramos el final de stdout o un mensaje genérico accionable.
+      const detail = ok
+        ? "todos los componentes presentes"
+        : r.stderr.slice(-300) ||
+          r.stdout.slice(-300) ||
+          "el proceso de Python terminó sin mensaje (posible crash al importar torch/whisperx). Reinstala o corre bootstrap.ps1.";
       g.__doctorImports = { at: Date.now(), ok, detail };
       checks.push({
         id: "python-imports",
