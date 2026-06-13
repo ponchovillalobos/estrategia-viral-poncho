@@ -433,10 +433,11 @@ programa_ok:
   WriteRegStr HKLM "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\Desinstalar.exe" /S'
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
-  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
-  IntCmp $0 0 0 0 +2
-  StrCpy $0 3600000   ; fallback ~3.5 GB si no se pudo medir
-  WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" $0
+  ; EstimatedSize es solo un número informativo en Agregar/quitar programas.
+  ; Antes con ${GetSize} se ESCANEABAN los ~43k archivos al final de CADA
+  ; instalación (segundos perdidos sin beneficio). Valor fijo ~2.5 GB: instala
+  ; más rápido y el número sigue siendo correcto.
+  WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" 2600000
 
   !insertmacro Estado "FIN"   ; cierra el slideshow
   DetailPrint "¡Listo! ${APP_NAME} quedó instalado en $INSTDIR"
