@@ -117,6 +117,8 @@ Page custom PagChequeoCrear
 ; ----------------------------------------------------------------------------
 ; Variables de la página de chequeo
 ; ----------------------------------------------------------------------------
+Var IntentosDescarga   ; reintentos automaticos de la descarga del zip
+Var IntentosSums       ; reintentos automaticos del SHA256SUMS.txt
 Var Dialogo
 Var LblArch
 Var LblWin
@@ -295,9 +297,19 @@ descargar:
     /RESUME "Se interrumpió la descarga. ¿Reintentar desde donde quedó?" \
     "${ZIP_URL}" "$INSTDIR\${ZIP_NAME}" /END
   Pop $0
+  WriteINIStr "$INSTDIR\instalar-debug.ini" pasos descarga "$0"
   StrCmp $0 "OK" verificar
-  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "No se pudo descargar la app (motivo: $0).$\r$\n$\r$\nRevisa que tengas internet y vuelve a intentar." IDRETRY descargar
+  ; Reintento automático (hasta 3 intentos): los cortes de internet transitorios
+  ; no deben tumbar la instalación, sobre todo en modo silencioso.
+  IntOp $IntentosDescarga $IntentosDescarga + 1
+  IntCmp $IntentosDescarga 3 0 reintentar_descarga 0
+  ; /SD = respuesta por defecto en modo silencioso (sin ella, /S se cuelga esperando clic)
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "No se pudo descargar la app (motivo: $0).$\r$\n$\r$\nRevisa que tengas internet y vuelve a intentar." /SD IDCANCEL IDRETRY descargar
   Abort "Instalación cancelada: falló la descarga."
+reintentar_descarga:
+  DetailPrint "La descarga falló ($0); reintentando en 5 segundos (intento $IntentosDescarga de 3)..."
+  Sleep 5000
+  Goto descargar
 
   ; --------------------------------------------------------------------------
   ; 2) VERIFICACIÓN SHA256 contra el SHA256SUMS.txt del release
@@ -306,16 +318,30 @@ verificar:
   DetailPrint "Verificando que la descarga esté completa y sin alterar..."
   inetc::get /SILENT "${SUMS_URL}" "$PLUGINSDIR\SHA256SUMS.txt" /END
   Pop $0
-  StrCmp $0 "OK" +3
-  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "No se pudo descargar el archivo de verificación (SHA256SUMS.txt).$\r$\n$\r$\nRevisa tu internet y vuelve a intentar." IDRETRY verificar
+  WriteINIStr "$INSTDIR\instalar-debug.ini" pasos sums "$0"
+  StrCmp $0 "OK" verificar_hash
+  IntOp $IntentosSums $IntentosSums + 1
+  IntCmp $IntentosSums 3 0 reintentar_sums 0
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "No se pudo descargar el archivo de verificación (SHA256SUMS.txt).$\r$\n$\r$\nRevisa tu internet y vuelve a intentar." /SD IDCANCEL IDRETRY verificar
   Abort "Instalación cancelada: no se pudo verificar la descarga."
+reintentar_sums:
+  DetailPrint "No bajó el archivo de verificación ($0); reintentando en 5 segundos (intento $IntentosSums de 3)..."
+  Sleep 5000
+  Goto verificar
 
+verificar_hash:
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\instalar-helper.ps1" verificar "$INSTDIR\${ZIP_NAME}" "$PLUGINSDIR\SHA256SUMS.txt" "$INSTDIR"'
   Pop $0
+  WriteINIStr "$INSTDIR\instalar-debug.ini" pasos verificar "$0"
   StrCmp $0 "0" extraer
   Delete "$INSTDIR\${ZIP_NAME}"
-  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "La descarga llegó dañada o incompleta (la huella SHA256 no coincide).$\r$\n$\r$\nVamos a descargarla de nuevo." IDRETRY descargar
+  IntOp $IntentosDescarga $IntentosDescarga + 1
+  IntCmp $IntentosDescarga 3 0 redescargar_hash 0
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "La descarga llegó dañada o incompleta (la huella SHA256 no coincide).$\r$\n$\r$\nVamos a descargarla de nuevo." /SD IDCANCEL IDRETRY descargar
   Abort "Instalación cancelada: la descarga no pasó la verificación."
+redescargar_hash:
+  DetailPrint "La verificación no pasó (código $0); descargando de nuevo (intento $IntentosDescarga de 3)..."
+  Goto descargar
 
   ; --------------------------------------------------------------------------
   ; 3) EXTRACCIÓN (miles de archivos; muestra progreso en el detalle)
@@ -324,12 +350,13 @@ extraer:
   DetailPrint "Instalando archivos (son miles, puede tardar varios minutos)..."
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\instalar-helper.ps1" extraer "$INSTDIR\${ZIP_NAME}" "-" "$INSTDIR"'
   Pop $0
+  WriteINIStr "$INSTDIR\instalar-debug.ini" pasos extraer "$0"
   StrCmp $0 "0" +3
-  MessageBox MB_ICONSTOP|MB_OK "No se pudieron extraer los archivos (código $0).$\r$\n$\r$\nCierra otros programas, asegúrate de tener espacio libre y corre el instalador de nuevo."
+  MessageBox MB_ICONSTOP|MB_OK "No se pudieron extraer los archivos (código $0).$\r$\n$\r$\nCierra otros programas, asegúrate de tener espacio libre y corre el instalador de nuevo. El detalle del error está en el log de arriba." /SD IDOK
   Abort "Instalación cancelada: falló la extracción."
 
   IfFileExists "$INSTDIR\${APP_EXE}" +3 0
-  MessageBox MB_ICONSTOP|MB_OK "La extracción terminó pero falta el programa principal (${APP_EXE}).$\r$\n$\r$\nDescarga de nuevo el instalador y vuelve a intentar."
+  MessageBox MB_ICONSTOP|MB_OK "La extracción terminó pero falta el programa principal (${APP_EXE}).$\r$\n$\r$\nDescarga de nuevo el instalador y vuelve a intentar." /SD IDOK
   Abort "Instalación cancelada: instalación incompleta."
 
   Delete "$INSTDIR\${ZIP_NAME}"   ; el zip ya no hace falta (libera ~1 GB)

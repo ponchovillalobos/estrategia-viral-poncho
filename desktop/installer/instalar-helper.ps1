@@ -16,6 +16,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Cada mensaje va al log del instalador (stdout) Y a un archivo en la carpeta
+# de instalacion: en modo silencioso el log de NSIS no se ve, y este archivo
+# es la unica forma de diagnosticar que paso.
+$script:LogPath = Join-Path $Destino 'instalar-helper.log'
+function W([string]$m) {
+  Write-Output $m
+  try { Add-Content -LiteralPath $script:LogPath -Value ('[' + (Get-Date -Format 'HH:mm:ss') + "] $m") } catch {}
+}
+W "--- accion: $Accion ---"
+
 try {
   switch ($Accion) {
 
@@ -25,35 +35,76 @@ try {
         Where-Object { $_ -match [regex]::Escape($nombre) } |
         Select-Object -First 1
       if (-not $linea) {
-        Write-Output "No encontre la huella de $nombre en SHA256SUMS.txt"
+        W "No encontre la huella de $nombre en SHA256SUMS.txt"
         exit 2
       }
       $esperado = ($linea.Trim() -split '\s+')[0]
-      Write-Output 'Calculando huella SHA256 de la descarga (tarda un momento)...'
+      W 'Calculando huella SHA256 de la descarga (tarda un momento)...'
       $real = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash
       if ($real -eq $esperado) {
-        Write-Output 'Integridad verificada: la descarga esta completa y sin alterar.'
+        W 'Integridad verificada: la descarga esta completa y sin alterar.'
         exit 0
       }
-      Write-Output "La huella no coincide. Esperada: $esperado / Real: $real"
+      W "La huella no coincide. Esperada: $esperado / Real: $real"
       exit 1
     }
 
     'extraer' {
-      Add-Type -AssemblyName System.IO.Compression.FileSystem
       if (-not (Test-Path -LiteralPath $Destino)) {
         New-Item -ItemType Directory -Force -Path $Destino | Out-Null
       }
+
+      # METODO 1: tar.exe nativo de Windows (10 1803+). Binario del sistema
+      # firmado por Microsoft: los antivirus no lo bloquean (a PowerShell
+      # escribiendo miles de archivos si lo llegan a matar) y maneja zip64
+      # y rutas largas sin depender de .NET.
+      $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+      if (Test-Path -LiteralPath $tar) {
+        W 'Extrayendo con la herramienta del sistema (tar)...'
+        $errFile = Join-Path $env:TEMP ('evs-tar-' + [Guid]::NewGuid().ToString('N') + '.log')
+        $p = Start-Process -FilePath $tar `
+          -ArgumentList ('-xf "' + $Zip + '" -C "' + $Destino + '"') `
+          -NoNewWindow -PassThru -RedirectStandardError $errFile
+        $null = $p.Handle   # sin esto PS 5.1 no cachea el handle y ExitCode llega null
+        $min = 0
+        while (-not $p.HasExited) {
+          Start-Sleep -Seconds 20
+          $min += 0.33
+          W ('Extrayendo... sigue trabajando ({0:N0} min; son miles de archivos)' -f $min)
+        }
+        $p.WaitForExit()
+        $codigo = $p.ExitCode
+        if ($null -eq $codigo) { $codigo = -1 }
+        if ($codigo -eq 0) {
+          Remove-Item -LiteralPath $errFile -Force -ErrorAction SilentlyContinue
+          W 'Extraccion completa.'
+          exit 0
+        }
+        $detalle = ''
+        if (Test-Path -LiteralPath $errFile) {
+          $detalle = (Get-Content -LiteralPath $errFile -TotalCount 5) -join ' | '
+          Remove-Item -LiteralPath $errFile -Force -ErrorAction SilentlyContinue
+        }
+        W ("tar fallo (codigo $codigo): $detalle")
+        W 'Probando metodo alternativo de extraccion...'
+      }
+      else {
+        W 'tar.exe no esta en este Windows; usando metodo alternativo...'
+      }
+
+      # METODO 2 (respaldo): .NET, con progreso por porcentaje.
+      Add-Type -AssemblyName System.IO.Compression.FileSystem
       $archivo = [IO.Compression.ZipFile]::OpenRead($Zip)
       try {
         $total = $archivo.Entries.Count
         $i = 0
         $paso = [Math]::Max(1, [int][Math]::Floor($total / 20))
-        Write-Output "Extrayendo $total archivos..."
+        W "Extrayendo $total archivos..."
         foreach ($e in $archivo.Entries) {
           $i++
           $rel = $e.FullName -replace '/', '\'
           if ($rel -match '\.\.') { continue }   # guardia zip-slip
+          $script:entradaActual = $rel
           $ruta = Join-Path $Destino $rel
           if ($rel.EndsWith('\') -or $e.Name -eq '') {
             # entrada de carpeta
@@ -67,24 +118,34 @@ try {
           }
           if ($i % $paso -eq 0) {
             $pct = [int](100 * $i / $total)
-            Write-Output ("Extrayendo... {0}% ({1} de {2})" -f $pct, $i, $total)
+            W ("Extrayendo... {0}% ({1} de {2})" -f $pct, $i, $total)
           }
         }
       }
       finally {
         $archivo.Dispose()
       }
-      Write-Output 'Extraccion completa.'
+      W 'Extraccion completa.'
       exit 0
     }
 
     default {
-      Write-Output "Accion desconocida: $Accion"
+      W "Accion desconocida: $Accion"
       exit 3
     }
   }
 }
 catch {
-  Write-Output ("ERROR: " + $_.Exception.Message)
+  # Error con TODO el detalle: tipo, mensaje, inner y linea — para que el log
+  # del instalador diga exactamente que paso (foto del usuario = diagnostico).
+  $e = $_.Exception
+  W ("ERROR: [" + $e.GetType().Name + "] " + $e.Message)
+  if ($e.InnerException) {
+    W ("  Causa interna: [" + $e.InnerException.GetType().Name + "] " + $e.InnerException.Message)
+  }
+  if ($script:entradaActual) {
+    W ("  Archivo en curso: " + $script:entradaActual)
+  }
+  W ("  Donde: " + $_.InvocationInfo.PositionMessage)
   exit 3
 }
