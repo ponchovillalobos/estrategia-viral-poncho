@@ -58,6 +58,32 @@ try {
         New-Item -ItemType Directory -Force -Path $Destino | Out-Null
       }
 
+      # ANTES de extraer: cerrar cualquier proceso que corra DESDE la carpeta de
+      # instalacion (desktop.exe, y sus hijos node.exe/python.exe de una version
+      # abierta). Esos tienen .pyd/.dll cargados y BLOQUEADOS; sin esto la
+      # extraccion no puede sobrescribirlos ("el archivo esta siendo utilizado en
+      # otro proceso") — exactamente lo que rompia un reinstalar/actualizar.
+      # Filtra por ruta: solo toca procesos de ESTA carpeta, jamas node/python
+      # ajenos del sistema (p.ej. los de Program Files).
+      # OJO: usamos Get-CimInstance (ExecutablePath), NO (Get-Process).Path: el
+      # instalador NSIS es de 32 bits y desde PowerShell de 32 bits .Path NO puede
+      # leer el modulo de procesos de 64 bits (node/python son 64-bit) -> devolvia
+      # null y no detectaba a nadie. CIM si lo lee cross-bitness.
+      $destFull = $Destino.TrimEnd('\')
+      try { $rp = (Resolve-Path -LiteralPath $Destino -ErrorAction Stop).Path; if ($rp) { $destFull = $rp.TrimEnd('\') } } catch {}
+      $prefijo = $destFull + '\'
+      $bloqueadores = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+          $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefijo, [System.StringComparison]::OrdinalIgnoreCase)
+        })
+      foreach ($b in $bloqueadores) {
+        W ("Cerrando proceso que bloquea archivos: $($b.Name) (PID $($b.ProcessId))")
+        try { Stop-Process -Id $b.ProcessId -Force -ErrorAction Stop } catch { W ("  no se pudo cerrar: " + $_.Exception.Message) }
+      }
+      if ($bloqueadores.Count -gt 0) {
+        W ("Cerre $($bloqueadores.Count) proceso(s) de una version abierta; sigo con la extraccion.")
+        Start-Sleep -Seconds 3
+      }
+
       # METODO 1: tar.exe nativo de Windows (10 1803+). Binario del sistema
       # firmado por Microsoft: los antivirus no lo bloquean (a PowerShell
       # escribiendo miles de archivos si lo llegan a matar) y maneja zip64
