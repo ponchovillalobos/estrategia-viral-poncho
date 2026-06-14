@@ -40,6 +40,65 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENTRY = path.join(__dirname, "src", "index.ts");
 const COMPOSITION_ID = "ViralVideo";
 
+// ── Perfil de hardware (hw_profile.py lo escribe en DATA_ROOT/cache/hw_profile.json).
+//    Leemos SOLO `recommend` para pasar valores explícitos a Remotion:
+//      • x264Preset/crf  → encode x264 más rápido a igual calidad (#4/#5).
+//      • chromium_gl     → "angle" opt-in (#3); null = comportamiento actual.
+//    Si el JSON no existe / está corrupto / le faltan campos → null por campo, y
+//    Remotion usa sus defaults de siempre (camino viejo intacto).
+const PRESET_WHITELIST = new Set([
+  "ultrafast", "superfast", "veryfast", "faster", "fast",
+  "medium", "slow", "slower", "veryslow", "placebo",
+]);
+const GL_WHITELIST = new Set([
+  "angle", "angle-egl", "egl", "swangle", "swiftshader", "vulkan",
+]);
+
+function dataRoot() {
+  const override = process.env.VIRAL_DATA_ROOT;
+  if (override) return override;
+  // Paridad con paths.ts / config.py: viral-data primero, hermes-data por compat.
+  return "C:\\viral-data\\videos";
+}
+
+let _hwRec = null; // memo por proceso del bloque `recommend`
+function hwRecommend() {
+  if (_hwRec !== null) return _hwRec;
+  _hwRec = {};
+  try {
+    const p = path.join(dataRoot(), "cache", "hw_profile.json");
+    const j = JSON.parse(readFileSync(p, "utf-8"));
+    if (j && typeof j === "object" && j.recommend && typeof j.recommend === "object") {
+      _hwRec = j.recommend;
+    }
+  } catch {
+    /* sin perfil → defaults de Remotion */
+  }
+  return _hwRec;
+}
+
+/** Preset x264 recomendado, validado contra la whitelist. null si no aplica. */
+function recommendedX264Preset() {
+  const v = hwRecommend().x264_preset;
+  return typeof v === "string" && PRESET_WHITELIST.has(v) ? v : null;
+}
+/** CRF recomendado (entero válido). null si no aplica → Remotion usa su default. */
+function recommendedCrf() {
+  const v = hwRecommend().x264_crf;
+  return Number.isInteger(v) && v >= 0 && v <= 51 ? v : null;
+}
+/** Backend GL para Chromium. "angle" sólo si hw_profile lo recomienda (opt-in). */
+function recommendedGl() {
+  const v = hwRecommend().chromium_gl;
+  return typeof v === "string" && GL_WHITELIST.has(v) ? v : null;
+}
+// Permite forzar el respawn SIN angle tras un fallo de angle (lo set-ea el caller
+// por env al relanzar). Si está, ignoramos el gl recomendado.
+function effectiveGl() {
+  if (process.env.VIRAL_RENDER_SERVER_NO_ANGLE === "1") return null;
+  return recommendedGl();
+}
+
 // ── Línea de salida estructurada (una por línea, JSON). Los logs informativos
 //    van a stderr para no contaminar el canal de respuestas (stdout). ──────────
 function emit(obj) {
@@ -93,6 +152,7 @@ function srcFingerprint() {
 
 let bundlePromise = null; // Promise<string> del dir del bundle
 let bundledFingerprint = null;
+let renderCount = 0; // renders completados con éxito en este proceso (para reciclado)
 
 async function getBundle() {
   const fp = srcFingerprint();
@@ -132,11 +192,17 @@ async function handleRequest(req) {
     const inputProps = JSON.parse(readFileSync(propsPath, "utf-8"));
     const serveUrl = await getBundle();
 
+    // gl=angle (opt-in) también se pasa a selectComposition para que el browser
+    // headless que abre el calculateMetadata use el mismo backend. null → no se pasa.
+    const gl = effectiveGl();
+    const chromiumOptions = gl ? { gl } : undefined;
+
     // selectComposition respeta calculateMetadata (duración/dims dinámicas).
     const composition = await selectComposition({
       serveUrl,
       id: COMPOSITION_ID,
       inputProps,
+      ...(chromiumOptions ? { chromiumOptions } : {}),
     });
 
     const concurrency = Number.isFinite(req.concurrency) ? req.concurrency : defaultConcurrency();
@@ -145,6 +211,11 @@ async function handleRequest(req) {
       : defaultOffthreadCacheBytes();
     const timeoutMs = Number.isFinite(req.timeoutMs) ? req.timeoutMs : 120_000;
     const scale = Number.isFinite(req.scale) ? req.scale : 1;
+
+    // Preset/CRF explícitos del hw_profile. Sin el JSON, quedan null y NO se pasan
+    // → Remotion usa su default ('medium'), exactamente como antes (camino viejo).
+    const x264Preset = recommendedX264Preset();
+    const crf = recommendedCrf();
 
     await renderMedia({
       composition,
@@ -158,6 +229,11 @@ async function handleRequest(req) {
       // Paridad con --timeout (delayRender) del camino viejo.
       timeoutInMilliseconds: timeoutMs,
       scale,
+      // #4/#5 — preset x264 explícito (más rápido, misma calidad a igual CRF).
+      ...(x264Preset ? { x264Preset } : {}),
+      ...(crf !== null ? { crf } : {}),
+      // #3 — gl=angle opt-in. Si null, no se pasa (swiftshader/swangle de siempre).
+      ...(chromiumOptions ? { chromiumOptions } : {}),
       onProgress: ({ renderedFrames }) => {
         emit({
           type: "progress",
@@ -168,7 +244,10 @@ async function handleRequest(req) {
       },
     });
 
-    emit({ type: "result", id, ok: true, outPath });
+    // Contador de renders para el reciclado del proceso (memory-leak de angle en
+    // procesos largos). El caller decide cuándo respawnear según renderCount/gl.
+    renderCount += 1;
+    emit({ type: "result", id, ok: true, outPath, renderCount, gl: gl ?? null });
   } catch (err) {
     emit({
       type: "result",
@@ -190,7 +269,9 @@ async function main() {
   // Pre-bundlear al arrancar para que el primer render ya encuentre el bundle.
   try {
     await getBundle();
-    emit({ type: "ready" });
+    // Informamos el gl efectivo: el caller lo usa para decidir la agresividad del
+    // reciclado (con angle activo recicla más seguido por el memory-leak conocido).
+    emit({ type: "ready", gl: effectiveGl() ?? null });
   } catch (err) {
     // Si el bundle inicial falla, avisamos: el caller hará fallback al camino viejo.
     emit({ type: "fatal", error: String(err) });

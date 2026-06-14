@@ -155,11 +155,21 @@ def _try_parse_clips(response_text: str) -> list[dict[str, Any]] | None:
 
 def _ollama_request(prompt: str, model: str, temperature: float = 0.3) -> str:
     """Llamada HTTP raw a Ollama, devuelve el texto de respuesta (sin parsear)."""
+    # Fallback para Ollama viejos que ignoran el campo think:false → qwen3 entiende el
+    # token /no_think al inicio del prompt y omite el bloque <think>. No cambia el análisis
+    # ni el schema (sólo suprime el razonamiento); si think:false ya funcionó, es inocuo.
+    prompt = f"/no_think\n{prompt}"
     payload = {
         "model": model,
         "prompt": prompt,
         "stream": False,
         "format": "json",
+        # think:false apaga el razonamiento de qwen3 (bloque <think>...</think> que descartamos):
+        # ~1.5-2x más rápido sin tocar el schema (lo garantiza format:"json").
+        "think": False,
+        # keep_alive mantiene el modelo en RAM entre clips para no pagar la recarga (segundos).
+        # 10m es moderado: en PC sin GPU/8GB no presiona la RAM mientras Remotion renderiza.
+        "keep_alive": "10m",
         "options": {"temperature": temperature, "num_ctx": 8192},
     }
     data = json.dumps(payload).encode("utf-8")

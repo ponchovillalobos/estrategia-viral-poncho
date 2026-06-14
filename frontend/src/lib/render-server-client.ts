@@ -42,12 +42,28 @@ interface ServerMsg {
   error?: string;
   renderedFrames?: number;
   totalFrames?: number;
+  /** renders completados por el proceso (para el reciclado). */
+  renderCount?: number;
+  /** backend GL efectivo del proceso (null = swiftshader/swangle). */
+  gl?: string | null;
 }
 
 let proc: ChildProcessWithoutNullStreams | null = null;
 let readyPromise: Promise<void> | null = null;
 let nextId = 1;
 const pending = new Map<string, PendingRender>();
+
+// ── Reciclado del proceso (#3) ───────────────────────────────────────────────
+// angle tiene un memory-leak conocido en procesos de larga vida: reciclamos el
+// render-server cada N renders. Sin angle (gl=null, swiftshader) el leak es mucho
+// menor, así que reciclamos más esporádicamente. El respawn es perezoso: marcamos
+// `needsRecycle` y el próximo `ensureServer()` arranca un proceso fresco.
+const RECYCLE_EVERY_DEFAULT = 40;
+const RECYCLE_EVERY_ANGLE = 25;
+let serverGl: string | null = null; // gl del proceso vivo (se llena con el ready)
+let needsRecycle = false;
+// Si un render con angle falla, el próximo arranque fuerza SIN angle (fallback).
+let forceNoAngle = false;
 
 /** Mata el server (al apagar la app o ante un crash) y rechaza lo pendiente. */
 function teardown(reason: string) {
@@ -60,6 +76,8 @@ function teardown(reason: string) {
   }
   proc = null;
   readyPromise = null;
+  serverGl = null;
+  needsRecycle = false;
   for (const [, p] of pending) {
     clearTimeout(p.timer);
     p.reject(new Error(`render-server caído: ${reason}`));
@@ -68,17 +86,42 @@ function teardown(reason: string) {
 }
 
 /**
+ * Recicla el proceso de forma SEGURA: sólo cuando no hay renders en vuelo (si los
+ * hubiera, esperaríamos al próximo hueco). Mata el proceso vivo para que el
+ * siguiente `ensureServer()` arranque uno fresco (bundle se rearma una vez).
+ */
+function recycleIfIdle(reason: string) {
+  if (pending.size > 0) return; // hay un render activo: reciclar luego
+  if (!proc) return;
+  console.log(`[render-server] reciclando proceso (${reason})`);
+  teardown(reason);
+}
+
+/**
  * Arranca el server si no está vivo y espera su `{"type":"ready"}` (bundle listo).
  * Cachea la promesa para no arrancar dos procesos en paralelo. Si el arranque o
  * el bundle inicial falla, rechaza → el caller hace fallback.
  */
 function ensureServer(): Promise<void> {
+  // Reciclado perezoso: si el proceso vivo pidió reciclarse y no hay nada en
+  // vuelo, lo matamos acá antes de reusarlo → arranca uno fresco abajo.
+  if (proc && readyPromise && needsRecycle && pending.size === 0) {
+    teardown("reciclado por contador de renders");
+  }
   if (proc && readyPromise) return readyPromise;
 
   const npxNode = process.execPath; // el node que corre Next: garantizado en PATH
+  // Fallback de angle: si un render con angle falló, relanzamos el server SIN
+  // angle para que el render-server lea gl=null (swiftshader) este arranque.
+  const childEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUTF8: "1",
+  };
+  if (forceNoAngle) childEnv.VIRAL_RENDER_SERVER_NO_ANGLE = "1";
   const child = spawn(npxNode, ["render-server.mjs"], {
     cwd: REMOTION_DIR,
-    env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+    env: childEnv,
   }) as ChildProcessWithoutNullStreams;
   proc = child;
 
@@ -108,6 +151,7 @@ function ensureServer(): Promise<void> {
       }
       if (msg.type === "ready") {
         clearTimeout(readyTimer);
+        serverGl = msg.gl ?? null;
         resolve();
         return;
       }
@@ -127,8 +171,20 @@ function ensureServer(): Promise<void> {
         if (!p) return;
         clearTimeout(p.timer);
         pending.delete(msg.id);
-        if (msg.ok && msg.outPath) p.resolve(msg.outPath);
-        else p.reject(new Error(msg.error ?? "render-server devolvió ok:false"));
+        if (msg.ok && msg.outPath) {
+          // Render OK: si llevamos suficientes renders, marcamos el reciclado.
+          // Umbral más bajo con angle (memory-leak). El respawn ocurre cuando el
+          // proceso queda idle (ahora mismo si no hay nada en vuelo).
+          const limit =
+            (serverGl ?? msg.gl) === "angle" ? RECYCLE_EVERY_ANGLE : RECYCLE_EVERY_DEFAULT;
+          if (typeof msg.renderCount === "number" && msg.renderCount >= limit) {
+            needsRecycle = true;
+            recycleIfIdle(`${msg.renderCount} renders (gl=${serverGl ?? "null"})`);
+          }
+          p.resolve(msg.outPath);
+        } else {
+          p.reject(new Error(msg.error ?? "render-server devolvió ok:false"));
+        }
       }
     });
   });
@@ -166,35 +222,95 @@ export interface RenderServerOpts {
  */
 export async function renderWithServer(opts: RenderServerOpts): Promise<string> {
   await ensureServer();
+  // Recordamos si ESTE arranque corre con angle, para el fallback ante fallo.
+  const ranWithAngle = serverGl === "angle";
   const id = String(nextId++);
   const hardTimeout = opts.hardTimeoutMs ?? 25 * 60 * 1000;
 
-  return new Promise<string>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      pending.delete(id);
-      // Un render colgado puede haber dejado el server en mal estado: lo
-      // reiniciamos para que el siguiente pedido empiece limpio.
-      teardown("timeout de render");
-      reject(new Error(`render-server: timeout (${hardTimeout}ms)`));
-    }, hardTimeout);
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        // Un render colgado puede haber dejado el server en mal estado: lo
+        // reiniciamos para que el siguiente pedido empiece limpio.
+        teardown("timeout de render");
+        reject(new Error(`render-server: timeout (${hardTimeout}ms)`));
+      }, hardTimeout);
 
-    pending.set(id, { resolve, reject, onProgress: opts.onProgress, timer });
+      pending.set(id, { resolve, reject, onProgress: opts.onProgress, timer });
 
-    const req = {
-      id,
-      propsPath: opts.propsPath,
-      outPath: opts.outPath,
-      concurrency: opts.concurrency,
-      timeoutMs: opts.timeoutMs,
-      scale: opts.scale ?? 1,
-      offthreadCacheBytes: defaultOffthreadCacheBytes(),
-    };
-    try {
-      proc!.stdin.write(JSON.stringify(req) + "\n");
-    } catch (err) {
-      clearTimeout(timer);
-      pending.delete(id);
-      reject(new Error(`no se pudo escribir al render-server: ${String(err)}`));
+      const req = {
+        id,
+        propsPath: opts.propsPath,
+        outPath: opts.outPath,
+        concurrency: opts.concurrency,
+        timeoutMs: opts.timeoutMs,
+        scale: opts.scale ?? 1,
+        offthreadCacheBytes: defaultOffthreadCacheBytes(),
+      };
+      try {
+        proc!.stdin.write(JSON.stringify(req) + "\n");
+      } catch (err) {
+        clearTimeout(timer);
+        pending.delete(id);
+        reject(new Error(`no se pudo escribir al render-server: ${String(err)}`));
+      }
+    });
+  } catch (err) {
+    // #3 — fallback de angle: si el render corría con angle y falló, relanzamos
+    // el server SIN angle y reintentamos UNA vez. angle es opt-in y propenso a
+    // fallos (memory-leak/driver); sin angle es el camino estable. Si vuelve a
+    // fallar, propagamos → el caller cae a `npx remotion render`.
+    if (ranWithAngle && !forceNoAngle) {
+      console.warn(
+        `[render-server] render con angle falló (${String(err)}) — relanzando sin angle y reintentando`
+      );
+      forceNoAngle = true;
+      teardown("fallback angle→sin angle");
+      await ensureServer();
+      const id2 = String(nextId++);
+      return await new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pending.delete(id2);
+          teardown("timeout de render (reintento sin angle)");
+          reject(new Error(`render-server: timeout (${hardTimeout}ms)`));
+        }, hardTimeout);
+        pending.set(id2, { resolve, reject, onProgress: opts.onProgress, timer });
+        const req = {
+          id: id2,
+          propsPath: opts.propsPath,
+          outPath: opts.outPath,
+          concurrency: opts.concurrency,
+          timeoutMs: opts.timeoutMs,
+          scale: opts.scale ?? 1,
+          offthreadCacheBytes: defaultOffthreadCacheBytes(),
+        };
+        try {
+          proc!.stdin.write(JSON.stringify(req) + "\n");
+        } catch (e) {
+          clearTimeout(timer);
+          pending.delete(id2);
+          reject(new Error(`no se pudo escribir al render-server: ${String(e)}`));
+        }
+      });
     }
-  });
+    throw err;
+  }
+}
+
+/**
+ * PRE-CALENTADO (#7) — arranca el render-server (y por ende arma el bundle webpack)
+ * de forma best-effort, SIN bloquear ni propagar errores. Lo llama instrumentation.ts
+ * al iniciar la app para que el primer render ya encuentre el bundle listo en vez de
+ * pagar los 15-40s de bundle en caliente. Si está deshabilitado, es no-op.
+ */
+export function warmup(): void {
+  if (!renderServerEnabled()) return;
+  try {
+    // No await: arranque en segundo plano. Tragamos cualquier error (el fallback
+    // al camino viejo sigue intacto si el server no levanta).
+    void ensureServer().catch(() => {});
+  } catch {
+    /* nunca debe romper el arranque de la app */
+  }
 }

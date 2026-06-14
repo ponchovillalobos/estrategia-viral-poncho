@@ -62,7 +62,8 @@ def _run_detect(monkeypatch, *, gpu, ram_gb, torch_cuda,
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     for var in ("VIRAL_FORCE_X264", "VIRAL_WHISPER_DEVICE",
-                "LF_RENDER_WORKERS", "VIRAL_WHISPER_COMPUTE_TYPE"):
+                "LF_RENDER_WORKERS", "VIRAL_WHISPER_COMPUTE_TYPE",
+                "VIRAL_WHISPER_MODEL", "VIRAL_REMOTION_GL"):
         monkeypatch.delenv(var, raising=False)
     yield
     hw_profile._profile = None
@@ -83,6 +84,11 @@ def test_cpu_only(monkeypatch):
     assert rec["whisper_device"] == "cpu"
     assert rec["video_decoder_hwaccel"] == "none"
     assert prof["gpu_nvidia"] is None
+    # VELOCIDAD: sin encoder de hardware, el x264 es el entregable → veryfast
+    assert rec["x264_preset"] == "veryfast"
+    assert rec["x264_crf"] == 24
+    # sin GPU, chromium_gl es None aunque se pida angle (no aplica)
+    assert rec["chromium_gl"] is None
     # firmas legacy
     assert hw_profile.whisper_device() == ("cpu", "int8")
     assert hw_profile.ffmpeg_video_args("final")[:2] == ["-c:v", "libx264"]
@@ -121,12 +127,18 @@ def test_rtx4090(monkeypatch):
         cores_physical=16, cores_logical=32,
     )
     rec = prof["recommend"]
-    assert rec["whisper_model"] == "large-v3"
+    # VELOCIDAD: el modelo grande ahora es el turbo (id ct2 explícito).
+    assert rec["whisper_model"] == "deepdml/faster-whisper-large-v3-turbo-ct2"
     assert rec["video_encoder"] == "h264_nvenc"
     assert rec["ollama_model"] == "qwen3:14b"
     assert rec["whisper_compute_type"] == "float16"
     assert rec["video_decoder_hwaccel"] == "cuda"
     assert rec["remotion_workers"] == min(4, 16 // 2)
+    # con GPU el x264 (intermedio que se re-encodea) es ultrafast; crf fijo 24
+    assert rec["x264_preset"] == "ultrafast"
+    assert rec["x264_crf"] == 24
+    # chromium_gl None por default (sin el env de opt-in), aunque haya GPU usable
+    assert rec["chromium_gl"] is None
     # legacy
     assert hw_profile.whisper_device() == ("cuda", "float16")
     assert hw_profile.ffmpeg_video_args("final")[:2] == ["-c:v", "h264_nvenc"]
@@ -168,3 +180,45 @@ def test_render_workers_override(monkeypatch):
                 cores_physical=4, cores_logical=8)
     monkeypatch.setenv("LF_RENDER_WORKERS", "3")
     assert hw_profile.render_workers() == 3
+
+
+# ---------------------------------------------------------------------------
+# chromium_gl: opt-in explícito (env) + GPU usable → "angle"; si no, None
+# ---------------------------------------------------------------------------
+def test_chromium_gl_angle_optin_con_gpu(monkeypatch):
+    # El env se lee dentro de _recommend en tiempo de detect(): setear ANTES.
+    monkeypatch.setenv("VIRAL_REMOTION_GL", "angle")
+    prof = _run_detect(
+        monkeypatch, gpu="NVIDIA GeForce RTX 4090", ram_gb=64.0, torch_cuda=True,
+        nvenc_usable=True, nvdec_usable=True, vram_free=22000, vram_total=24564,
+        compute_cap=8.9, cores_physical=16, cores_logical=32,
+    )
+    assert prof["recommend"]["chromium_gl"] == "angle"
+
+
+def test_chromium_gl_angle_sin_gpu_es_none(monkeypatch):
+    # opt-in pedido pero sin GPU usable → NO se prende angle.
+    monkeypatch.setenv("VIRAL_REMOTION_GL", "angle")
+    prof = _run_detect(monkeypatch, gpu=None, ram_gb=16.0, torch_cuda=False,
+                       cores_physical=8, cores_logical=16)
+    assert prof["recommend"]["chromium_gl"] is None
+
+
+def test_chromium_gl_sin_optin_es_none(monkeypatch):
+    # GPU usable pero sin el env de opt-in → None (conservador por default).
+    prof = _run_detect(
+        monkeypatch, gpu="NVIDIA GeForce RTX 4090", ram_gb=64.0, torch_cuda=True,
+        nvenc_usable=True, nvdec_usable=True, vram_free=22000, vram_total=24564,
+        compute_cap=8.9, cores_physical=16, cores_logical=32,
+    )
+    assert prof["recommend"]["chromium_gl"] is None
+
+
+def test_whisper_model_env_override(monkeypatch):
+    monkeypatch.setenv("VIRAL_WHISPER_MODEL", "tiny")
+    prof = _run_detect(
+        monkeypatch, gpu="NVIDIA GeForce RTX 4090", ram_gb=64.0, torch_cuda=True,
+        nvenc_usable=True, nvdec_usable=True, vram_free=22000, vram_total=24564,
+        compute_cap=8.9, cores_physical=16, cores_logical=32,
+    )
+    assert prof["recommend"]["whisper_model"] == "tiny"

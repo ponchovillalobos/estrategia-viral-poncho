@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { REMOTION_DIR, RENDERS_DIR, RAW_DIR, PYTHON_EXE, PYTHON_DIR } from "@/lib/paths";
+import { readFileSync } from "node:fs";
+import { REMOTION_DIR, RENDERS_DIR, RAW_DIR, PYTHON_EXE, PYTHON_DIR, DATA_ROOT } from "@/lib/paths";
 import { humanizeError } from "@/lib/humanize-error";
 import { canRender, registerRender } from "@/lib/license";
 import { runProcess } from "@/lib/run-process";
@@ -16,6 +17,33 @@ import {
   offthreadCacheFlag,
 } from "@/lib/render-utils";
 import { embedIconStickerSvgs } from "@/lib/sticker-svg";
+import { renderWithServer, renderServerEnabled } from "@/lib/render-server-client";
+
+// ── Preset/CRF de x264 desde hw_profile.json (#4/#5). Para el camino `npx remotion
+//    render`: si el perfil recomienda un preset/crf válido, los pasamos por flags.
+//    Sin perfil → no se agregan flags y Remotion usa sus defaults (camino viejo).
+const _X264_PRESETS = new Set([
+  "ultrafast", "superfast", "veryfast", "faster", "fast",
+  "medium", "slow", "slower", "veryslow", "placebo",
+]);
+function x264PresetFlags(): string[] {
+  try {
+    const j = JSON.parse(
+      readFileSync(path.join(DATA_ROOT, "cache", "hw_profile.json"), "utf-8")
+    );
+    const rec = j?.recommend ?? {};
+    const flags: string[] = [];
+    if (typeof rec.x264_preset === "string" && _X264_PRESETS.has(rec.x264_preset)) {
+      flags.push(`--x264-preset=${rec.x264_preset}`);
+    }
+    if (Number.isInteger(rec.x264_crf) && rec.x264_crf >= 0 && rec.x264_crf <= 51) {
+      flags.push(`--crf=${rec.x264_crf}`);
+    }
+    return flags;
+  } catch {
+    return [];
+  }
+}
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -138,47 +166,91 @@ export async function POST(req: NextRequest) {
       // lo parte en el primer espacio y el .mp4 sale truncado.
       const needsQuote = process.platform === "win32" && /\s/.test(outFile);
       const outArg = needsQuote ? `"${outFile}"` : outFile;
-      const args = [
-        "remotion",
-        "render",
-        "src/index.ts",
-        "ViralVideo",
-        outArg,
-        "--concurrency",
-        String(remotionConcurrency()),
-        `--timeout=${REMOTION_DELAY_TIMEOUT_MS}`,
-        offthreadCacheFlag(),
-        `--props=${propsFileName}`,
-      ];
-      if (quality === "preview") {
-        args.push("--scale", "0.5");
+
+      // ─── Camino viejo (FALLBACK probado): `npx remotion render`. Lo encapsulamos
+      //     en una función para poder caer acá si el render-server falla. ─────────
+      async function runNpxRender(): Promise<{ code: number; stdout: string; stderr: string; timedOut: boolean }> {
+        const args = [
+          "remotion",
+          "render",
+          "src/index.ts",
+          "ViralVideo",
+          outArg,
+          "--concurrency",
+          String(remotionConcurrency()),
+          `--timeout=${REMOTION_DELAY_TIMEOUT_MS}`,
+          offthreadCacheFlag(),
+          // #4/#5 — preset x264 / crf explícitos del hw_profile (vacío si no aplica).
+          ...x264PresetFlags(),
+          `--props=${propsFileName}`,
+        ];
+        if (quality === "preview") {
+          args.push("--scale", "0.5");
+        }
+        const npxExe = process.platform === "win32" ? "npx.cmd" : "npx";
+        const proc = spawn(npxExe, args, {
+          cwd: REMOTION_DIR,
+          shell: process.platform === "win32",
+          env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+        });
+        let so = "";
+        let se = "";
+        let to = false;
+        proc.stdout.on("data", (d) => (so += d.toString()));
+        proc.stderr.on("data", (d) => (se += d.toString()));
+        const timer = setTimeout(() => {
+          to = true;
+          try {
+            proc.kill("SIGKILL");
+          } catch {}
+        }, RENDER_TIMEOUT_MS);
+        const c = await new Promise<number>((resolve) => {
+          proc.on("close", (cc) => resolve(cc ?? 1));
+          proc.on("error", () => resolve(1));
+        });
+        clearTimeout(timer);
+        return { code: c, stdout: so, stderr: se, timedOut: to };
       }
 
-      const npxExe = process.platform === "win32" ? "npx.cmd" : "npx";
-      const proc = spawn(npxExe, args, {
-        cwd: REMOTION_DIR,
-        shell: process.platform === "win32",
-        env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
-      });
-
+      // ─── #1 RENDER-SERVER en el EDITOR MANUAL ──────────────────────────────────
+      // Intentamos primero el server de larga vida (bundle webpack 1 sola vez →
+      // ahorra 15-40s por render). Le pasamos el props-<id>.json absoluto y el MISMO
+      // outFile temporal. Si el server falla por CUALQUIER motivo → fallback al
+      // `npx remotion render` de siempre (red de seguridad). El post-encode NVENC y
+      // el flag offthreadvideo se mantienen intactos abajo / en el camino npx.
       let stdout = "";
       let stderr = "";
       let timedOut = false;
-      proc.stdout.on("data", (d) => (stdout += d.toString()));
-      proc.stderr.on("data", (d) => (stderr += d.toString()));
-
-      const timer = setTimeout(() => {
-        timedOut = true;
+      let code = 0;
+      let serverOk = false;
+      if (renderServerEnabled()) {
         try {
-          proc.kill("SIGKILL");
-        } catch {}
-      }, RENDER_TIMEOUT_MS);
+          await renderWithServer({
+            propsPath: path.join(REMOTION_DIR, propsFileName),
+            outPath: outFile,
+            concurrency: remotionConcurrency(),
+            timeoutMs: REMOTION_DELAY_TIMEOUT_MS,
+            scale: quality === "preview" ? 0.5 : 1,
+            hardTimeoutMs: RENDER_TIMEOUT_MS,
+          });
+          serverOk = true;
+          console.log(`[videos/render] render-server ok: ${videoId}`);
+        } catch (err) {
+          console.warn(
+            `[videos/render] render-server falló (${String(err)}) — fallback a npx remotion render`
+          );
+          await fs.rm(outFile, { force: true }).catch(() => {});
+        }
+      }
 
-      const code = await new Promise<number>((resolve) => {
-        proc.on("close", (c) => resolve(c ?? 1));
-        proc.on("error", () => resolve(1));
-      });
-      clearTimeout(timer);
+      if (!serverOk) {
+        const r = await runNpxRender();
+        stdout = r.stdout;
+        stderr = r.stderr;
+        timedOut = r.timedOut;
+        code = r.code;
+      }
+
       await fs.rm(path.join(REMOTION_DIR, propsFileName), { force: true }).catch(() => {});
 
       if (code !== 0 || timedOut) {

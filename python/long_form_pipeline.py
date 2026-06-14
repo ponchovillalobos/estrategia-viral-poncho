@@ -92,6 +92,107 @@ def _remotion_concurrency(workers: int) -> int:
     return max(1, (cores - 1) // max(1, workers))
 
 
+def _node_bin() -> str | None:
+    """Ejecutable de node para invocar el CLI de Remotion DIRECTO (sin npx).
+
+    Prioridad: env VIRAL_NODE_BIN → node embebido junto al CLI de Remotion
+    (paquete distribuible) → `node`/`node.exe` en el PATH. Devuelve None si no
+    se encuentra ninguno (el caller cae a `npx`).
+    """
+    import shutil  # noqa: PLC0415
+
+    override = os.environ.get("VIRAL_NODE_BIN")
+    if override and Path(override).exists():
+        return override
+    # node embebido que algunos paquetes dejan junto a node_modules/.bin
+    embedded = REMOTION_DIR / "node_modules" / ".bin" / (
+        "node.exe" if sys.platform == "win32" else "node"
+    )
+    if embedded.exists():
+        return str(embedded)
+    found = shutil.which("node")
+    if found:
+        return found
+    return None
+
+
+def _remotion_cli_js() -> Path | None:
+    """Ruta REAL al cli.js de @remotion/cli para invocarlo con node directo.
+
+    Es el mismo entrypoint que el shim de node_modules/.bin/remotion ejecuta
+    (`node @remotion/cli/remotion-cli.js`), así que los args son idénticos a
+    `npx remotion`. Devuelve None si no existe (el caller cae a `npx`).
+    """
+    candidates = [
+        REMOTION_DIR / "node_modules" / "@remotion" / "cli" / "remotion-cli.js",
+        REMOTION_DIR / "node_modules" / ".bin" / "remotion",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+
+def _remotion_render_cmd(out: Path, remotion_concurrency: int, props_name: str) -> list[str]:
+    """Comando de `remotion render` para un clip.
+
+    #8 VELOCIDAD: invoca el CLI de Remotion DIRECTO con node (node remotion-cli.js
+    render …) en vez de `npx remotion render …`. npx re-resuelve el paquete en cada
+    spawn (~1.5-2s × hasta 15-45 spawns por lote). Los ARGS son EXACTAMENTE los
+    mismos. FALLBACK: si no encontramos node o el cli.js, caemos a `npx` como antes.
+    """
+    base_args = [
+        "render",
+        "src/index.ts",
+        "ViralVideo",
+        str(out),
+        "--concurrency",
+        str(remotion_concurrency),
+        # delayRender amplio: el dev server sirviendo el clip bajo carga puede
+        # tardar >28s (default) en responder un seek de OffthreadVideo.
+        "--timeout=120000",
+        _offthread_cache_flag(),
+        f"--props={props_name}",
+    ]
+    # #4/#5 VELOCIDAD: preset de libx264 según hw_profile (ultrafast con GPU porque
+    # el post-fx/post-encode re-encodea por hardware; veryfast en CPU-only). NO se
+    # toca el CRF: Remotion mantiene su default (calidad final intacta). Solo el
+    # preset, que a igual CRF da la MISMA calidad visual y baja el tiempo de encode.
+    preset, _crf = _x264_recommend()
+    if preset:
+        base_args.append(f"--x264-preset={preset}")
+    node = _node_bin()
+    cli = _remotion_cli_js()
+    if node and cli:
+        return [node, str(cli), *base_args]
+    # FALLBACK: npx (re-resuelve el paquete cada vez, pero siempre funciona).
+    npx = "npx.cmd" if sys.platform == "win32" else "npx"
+    return [npx, "remotion", *base_args]
+
+
+def _x264_recommend() -> tuple[str, int]:
+    """(x264_preset, x264_crf) recomendados por hw_profile para el render de cada
+    clip (#4/#5).
+
+    - Con GPU usable (nvenc/qsv/amf): el x264 de Remotion es un INTERMEDIO que el
+      post-fx/post-encode por hardware re-encodea y tira → preset 'ultrafast'.
+    - CPU-only: el x264 ES el entregable → 'veryfast' (misma calidad visual a igual
+      CRF, ~1.5-2x más rápido). El CRF NO se cambia (calidad final intacta).
+
+    Best-effort: si no puedo leer el perfil, defaults conservadores (veryfast/24)
+    que NO degradan calidad.
+    """
+    try:
+        from hw_profile import detect  # noqa: PLC0415
+
+        rec = detect().get("recommend", {}) or {}
+        preset = str(rec.get("x264_preset") or "veryfast")
+        crf = int(rec.get("x264_crf") or 24)
+        return preset, crf
+    except Exception:  # noqa: BLE001
+        return "veryfast", 24
+
+
 def run(cmd: list[str], cwd: Path | None = None) -> None:
     print(f"\n[run] {' '.join(str(x) for x in cmd)}", file=sys.stderr)
     subprocess.run(cmd, check=True, cwd=cwd)
@@ -288,6 +389,12 @@ def _ollama_explain(text: str, model: str | None = None, timeout: float = 20.0) 
         "model": model or OLLAMA_MODEL,
         "prompt": prompt,
         "stream": False,
+        # #12-largos: paridad con analyze_clips._ollama_request.
+        # think:false apaga el razonamiento de qwen3 (~1.5-2x más rápido); aquí no
+        # usamos format:"json" porque la respuesta es texto libre (2 frases).
+        "think": False,
+        # keep_alive mantiene el modelo en RAM entre clips para no pagar la recarga.
+        "keep_alive": "10m",
         "options": {"temperature": 0.4, "num_predict": 140},
     }).encode("utf-8")
     req = urllib.request.Request(
@@ -535,6 +642,94 @@ def _apply_emotion(clip_id: str, style_id: str) -> None:
         print(f"[emotion] skipped: {e}", file=sys.stderr)
 
 
+# Mastering de audio — MISMOS filtros que el SUPREME de shorts (no cambian).
+_AUDIO_MASTER_FILTER = (
+    "acompressor=threshold=-18dB:ratio=3:attack=20:release=200,"
+    "alimiter=level_in=1:level_out=0.95:limit=0.95,"
+    "highpass=f=80,"
+    "equalizer=f=3000:t=q:w=1:g=2"
+)
+
+
+def _post_fx_lut_step(rendered: Path, lut_name: str) -> bool:
+    """PASO LUT original (re-encode de video con lut3d). Devuelve True si re-encodeó.
+
+    Se conserva INTACTO como fallback del camino fusionado (#9).
+    """
+    graded = rendered.with_name(rendered.stem + "_graded.mp4")
+    # Log ANTES de arrancar: el lut3d re-encodea todo el clip y tarda 1-2 min
+    # en silencio. Sin este aviso el panel de progreso parece congelado.
+    print(
+        f"[post-fx] aplicando color grade ({lut_name})… re-encode del clip, ~1-2 min",
+        file=sys.stderr, flush=True,
+    )
+    # Ruta relativa con forward-slashes (cwd=REMOTION_DIR) para evitar el
+    # escaping del ":" de la unidad de Windows dentro del filtergraph.
+    # Encoder adaptativo: NVENC en GPU NVIDIA (3-8x), libx264 si no.
+    # CONSERVADOR: lleva -vf lut3d (filtro CPU) → NO inyectamos decode
+    # hwaccel (input_path=None); solo adaptamos el ENCODER. safe_ffmpeg
+    # cae a libx264 si el NVENC falla en runtime.
+    ff = ffmpeg_full_args(input_path=None, quality="final")
+    _res = safe_ffmpeg(
+        [
+            str(FFMPEG_PATH), "-y",
+            "-i", str(rendered),
+            "-vf", f"lut3d=public/luts/{lut_name}",
+            "-c:a", "copy",
+            *ff["video_args"],
+            "-pix_fmt", "yuv420p",
+            str(graded),
+        ],
+        input_path=str(rendered),
+        cwd=REMOTION_DIR, timeout=240,
+    )
+    if _res.returncode != 0:
+        raise subprocess.CalledProcessError(
+            _res.returncode, "ffmpeg lut3d", _res.stdout, _res.stderr
+        )
+    graded.replace(rendered)
+    print(f"[post-fx] LUT aplicado ({lut_name}): {rendered.name}", file=sys.stderr)
+    return True
+
+
+def _post_fx_audio_step(rendered: Path) -> None:
+    """PASO de mastering de audio original (copia video, re-encodea solo audio).
+
+    Se conserva INTACTO como fallback del camino fusionado (#9).
+    """
+    mastered = rendered.with_name(rendered.stem + "_mastered.mp4")
+    print("[post-fx] masterizando audio…", file=sys.stderr, flush=True)
+    subprocess.run(
+        [
+            str(FFMPEG_PATH), "-y",
+            "-i", str(rendered),
+            "-af", _AUDIO_MASTER_FILTER,
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "192k",
+            str(mastered),
+        ],
+        check=True, cwd=REMOTION_DIR, timeout=120,
+    )
+    mastered.replace(rendered)
+    print(f"[post-fx] audio mastered: {rendered.name}", file=sys.stderr)
+
+
+def _post_fx_two_pass(rendered: Path, lut_name: str | None) -> bool:
+    """Camino ORIGINAL en 2 pasadas (fallback de la fusión #9). Cada paso es
+    independiente y opcional; best-effort por paso (no rompe el clip)."""
+    video_reencoded = False
+    if lut_name:
+        try:
+            video_reencoded = _post_fx_lut_step(rendered, lut_name)
+        except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
+            print(f"[post-fx] LUT skipped: {e}", file=sys.stderr)
+    try:
+        _post_fx_audio_step(rendered)
+    except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
+        print(f"[post-fx] audio mastering skipped: {e}", file=sys.stderr)
+    return video_reencoded
+
+
 def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> bool:
     """Post-procesa el render con ffmpeg, en paridad con el pipeline de shorts:
 
@@ -545,94 +740,95 @@ def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> bool:
          contenido hablado (cursos/charlas), así que el master mejora la claridad en
          todos los estilos (en shorts solo corría para cinematic_pro).
 
-    Best-effort: cada paso es try/except con timeout. Si ffmpeg falla o el .cube no
-    existe, se conserva el render tal cual y el clip NO se da por fallido.
+    #9 VELOCIDAD: cuando hay LUT, se intenta FUSIONAR el grade de video + el master
+    de audio en UNA sola pasada de ffmpeg (-vf lut3d + -af <master> + re-encode de
+    ambos), evitando una segunda pasada que re-leía/re-escribía el archivo entero.
+    FALLBACK obligatorio: si el comando fusionado falla, se cae a las 2 pasadas
+    originales (intactas), que se conservan como _post_fx_two_pass. Cada filtro
+    sigue siendo opcional: sin LUT no se mete lut3d (y sin LUT no hay nada que
+    fusionar → va directo al paso de audio en una pasada como siempre).
 
-    Devuelve True si el PASO DE LUT re-encodeó el video (con el encoder adaptativo
-    de hw_profile, NVENC cuando hay GPU). El caller usa esto para NO volver a
-    re-encodear el video en el post-encode NVENC (sería un re-encode redundante):
-    si ya hubo LUT, el video salió del encoder por hardware; si no, sigue siendo el
-    x264 de Remotion y el post-encode aporta la aceleración.
+    Best-effort: si todo falla, se conserva el render tal cual y el clip NO se da
+    por fallido.
+
+    Devuelve True si el video fue re-encodeado (con el encoder adaptativo de
+    hw_profile, NVENC cuando hay GPU). El caller usa esto para NO volver a
+    re-encodear el video en el post-encode NVENC (sería redundante): si hubo LUT,
+    el video salió del encoder por hardware; si no, sigue siendo el x264 de Remotion
+    y el post-encode aporta la aceleración.
     """
-    video_reencoded = False
-    # 1) LUT — leer el nombre del .cube del project JSON que escribió build-clip-supreme
+    # Leer el nombre del .cube del project JSON que escribió build-clip-supreme.
+    lut_name: str | None = None
     try:
         project_path = LF_PROJECTS / f"{clip_id}_{style_id}.json"
-        lut_name = None
         if project_path.exists():
             data = json.loads(project_path.read_text(encoding="utf-8"))
             lut_name = data.get("lut")
-        if lut_name:
-            lut_file = REMOTION_DIR / "public" / "luts" / lut_name
-            if lut_file.exists():
-                graded = rendered.with_name(rendered.stem + "_graded.mp4")
-                # Log ANTES de arrancar: el lut3d re-encodea todo el clip y tarda 1-2 min
-                # en silencio. Sin este aviso el panel de progreso parece congelado.
-                print(
-                    f"[post-fx] aplicando color grade ({lut_name})… re-encode del clip, ~1-2 min",
-                    file=sys.stderr, flush=True,
-                )
-                # Ruta relativa con forward-slashes (cwd=REMOTION_DIR) para evitar el
-                # escaping del ":" de la unidad de Windows dentro del filtergraph.
-                # preset=fast (no medium): ~40% más rápido a crf 18 con calidad casi igual,
-                # clave porque un lote de largos re-encodea N clips × M estilos.
-                # Encoder adaptativo: NVENC en GPU NVIDIA (3-8x), libx264 si no.
-                # CONSERVADOR: lleva -vf lut3d (filtro CPU) → NO inyectamos decode
-                # hwaccel (input_path=None); solo adaptamos el ENCODER. safe_ffmpeg
-                # cae a libx264 si el NVENC falla en runtime.
-                ff = ffmpeg_full_args(input_path=None, quality="final")
-                _res = safe_ffmpeg(
-                    [
-                        str(FFMPEG_PATH), "-y",
-                        "-i", str(rendered),
-                        "-vf", f"lut3d=public/luts/{lut_name}",
-                        "-c:a", "copy",
-                        *ff["video_args"],
-                        "-pix_fmt", "yuv420p",
-                        str(graded),
-                    ],
-                    input_path=str(rendered),
-                    cwd=REMOTION_DIR, timeout=240,
-                )
-                if _res.returncode != 0:
-                    raise subprocess.CalledProcessError(
-                        _res.returncode, "ffmpeg lut3d", _res.stdout, _res.stderr
-                    )
-                graded.replace(rendered)
-                video_reencoded = True
-                print(f"[post-fx] LUT aplicado ({lut_name}): {rendered.name}", file=sys.stderr)
-            else:
-                print(f"[post-fx] LUT no encontrado, se salta: {lut_name}", file=sys.stderr)
-    except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
-        print(f"[post-fx] LUT skipped: {e}", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001
+        print(f"[post-fx] no pude leer el project ({e}); sigo sin LUT", file=sys.stderr)
+        lut_name = None
 
-    # 2) Audio mastering — mismos filtros que el SUPREME de shorts
+    # LUT declarado pero el .cube no existe → no fusionamos el video, solo audio.
+    if lut_name:
+        lut_file = REMOTION_DIR / "public" / "luts" / lut_name
+        if not lut_file.exists():
+            print(f"[post-fx] LUT no encontrado, se salta: {lut_name}", file=sys.stderr)
+            lut_name = None
+
+    # ── Sin LUT: nada que fusionar, una sola pasada de audio (igual que antes). ──
+    if not lut_name:
+        try:
+            _post_fx_audio_step(rendered)
+        except Exception as e:  # noqa: BLE001
+            print(f"[post-fx] audio mastering skipped: {e}", file=sys.stderr)
+        return False
+
+    # ── Con LUT: intentar la pasada FUSIONADA (video lut3d + audio master). ──
     try:
-        mastered = rendered.with_name(rendered.stem + "_mastered.mp4")
-        audio_filter = (
-            "acompressor=threshold=-18dB:ratio=3:attack=20:release=200,"
-            "alimiter=level_in=1:level_out=0.95:limit=0.95,"
-            "highpass=f=80,"
-            "equalizer=f=3000:t=q:w=1:g=2"
+        fused = rendered.with_name(rendered.stem + "_fxfused.mp4")
+        print(
+            f"[post-fx] grade ({lut_name}) + master de audio en UNA pasada… ~1-2 min",
+            file=sys.stderr, flush=True,
         )
-        print("[post-fx] masterizando audio…", file=sys.stderr, flush=True)
-        subprocess.run(
+        # Mismo encoder adaptativo + pix_fmt que el paso LUT original; el audio se
+        # re-encodea a AAC con EXACTAMENTE los mismos filtros de mastering. No se
+        # toca el timing (sin -ss/-itsoffset/-shortest): el sync de A/V queda igual.
+        ff = ffmpeg_full_args(input_path=None, quality="final")
+        _res = safe_ffmpeg(
             [
                 str(FFMPEG_PATH), "-y",
                 "-i", str(rendered),
-                "-af", audio_filter,
-                "-c:v", "copy",
+                "-vf", f"lut3d=public/luts/{lut_name}",
+                "-af", _AUDIO_MASTER_FILTER,
+                *ff["video_args"],
+                "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-b:a", "192k",
-                str(mastered),
+                str(fused),
             ],
-            check=True, cwd=REMOTION_DIR, timeout=120,
+            input_path=str(rendered),
+            cwd=REMOTION_DIR, timeout=300,
         )
-        mastered.replace(rendered)
-        print(f"[post-fx] audio mastered: {rendered.name}", file=sys.stderr)
-    except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
-        print(f"[post-fx] audio mastering skipped: {e}", file=sys.stderr)
-
-    return video_reencoded
+        if _res.returncode != 0:
+            raise subprocess.CalledProcessError(
+                _res.returncode, "ffmpeg lut3d+master", _res.stdout, _res.stderr
+            )
+        fused.replace(rendered)
+        print(
+            f"[post-fx] grade + audio master fusionados: {rendered.name}",
+            file=sys.stderr,
+        )
+        return True
+    except Exception as e:  # noqa: BLE001 — fusión falló: caer a las 2 pasadas.
+        print(
+            f"[post-fx] pasada fusionada falló ({e}); fallback a 2 pasadas",
+            file=sys.stderr,
+        )
+        # Limpiar el parcial si quedó a medias.
+        try:
+            rendered.with_name(rendered.stem + "_fxfused.mp4").unlink(missing_ok=True)
+        except OSError:
+            pass
+        return _post_fx_two_pass(rendered, lut_name)
 
 
 def step_render_clip(
@@ -646,12 +842,16 @@ def step_render_clip(
     subtitle_font: str | None = None,
     subtitle_color: str | None = None,
     editorial_theme: str | None = None,
+    render_pool=None,
 ) -> Path:
     """Genera proyecto + props + render con Remotion para un (clip, style) específico.
 
     Output: long_form/renders/{clip_id}_{style_id}.mp4
     aspect_ratio: "9:16" vertical (default) o "16:9" horizontal.
     remotion_concurrency: workers internos de Remotion (0 = auto según workers del pool).
+    render_pool: RenderPool de render-servers (OLA 3) — si se pasa y la instancia
+        responde ok, el render NO re-bundlea webpack. None o cualquier fallo →
+        FALLBACK por-clip al CLI directo (`_remotion_render_cmd`), idéntico a antes.
     """
     if remotion_concurrency <= 0:
         remotion_concurrency = _remotion_concurrency(_render_workers())
@@ -687,22 +887,56 @@ def step_render_clip(
     )
     # 3) render — nombre incluye styleId para no pisar otros estilos del mismo clip
     out = LF_RENDERS / f"{clip_id}_{style_id}.mp4"
+    props_path = REMOTION_DIR / props_name
+    rendered_via_pool = False
+    # 3a) OLA 3 — POOL de render-servers: bundle UNA vez por proceso, reusado para
+    #     todos los clips. Si el pool atiende el render con ok, NOS SALTAMOS el CLI
+    #     (que re-bundlea webpack). El .mp4 es idéntico: mismos props, codec h264,
+    #     offthread cache, timeout y preset x264/crf del hw_profile. CUALQUIER fallo
+    #     (instancia muerta, error de render) → FALLBACK por-clip al CLI directo.
+    if render_pool is not None:
+        try:
+            timeout_ms = 120000
+            rendered_via_pool = render_pool.render_clip(
+                props_path, out, remotion_concurrency, timeout_ms
+            )
+            if rendered_via_pool:
+                print(f"[render] {clip_id}: vía pool (sin re-bundle)", file=sys.stderr, flush=True)
+            else:
+                print(
+                    f"[render] {clip_id}: pool no atendió → fallback CLI directo",
+                    file=sys.stderr, flush=True,
+                )
+        except Exception as e:  # noqa: BLE001 — nunca rompe: cae al CLI directo
+            print(f"[render] {clip_id}: pool error ({e}) → fallback CLI directo", file=sys.stderr)
+            rendered_via_pool = False
+    # #8: CLI de Remotion DIRECTO con node (sin npx) + #4/#5 preset x264. Si el CLI
+    # directo no se resuelve, _remotion_render_cmd devuelve el comando con `npx`
+    # (mismo comportamiento de antes). Si el render directo FALLA en runtime, caemos
+    # a npx explícitamente como segunda red de seguridad.
+    cmd = _remotion_render_cmd(out, remotion_concurrency, props_name)
     try:
-        run([
-            "npx.cmd" if sys.platform == "win32" else "npx",
-            "remotion",
-            "render",
-            "src/index.ts",
-            "ViralVideo",
-            str(out),
-            "--concurrency",
-            str(remotion_concurrency),
-            # delayRender amplio: el dev server sirviendo el clip bajo carga puede
-            # tardar >28s (default) en responder un seek de OffthreadVideo.
-            "--timeout=120000",
-            _offthread_cache_flag(),
-            f"--props={props_name}",
-        ], cwd=REMOTION_DIR)
+        if not rendered_via_pool:
+            used_direct = cmd[0] not in ("npx", "npx.cmd")
+            try:
+                run(cmd, cwd=REMOTION_DIR)
+            except (subprocess.CalledProcessError, OSError) as e:
+                if not used_direct:
+                    raise  # ya era npx: no hay fallback adicional
+                print(
+                    f"[render] CLI directo falló ({e}); reintento con npx (fallback)",
+                    file=sys.stderr, flush=True,
+                )
+                preset, _crf = _x264_recommend()
+                npx = "npx.cmd" if sys.platform == "win32" else "npx"
+                npx_cmd = [
+                    npx, "remotion", "render", "src/index.ts", "ViralVideo", str(out),
+                    "--concurrency", str(remotion_concurrency),
+                    "--timeout=120000", _offthread_cache_flag(), f"--props={props_name}",
+                ]
+                if preset:
+                    npx_cmd.append(f"--x264-preset={preset}")
+                run(npx_cmd, cwd=REMOTION_DIR)
     finally:
         # limpiar el props temporal (best-effort)
         try:
@@ -941,15 +1175,48 @@ def main() -> int:
     # Virality Score + whyViral SOLO si el proposals es nuevo. En --from-proposals
     # NO se re-scorea: el score reordena los clips y eso rompería las posiciones
     # que el usuario ya aprobó/ajustó en el paso de revisión.
+    #
+    # #15 VELOCIDAD: step_explain_virality llama a Ollama ~20s × N clips SOLO para
+    # poblar el campo `whyViral` (el "porqué" del clip que muestra el wizard). NO
+    # afecta el render del video. Por eso lo DIFERIMOS para que no bloquee extract +
+    # render:
+    #   - En --analyze-only el explain ES parte del entregable (el wizard lee el
+    #     proposals enriquecido), así que ahí se corre síncrono antes de devolver.
+    #   - En el flujo de render arranca en un thread daemon en PARALELO mientras
+    #     extract/render corren; escribe whyViral en el proposals cuando termina.
+    #     Si Ollama no está, hace skip silencioso (ya era best-effort).
+    explain_thread = None
     if not args.from_proposals:
         # Virality Score (0-100) por clip — reordena de más a menos viral.
+        # IMPORTANTE: el score corre ANTES (síncrono) porque reordena los clips y el
+        # explain lee ese orden; además el extract consume este proposals.
         print("\n========== Virality Score ==========", file=sys.stderr)
         step_score_virality(args.video_id, proposals_path)
 
         # "¿Por qué este clip?" — explicación corta con IA local (solo modo inteligente,
         # top 15 por score; si Ollama no está, sigue sin el campo y sin error).
         if not args.use_heuristic:
-            step_explain_virality(args.video_id, proposals_path, model=args.model)
+            if args.analyze_only:
+                # Entregable del wizard: debe estar listo antes de devolver.
+                step_explain_virality(args.video_id, proposals_path, model=args.model)
+            else:
+                # NO bloquear el render: corre en paralelo. El score ya reordenó y
+                # extract NO usa whyViral, así que parchear el JSON después es seguro.
+                import threading  # noqa: PLC0415
+
+                explain_thread = threading.Thread(
+                    target=step_explain_virality,
+                    args=(args.video_id, proposals_path),
+                    kwargs={"model": args.model},
+                    daemon=True,
+                    name="explain-virality",
+                )
+                explain_thread.start()
+                print(
+                    "[whyViral] explicación con IA local corriendo en paralelo "
+                    "(no bloquea el render)",
+                    file=sys.stderr,
+                )
 
     # ── ANÁLISIS-SOLO (flujo REVISAR, acto 1): aquí termina. El proposals quedó
     # escrito con score + whyViral; el wizard lo muestra para aprobar/ajustar y
@@ -1022,9 +1289,29 @@ def main() -> int:
             for si, style_id in enumerate(styles, start=1)
         ]
         workers = min(_render_workers(), max(1, len(tasks)))
+        # ── OLA 3 — POOL de render-servers (bundle UNA vez, reusado) ──────────
+        # Arrancamos un pool de N=workers instancias del render-server.mjs ANTES del
+        # ThreadPoolExecutor. Cada instancia bundlea una sola vez; los workers-thread
+        # toman una instancia libre por render → N renders concurrentes SIN re-bundle.
+        # GUARD DE RAM + fallback están en lf_render_pool.start_pool: si la RAM no
+        # alcanza, el pool no arranca o quedan <2 instancias listas, devuelve None y
+        # TODO cae al CLI directo de siempre (que sí re-bundlea, pero funciona).
+        render_pool = None
+        try:
+            import lf_render_pool  # noqa: PLC0415
+
+            render_pool = lf_render_pool.start_pool(workers)
+        except Exception as e:  # noqa: BLE001 — cualquier falla → CLI directo
+            print(f"[render] no pude armar el pool ({e}); uso CLI directo", file=sys.stderr)
+            render_pool = None
+        # Si hay pool, el paralelismo lo marca el TAMAÑO del pool (instancias listas);
+        # si no, los workers del ThreadPoolExecutor con CLI directo, como antes.
+        if render_pool is not None:
+            workers = render_pool.size
         rc = _remotion_concurrency(workers)
         print(
-            f"[render] {workers} render(s) en paralelo · --concurrency {rc} c/u",
+            f"[render] {workers} render(s) en paralelo · --concurrency {rc} c/u"
+            f"{' · pool de render-servers' if render_pool is not None else ' · CLI directo'}",
             file=sys.stderr, flush=True,
         )
         done_count = 0
@@ -1047,24 +1334,45 @@ def main() -> int:
                 subtitle_font=args.subtitle_font,
                 subtitle_color=args.subtitle_color,
                 editorial_theme=args.editorial_theme,
+                render_pool=render_pool,
             )
             return (c["index"], style_id, out)
 
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(_render_one, t): t for t in tasks}
-            for fut in as_completed(futures):
-                ci, c, si, style_id = futures[fut]
+        try:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {pool.submit(_render_one, t): t for t in tasks}
+                for fut in as_completed(futures):
+                    ci, c, si, style_id = futures[fut]
+                    try:
+                        _, _, out = fut.result()
+                        done_count += 1
+                        print(
+                            f"[ok] render -> {out} ({done_count}/{len(tasks)} listos)",
+                            file=sys.stderr, flush=True,
+                        )
+                    except subprocess.CalledProcessError as e:
+                        print(f"[fail] render clip {c['index']} style {style_id}: {e}", file=sys.stderr)
+                    except Exception as e:  # noqa: BLE001 — un clip fallido no tumba el lote
+                        print(f"[fail] render clip {c['index']} style {style_id}: {e}", file=sys.stderr)
+        finally:
+            # Apagar el pool SIEMPRE: libera los N procesos Node + browser (RAM).
+            if render_pool is not None:
                 try:
-                    _, _, out = fut.result()
-                    done_count += 1
-                    print(
-                        f"[ok] render -> {out} ({done_count}/{len(tasks)} listos)",
-                        file=sys.stderr, flush=True,
-                    )
-                except subprocess.CalledProcessError as e:
-                    print(f"[fail] render clip {c['index']} style {style_id}: {e}", file=sys.stderr)
-                except Exception as e:  # noqa: BLE001 — un clip fallido no tumba el lote
-                    print(f"[fail] render clip {c['index']} style {style_id}: {e}", file=sys.stderr)
+                    render_pool.shutdown()
+                except Exception:  # noqa: BLE001
+                    pass
+
+    # #15: el explain corrió en paralelo al render. Para entonces casi siempre ya
+    # terminó (el render tarda mucho más); le damos una espera acotada para que
+    # alcance a escribir whyViral en el proposals. Es daemon: si no termina, no
+    # bloquea la salida del proceso.
+    if explain_thread is not None:
+        explain_thread.join(timeout=30)
+        if explain_thread.is_alive():
+            print(
+                "[whyViral] sigue corriendo en background; no bloqueo el cierre",
+                file=sys.stderr,
+            )
 
     elapsed = time.time() - t_total
     print(f"\n========== DONE en {elapsed/60:.1f} min ==========", file=sys.stderr)

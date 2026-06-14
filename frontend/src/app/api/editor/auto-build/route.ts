@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
   PROJECTS_DIR,
@@ -10,6 +11,7 @@ import {
   PYTHON_EXE,
   PYTHON_DIR,
   FFMPEG_EXE,
+  DATA_ROOT,
 } from "@/lib/paths";
 import { humanizeError } from "@/lib/humanize-error";
 import { canRender, registerRender } from "@/lib/license";
@@ -68,6 +70,50 @@ export const maxDuration = 1800;
 // dimensionsFromAspect, findRawVideo, uniqueProjectId, STYLE_SHORT_LABEL viven en ./lib/helpers.
 // TranscriptWord, pickTopKeywords, sanitizeForFilename, generateContentTitle viven en @/lib/content-title.
 // runProcess + parseLastJsonLine viven en @/lib/run-process.
+
+// ─── #6 — Encoder por hardware para el paso de LUT (fusión, evita doble encode) ──
+// hw_profile.py recomienda el encoder en DATA_ROOT/cache/hw_profile.json. Para el
+// grade LUT, en vez de encodear SIEMPRE en libx264 'medium' y DESPUÉS re-encodear
+// en NVENC (postencode = doble encode), leemos el encoder recomendado y hacemos el
+// lut3d + encode por hardware en UNA sola pasada. Si el encoder es libx264 (sin GPU
+// usable) mantenemos el camino viejo (libx264) + postencode no-op.
+//
+// Estos args ESPEJAN hw_profile.ffmpeg_video_args('final') (h264_nvenc p5/cq19,
+// qsv gq19/slow, amf qp19) para preservar EXACTAMENTE el mismo look/calidad que el
+// postencode que se haría después. Si el JSON falta o algo no calza → libx264.
+function hwLutVideoArgs(): { encoder: string; args: string[] } {
+  let encoder = "libx264";
+  try {
+    const j = JSON.parse(
+      readFileSync(path.join(DATA_ROOT, "cache", "hw_profile.json"), "utf-8")
+    );
+    const v = j?.recommend?.video_encoder;
+    if (typeof v === "string") encoder = v;
+  } catch {
+    /* sin perfil → libx264 (camino viejo) */
+  }
+  switch (encoder) {
+    case "h264_nvenc":
+      return {
+        encoder,
+        args: [
+          "-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "19",
+          "-b:v", "0", "-spatial-aq", "1", "-temporal-aq", "1",
+        ],
+      };
+    case "h264_qsv":
+      return { encoder, args: ["-c:v", "h264_qsv", "-global_quality", "19", "-preset", "slow"] };
+    case "h264_amf":
+      return {
+        encoder,
+        args: ["-c:v", "h264_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", "19", "-qp_p", "19"],
+      };
+    default:
+      // libx264: el grade LUT del camino viejo (CRF 18, preset medium). Lo
+      // mantenemos idéntico para no cambiar el look en equipos CPU-only.
+      return { encoder: "libx264", args: ["-c:v", "libx264", "-crf", "18", "-preset", "medium"] };
+  }
+}
 
 async function processJob(job: Job, body: AutoBuildRequest) {
   // Usar job.videoId (siempre string) en lugar de body.videoId (opcional ahora con batch)
@@ -500,6 +546,9 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // se conserva el render sin LUT (no rompe el job). Estilos existentes no setean
       // `lut` → este bloque no corre para ellos (render idéntico).
       const lutName = project.lut;
+      // #6 — Si el paso de LUT encodeó YA por hardware, el postencode NVENC posterior
+      // sería un doble encode inútil: marcamos para saltarlo.
+      let lutHwEncoded = false;
       if (lutName) {
         updateStep(job.id, styleId, { progress: 96 });
         try {
@@ -515,6 +564,11 @@ async function processJob(job: Job, body: AutoBuildRequest) {
             // Ruta relativa con forward-slashes (cwd=REMOTION_DIR) para evitar el
             // escaping del ":" de la unidad de Windows dentro del filtergraph.
             const lutFilter = `lut3d=public/luts/${lutName}`;
+            // #6 — FUSIÓN: encodea el grade con el encoder por HARDWARE recomendado
+            // en UNA sola pasada (antes: libx264 'medium' fijo + postencode NVENC =
+            // doble encode). Mismo lut3d, calidad equivalente (p5/cq19 ≈ crf18).
+            // Si no hay GPU usable → libx264 crf18/medium (look idéntico al de antes).
+            const { encoder: lutEncoder, args: lutVideoArgs } = hwLutVideoArgs();
             const lutRun = await runProcess(
               FFMPEG_EXE,
               [
@@ -522,9 +576,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
                 "-i", outPath,
                 "-vf", lutFilter,
                 "-c:a", "copy",
-                "-c:v", "libx264",
-                "-crf", "18",
-                "-preset", "medium",
+                ...lutVideoArgs,
                 "-pix_fmt", "yuv420p",
                 gradedPath,
               ],
@@ -536,7 +588,11 @@ async function processJob(job: Job, body: AutoBuildRequest) {
               await fs.rename(outPath, outPath.replace(/\.mp4$/, "_nolut.mp4"));
               await fs.rename(gradedPath, outPath);
               await fs.unlink(outPath.replace(/\.mp4$/, "_nolut.mp4")).catch(() => {});
-              console.log(`[auto-build] LUT aplicado (${lutName}): ${path.basename(outPath)}`);
+              // Si encodeó por hardware, no hace falta el postencode posterior.
+              lutHwEncoded = lutEncoder !== "libx264";
+              console.log(
+                `[auto-build] LUT aplicado (${lutName}, encoder=${lutEncoder}): ${path.basename(outPath)}`
+              );
             } else {
               console.warn(`[auto-build] ffmpeg lut3d falló, manteniendo render sin LUT`);
             }
@@ -575,21 +631,31 @@ async function processJob(job: Job, body: AutoBuildRequest) {
       // archivo intacto — así NUNCA degrada un equipo CPU-only con un re-encode inútil.
       // Best-effort: si falla, se conserva el render tal cual (no rompe el estilo).
       updateStep(job.id, styleId, { progress: 98 });
-      try {
-        const pe = await runProcess(
-          PYTHON_EXE,
-          [path.join(PYTHON_DIR, "postencode.py"), outPath],
-          PYTHON_DIR,
-          undefined,
-          300_000 // 5 min — re-encode NVENC de un short es rápido, pero damos margen
+      // #6 — Si el paso de LUT YA encodeó por hardware, saltamos el postencode: sería
+      // un segundo encode por GPU del mismo material (doble encode, sin ganancia y con
+      // pérdida extra). Sin LUT, o con LUT en libx264 (CPU-only), corremos el postencode
+      // de siempre (que es no-op en equipos sin GPU usable).
+      if (lutHwEncoded) {
+        console.log(
+          `[auto-build] post-encode NVENC omitido (LUT ya encodeó por hardware): ${path.basename(outPath)}`
         );
-        if (pe.ok) {
-          console.log(`[auto-build] post-encode NVENC ok: ${path.basename(outPath)}`);
-        } else {
-          console.warn(`[auto-build] post-encode NVENC falló, manteniendo render x264`);
+      } else {
+        try {
+          const pe = await runProcess(
+            PYTHON_EXE,
+            [path.join(PYTHON_DIR, "postencode.py"), outPath],
+            PYTHON_DIR,
+            undefined,
+            300_000 // 5 min — re-encode NVENC de un short es rápido, pero damos margen
+          );
+          if (pe.ok) {
+            console.log(`[auto-build] post-encode NVENC ok: ${path.basename(outPath)}`);
+          } else {
+            console.warn(`[auto-build] post-encode NVENC falló, manteniendo render x264`);
+          }
+        } catch (err) {
+          console.warn(`[auto-build] post-encode NVENC skipped:`, err);
         }
-      } catch (err) {
-        console.warn(`[auto-build] post-encode NVENC skipped:`, err);
       }
 
       // Publicar atómicamente: el .mp4 final aparece de una sola pieza recién acá.

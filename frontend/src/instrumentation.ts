@@ -11,4 +11,15 @@ export async function register() {
   startSchedulerIfNeeded();
   const { maybeSweepOrphans } = await import("@/lib/orphan-sweep");
   maybeSweepOrphans();
+
+  // OLA 2 (#7) — PRE-CALENTADO del render-server: arrancar el proceso de larga
+  // vida AHORA arma el bundle webpack (15-40s) al iniciar la app, no en el primer
+  // render. Best-effort y sin await: si falla, el fallback al `npx remotion render`
+  // sigue intacto. No debe bloquear ni romper el arranque de la app.
+  try {
+    const { warmup } = await import("@/lib/render-server-client");
+    warmup();
+  } catch {
+    /* el pre-calentado es opcional: nunca rompe el boot */
+  }
 }

@@ -270,12 +270,17 @@ def _recommend(prof: dict) -> dict:
         whisper_compute_type = "int8"
 
     # whisper_model
-    # NOTA: el spec lista >=5000 → large-v3, pero su propio test #2 (GTX 1080,
-    # 6700 MB libres) espera "medium" y el #3 (RTX 4090, 22000) espera "large-v3".
-    # El umbral real de large-v3 vive entre esos dos valores; usamos 8000 MB
-    # (large-v3 necesita ~10 GB de headroom de todos modos) para satisfacer ambos.
+    # NOTA: el spec lista >=5000 → large, pero su propio test #2 (GTX 1080,
+    # 6700 MB libres) espera "medium" y el #3 (RTX 4090, 22000) espera el modelo
+    # grande. El umbral real vive entre esos dos valores; usamos 8000 MB
+    # (el grande necesita ~10 GB de headroom de todos modos) para satisfacer ambos.
+    #
+    # VELOCIDAD: en lugar de "large-v3" usamos "large-v3-turbo" (decoder podado de
+    # 32→4 capas, ~2-3x más rápido en transcripción, +1-2% WER en español =
+    # aceptable). Damos el id explícito ct2 para que faster-whisper/whisperx lo
+    # resuelvan sin ambigüedad a un modelo CTranslate2 descargable.
     if torch_cuda and vram_free >= 8000:
-        whisper_model = "large-v3"
+        whisper_model = "deepdml/faster-whisper-large-v3-turbo-ct2"
     elif torch_cuda and vram_free >= 2000:
         whisper_model = "medium"
     elif torch_cuda:
@@ -284,6 +289,10 @@ def _recommend(prof: dict) -> dict:
         whisper_model = "small"
     else:
         whisper_model = "base"
+    # Override explícito por env (lo respeta transcribe.py).
+    env_wm = os.environ.get("VIRAL_WHISPER_MODEL")
+    if env_wm:
+        whisper_model = env_wm
 
     # video_encoder
     if nvenc_usable:
@@ -321,6 +330,44 @@ def _recommend(prof: dict) -> dict:
     else:
         remotion_workers = max(1, min(2, cores_physical // 3))
 
+    # ------------------------------------------------------------------
+    # VELOCIDAD del render (libx264 de Remotion / post-encode). Exponemos
+    # estos valores en recommend para que el render-server (Node) los lea del
+    # JSON y los pase EXPLÍCITOS a Remotion, sin cambiar la lógica existente.
+    # ------------------------------------------------------------------
+    # GPU "usable" para angle: hay GPU NVIDIA (name no vacío) o QSV usable.
+    nv_name = str(nv.get("name") or "").strip()
+    gpu_usable_for_gl = bool(nv_name or qsv)
+
+    # x264_preset: preset de libx264.
+    #  - Sin encoder de hardware usable (video_encoder == "libx264") → el x264 es
+    #    el ENTREGABLE final: "veryfast" encodea ~1.5-2.3x más rápido con la MISMA
+    #    calidad visual a igual CRF (solo ~10-17% más de tamaño, aceptable).
+    #  - Con GPU (nvenc/qsv/amf) → el x264 de Remotion es un intermedio que el
+    #    post-encode por hardware re-encodea y se TIRA, así que conviene que sea
+    #    lo más rápido posible: "ultrafast".
+    if video_encoder == "libx264":
+        x264_preset = "veryfast"
+    else:
+        x264_preset = "ultrafast"
+
+    # x264_crf: 24. NO se sube (mantener calidad). Solo se expone el valor que ya
+    # se usa para que el render-server lo pase explícito.
+    x264_crf = 24
+
+    # chromium_gl: backend OpenGL del Chromium headless de Remotion.
+    # CONSERVADOR por default: None = no forzar nada (comportamiento actual de
+    # Remotion, swiftshader/swangle). SOLO "angle" (raster por GPU real, más
+    # rápido en escenas con blur/sombras) si hay GPU usable Y el usuario hace
+    # opt-in explícito con VIRAL_REMOTION_GL=="angle".
+    # NUNCA "angle" por default: tiene un memory-leak conocido + posible
+    # diferencia sutil de pixel → debe validarse con un test de paridad antes de
+    # prenderlo en producción.
+    if os.environ.get("VIRAL_REMOTION_GL") == "angle" and gpu_usable_for_gl:
+        chromium_gl = "angle"
+    else:
+        chromium_gl = None
+
     return {
         "whisper_device": whisper_device,
         "whisper_compute_type": whisper_compute_type,
@@ -329,6 +376,9 @@ def _recommend(prof: dict) -> dict:
         "video_decoder_hwaccel": video_decoder_hwaccel,
         "ollama_model": ollama_model,
         "remotion_workers": remotion_workers,
+        "x264_preset": x264_preset,
+        "x264_crf": x264_crf,
+        "chromium_gl": chromium_gl,
     }
 
 

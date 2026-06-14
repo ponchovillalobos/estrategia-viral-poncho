@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -37,6 +38,79 @@ warnings.filterwarnings(
 )
 warnings.filterwarnings("ignore", module="pyannote.audio.core.io")
 warnings.filterwarnings("ignore", message=r".*torchcodec.*", category=UserWarning)
+
+
+# ── Plan de VELOCIDAD (overrides por env, sin degradar el default) ───────────
+# Por qué beam=1: faster-whisper/whisperx decodifican con beam_size=5 por
+# default (lento). Con voz limpia, beam=1 da WER casi igual y decodifica ~1.5x
+# más rápido. condition_on_previous_text=False evita arrastre de errores y
+# acelera. AMBOS son configurables por env:
+#   VIRAL_WHISPER_BEAM=5   → vuelve al beam clásico (si el karaoke se ve sensible)
+#   VIRAL_WHISPER_CONDITION_PREV=1 → reactiva el condicionamiento por texto previo
+# Si dudás del karaoke con beam=1, dejá beam=1 (default) y reportá; el override
+# VIRAL_WHISPER_BEAM=5 recupera la calidad anterior exacta.
+
+def _whisper_beam() -> int:
+    """beam_size para el decoder. Default 1 (rápido); override VIRAL_WHISPER_BEAM."""
+    try:
+        return max(1, int(os.environ.get("VIRAL_WHISPER_BEAM", "1")))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _condition_on_previous() -> bool:
+    """condition_on_previous_text. Default False (rápido, sin arrastre).
+
+    Override: VIRAL_WHISPER_CONDITION_PREV=1 lo reactiva.
+    """
+    return os.environ.get("VIRAL_WHISPER_CONDITION_PREV", "0").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+def _asr_options() -> dict[str, Any]:
+    """Opciones de decodificación para whisperx.load_model(asr_options=...).
+
+    whisperx mergea esto sobre sus defaults (ver asr.load_model), así que sólo
+    pisamos beam_size y condition_on_previous_text; el resto queda intacto.
+    """
+    return {
+        "beam_size": _whisper_beam(),
+        "condition_on_previous_text": _condition_on_previous(),
+    }
+
+
+def _cpu_threads(device: str) -> int | None:
+    """Hilos CTranslate2 para CPU = núcleos FÍSICOS (clamp >=4). None en GPU.
+
+    CTranslate2 (backend de faster-whisper) usa 4 hilos por default; en CPUs de
+    6-8+ cores conviene usar los cores físicos. Import lazy de hw_profile para no
+    pagar el costo cuando corremos en GPU.
+    """
+    if device == "cuda":
+        return None
+    try:
+        import hw_profile
+
+        cores = int(hw_profile.detect().get("cores_physical") or 0)
+    except Exception:  # noqa: BLE001 — si falla la detección, dejamos el default de whisperx
+        return None
+    return max(4, cores)
+
+
+def _load_model_kwargs(device: str) -> dict[str, Any]:
+    """kwargs extra para whisperx.load_model: asr_options + threads (CPU)."""
+    kwargs: dict[str, Any] = {"asr_options": _asr_options()}
+    threads = _cpu_threads(device)
+    if threads is not None:
+        kwargs["threads"] = threads
+    print(
+        f"[transcribe] beam={kwargs['asr_options']['beam_size']} "
+        f"condition_prev={kwargs['asr_options']['condition_on_previous_text']} "
+        f"threads={threads if threads is not None else 'gpu/default'}",
+        file=sys.stderr,
+    )
+    return kwargs
 
 
 def extract_audio(video_path: Path, out_wav: Path) -> None:
@@ -106,6 +180,7 @@ def transcribe(
             device=device,
             compute_type=compute_type,
             language=WHISPER_LANGUAGE,
+            **_load_model_kwargs(device),
         )
 
         print("[transcribe] transcribiendo...", file=sys.stderr)
@@ -221,15 +296,31 @@ def _try_batched_transcribe(
 
     try:
         print(f"[chunked] probando BatchedInferencePipeline (VAD batching) '{model_size}'...", file=sys.stderr)
-        base = WhisperModel(model_size, device=device, compute_type=compute_type)
+        # cpu_threads = cores físicos en CPU (clamp >=4); en GPU dejamos el default
+        # de CTranslate2. beam=1 + condition_on_previous_text=False por el plan de
+        # velocidad (override por env, ver helpers arriba).
+        wm_kwargs: dict[str, Any] = {}
+        threads = _cpu_threads(device)
+        if threads is not None:
+            wm_kwargs["cpu_threads"] = threads
+        base = WhisperModel(model_size, device=device, compute_type=compute_type, **wm_kwargs)
         pipeline = BatchedInferencePipeline(model=base)
         # batch_size alto en GPU, moderado en CPU. VAD recorta silencios.
         batch_size = 16 if device == "cuda" else 8
+        beam = _whisper_beam()
+        cond_prev = _condition_on_previous()
+        print(
+            f"[chunked] beam={beam} condition_prev={cond_prev} "
+            f"cpu_threads={threads if threads is not None else 'gpu/default'}",
+            file=sys.stderr,
+        )
         seg_iter, _info = pipeline.transcribe(
             str(wav_path),
             batch_size=batch_size,
             language=WHISPER_LANGUAGE,
             vad_filter=True,
+            beam_size=beam,
+            condition_on_previous_text=cond_prev,
         )
         # faster_whisper devuelve Segment (objeto), no dict: normalizamos a dicts
         # con text/start/end para reusar _segments_to_words tal cual.
@@ -311,6 +402,7 @@ def transcribe_chunked(
             device=device,
             compute_type=compute_type,
             language=WHISPER_LANGUAGE,
+            **_load_model_kwargs(device),
         )
 
         audio = whisperx.load_audio(str(wav_path))
@@ -420,7 +512,10 @@ def transcribe_batch(jobs: list[dict[str, str]], model_size: str = WHISPER_MODEL
         f"[batch] {len(jobs)} clips · device={device} · modelo se carga UNA sola vez",
         file=sys.stderr, flush=True,
     )
-    model = whisperx.load_model(model_size, device=device, compute_type=compute_type, language=WHISPER_LANGUAGE)
+    model = whisperx.load_model(
+        model_size, device=device, compute_type=compute_type, language=WHISPER_LANGUAGE,
+        **_load_model_kwargs(device),
+    )
     align_model, metadata = whisperx.load_align_model(language_code=WHISPER_LANGUAGE, device=device)
 
     ok_count = 0
