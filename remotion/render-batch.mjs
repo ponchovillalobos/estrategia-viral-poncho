@@ -27,6 +27,28 @@ const DATA_ROOT = pickDataRoot();
 const PROJECTS_DIR = path.join(DATA_ROOT, "projects");
 const RENDERS_DIR = path.join(DATA_ROOT, "renders");
 
+// Codec de salida según el perfil de hardware (H3). hw_profile.json lo escribe
+// Python; acá lo leemos para elegir el --codec de Remotion. NOTA: Remotion no
+// expone NVENC/QSV/AMF (su renderer encodea en CPU), así que esto siempre resuelve
+// a "h264"; el encoder de hardware real solo se reporta en el log. Ver remotion/lib/encoder.ts.
+import { readFileSync } from "node:fs";
+function pickRemotionCodec() {
+  try {
+    const p = path.join(DATA_ROOT, "cache", "hw_profile.json");
+    if (!existsSync(p)) return { codec: "h264", hw: "libx264" };
+    const prof = JSON.parse(readFileSync(p, "utf-8"));
+    const hw = String(prof?.recommend?.video_encoder ?? "libx264");
+    return { codec: "h264", hw };
+  } catch {
+    return { codec: "h264", hw: "libx264" };
+  }
+}
+const { codec: REMOTION_CODEC, hw: HW_ENCODER } = pickRemotionCodec();
+console.log(
+  `[encoder] recommend=${HW_ENCODER} → remotion --codec=${REMOTION_CODEC}` +
+    (HW_ENCODER === "libx264" ? " (CPU x264)" : " (Remotion encodea en CPU; NVENC no expuesto)")
+);
+
 function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
     const proc = spawn(cmd, args, { cwd: __dirname, shell: process.platform === "win32", ...opts });
@@ -57,6 +79,7 @@ async function main() {
         "ViralVideo",
         outPath,
         "--props=props.json",
+        `--codec=${REMOTION_CODEC}`,
       ]);
       const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
       summary.push({ project: job.project, status: "ok", elapsed, out: outPath });

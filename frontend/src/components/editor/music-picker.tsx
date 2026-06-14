@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { Music, Play, Pause, Check } from "lucide-react";
 
 interface MusicTrack {
@@ -51,18 +52,22 @@ export function MusicPicker({ selected, volume, onSelect, onVolumeChange }: Prop
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label className="text-xs">Volumen relativo a voz · {Math.round(volume * 100)}%</Label>
-        <input
-          type="range"
+        <div className="flex items-center justify-between">
+          <Label className="text-xs">Volumen de música</Label>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {Math.round((volume ?? 0.35) * 100)}%
+          </span>
+        </div>
+        <Slider
+          aria-label="Volumen de música"
           min={0}
-          max={1}
-          step={0.05}
-          value={volume}
-          onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-          className="w-full"
+          max={100}
+          step={1}
+          value={Math.round((volume ?? 0.35) * 100)}
+          onValueChange={(v) => onVolumeChange(v / 100)}
         />
         <p className="text-[10px] text-muted-foreground">
-          Recomendado 12–18% para que no tape la voz.
+          Sugerido: 30-40% bajo voz hablada. El ducking automático la baja cuando hablas.
         </p>
       </div>
 

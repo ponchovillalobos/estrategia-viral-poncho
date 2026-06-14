@@ -26,7 +26,12 @@ from mediapipe.tasks.python import vision
 from mediapipe.tasks.python.core.base_options import BaseOptions
 
 try:
-    from hw_profile import ffmpeg_video_args
+    from hw_profile import ffmpeg_full_args
+
+    def ffmpeg_video_args(quality: str = "final") -> list[str]:
+        # Solo el encoder: este script alimenta ffmpeg vía un pipe rawvideo (stdin),
+        # así que el decode hwaccel no aplica; usamos los video_args adaptativos.
+        return ffmpeg_full_args(input_path=None, quality=quality)["video_args"]
 except Exception:  # noqa: BLE001 — fallback x264 si el perfil no carga
     def ffmpeg_video_args(quality: str = "final") -> list[str]:
         return ["-c:v", "libx264", "-crf", "18", "-preset", "fast"]

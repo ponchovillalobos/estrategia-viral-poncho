@@ -15,7 +15,8 @@ import time
 from pathlib import Path
 
 from config import CUTS_DIR, FFMPEG_PATH, RAW_DIR
-from hw_profile import ffmpeg_video_args
+from hw_profile import ffmpeg_full_args
+from lib.ffmpeg_safe_run import safe_ffmpeg
 
 
 def build_filter(segments: list[dict]) -> str:
@@ -53,6 +54,12 @@ def cut(video_path: Path, cuts_path: Path, out_path: Path) -> dict:
 
 def _cut_with_filter_complex(video_path: Path, segments: list, out_path: Path, original_duration) -> dict:
     filter_complex = build_filter(segments)
+    # Encoder adaptativo: NVENC si hay GPU NVIDIA funcional, libx264 si no.
+    # CONSERVADOR: este path usa -filter_complex (trim/concat en CPU). NO inyectamos
+    # decode hwaccel (input_path=None) porque -hwaccel_output_format cuda entrega
+    # frames en VRAM que el filtergraph CPU no puede consumir. Solo adaptamos el
+    # ENCODER (video_args) + faststart; safe_ffmpeg cubre el fallback runtime.
+    ff = ffmpeg_full_args(input_path=None, quality="final")
     cmd = [
         str(FFMPEG_PATH),
         "-y",
@@ -60,13 +67,15 @@ def _cut_with_filter_complex(video_path: Path, segments: list, out_path: Path, o
         "-filter_complex", filter_complex,
         "-map", "[outv]",
         "-map", "[outa]",
-        # Encoder adaptativo: NVENC si hay GPU NVIDIA funcional, libx264 si no.
-        *ffmpeg_video_args("final"),
+        *ff["video_args"],
         "-c:a", "aac",
         "-b:a", "128k",
+        *ff["container_args"],
         str(out_path),
     ]
-    subprocess.run(cmd, check=True, capture_output=True)
+    res = safe_ffmpeg(cmd, input_path=str(video_path))
+    if res.returncode != 0:
+        raise subprocess.CalledProcessError(res.returncode, cmd, res.stdout, res.stderr)
     total = sum(s["end"] - s["start"] for s in segments)
     return {
         "ok": True,
@@ -92,19 +101,24 @@ def _cut_with_concat_demuxer(video_path: Path, segments: list, out_path: Path, o
             start, end = float(seg["start"]), float(seg["end"])
             duration = end - start
             chunk_path = work_dir / f"chunk_{i:05d}.mp4"
+            # Trim simple por chunk (sin filtergraph): seguro inyectar decode hwaccel.
+            ff = ffmpeg_full_args(input_path=str(video_path), quality="fast")
             cmd = [
                 str(FFMPEG_PATH),
                 "-y",
+                *ff["input_args"],
                 "-ss", f"{start:.3f}",
                 "-i", str(video_path),
                 "-t", f"{duration:.3f}",
-                *ffmpeg_video_args("fast"),
+                *ff["video_args"],
                 "-c:a", "aac",
                 "-b:a", "128k",
                 "-avoid_negative_ts", "make_zero",
                 str(chunk_path),
             ]
-            subprocess.run(cmd, check=True, capture_output=True)
+            res = safe_ffmpeg(cmd, input_path=str(video_path))
+            if res.returncode != 0:
+                raise subprocess.CalledProcessError(res.returncode, cmd, res.stdout, res.stderr)
             chunk_paths.append(chunk_path)
             if (i + 1) % 20 == 0:
                 print(f"[cut] {i + 1}/{len(segments)} chunks", file=sys.stderr)

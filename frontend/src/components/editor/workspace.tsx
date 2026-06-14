@@ -71,7 +71,7 @@ const DEFAULT_PROJECT = (id: string): Project => ({
   subtitleColor: "#ffffff",
   subtitleHighlight: "#34d399",
   musicTrack: null,
-  musicVolume: 0.15,
+  musicVolume: 0.35,
   bRoll: [],
   animations: [],
   manualSubtitles: [],

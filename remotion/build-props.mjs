@@ -156,7 +156,7 @@ const props = {
     if (t.startsWith("/api/")) return `${HOST}${t}`;
     return `${HOST}/api/music/stream?file=${encodeURIComponent(t)}`;
   })(),
-  musicVolume: project.musicVolume ?? 0.15,
+  musicVolume: project.musicVolume ?? Number(process.env.VIRAL_MUSIC_VOLUME ?? 0.35),
   // F1 — Director emocional: curva de ducking de la música ({t, v}). Con jump cuts
   // los `t` se remapean a la línea de tiempo cortada (los puntos que caen en un
   // silencio eliminado se descartan — el cambio de volumen siguiente los cubre).

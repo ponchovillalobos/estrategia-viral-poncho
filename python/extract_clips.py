@@ -18,7 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from hw_profile import ffmpeg_video_args
+from hw_profile import ffmpeg_full_args
+from lib.ffmpeg_safe_run import safe_ffmpeg
 from config import (
     FFMPEG_PATH,
     LF_CLEAN,
@@ -178,41 +179,62 @@ def extract_clip(
 
     if not needs_reframe(clean_path, target_aspect) or face_tracking == "off":
         # Path simple: extract con (o sin) center crop, 1 solo pase de ffmpeg
+        will_crop = (
+            target_aspect in ("9:16", "16:9")
+            and needs_reframe(clean_path, target_aspect)
+        )
+        # CONSERVADOR: solo inyectamos decode hwaccel cuando NO hay -vf crop (el crop
+        # corre en CPU y -hwaccel_output_format cuda entregaría frames en VRAM que el
+        # filtro no consume). Con crop → encoder adaptativo solo (input_path=None).
+        ff = ffmpeg_full_args(
+            input_path=(None if will_crop else str(clean_path)),
+            quality="final",
+        )
         cmd = [
             str(FFMPEG_PATH),
             "-y",
+            *ff["input_args"],
             "-ss", f"{start:.3f}",
             "-i", str(clean_path),
             "-to", f"{end - start:.3f}",
         ]
-        if target_aspect in ("9:16", "16:9") and needs_reframe(clean_path, target_aspect):
+        if will_crop:
             cmd.extend(["-vf", build_crop_filter(target_aspect, None)])
             metadata["center_crop"] = True
         cmd.extend([
             # Encoder adaptativo: h264_nvenc si hay GPU NVIDIA funcional, libx264 si no.
-            *ffmpeg_video_args("final"),
+            *ff["video_args"],
             "-c:a", "aac",
             "-b:a", "128k",
+            *ff["container_args"],
             str(out_path),
         ])
-        subprocess.run(cmd, check=True, capture_output=True)
+        res = safe_ffmpeg(cmd, input_path=str(clean_path))
+        if res.returncode != 0:
+            raise subprocess.CalledProcessError(res.returncode, cmd, res.stdout, res.stderr)
         return metadata
 
     # Path face-aware: 2 pases de ffmpeg + face_tracking entre medio
     # Pase 1: extract temporal sin crop espacial → archivo .tmp.mp4
     tmp_path = out_path.with_suffix(".tmp.mp4")
-    subprocess.run([
+    # Pase 1: trim temporal puro (sin -vf) → decode hwaccel seguro.
+    ff1 = ffmpeg_full_args(input_path=str(clean_path), quality="fast")
+    res1 = safe_ffmpeg([
         str(FFMPEG_PATH),
         "-y",
+        *ff1["input_args"],
         "-ss", f"{start:.3f}",
         "-i", str(clean_path),
         "-to", f"{end - start:.3f}",
         # intermedio (se re-encodea en pase 2): velocidad sobre tamaño
-        *ffmpeg_video_args("fast"),
+        *ff1["video_args"],
         "-c:a", "aac",
         "-b:a", "128k",
+        *ff1["container_args"],
         str(tmp_path),
-    ], check=True, capture_output=True)
+    ], input_path=str(clean_path))
+    if res1.returncode != 0:
+        raise subprocess.CalledProcessError(res1.returncode, "ffmpeg pase1", res1.stdout, res1.stderr)
 
     # Face tracking sobre el tmp
     LF_FACE_TRACKS.mkdir(parents=True, exist_ok=True)
@@ -224,15 +246,21 @@ def extract_clip(
 
     # Pase 2: reframe con face-aware crop (o center fallback si no detectó cara)
     crop_filter = build_crop_filter(target_aspect, bbox)
-    subprocess.run([
+    # Pase 2: lleva -vf crop (CPU) → NO inyectar decode hwaccel (input_path=None),
+    # solo encoder adaptativo + faststart.
+    ff2 = ffmpeg_full_args(input_path=None, quality="final")
+    res2 = safe_ffmpeg([
         str(FFMPEG_PATH),
         "-y",
         "-i", str(tmp_path),
         "-vf", crop_filter,
-        *ffmpeg_video_args("final"),
+        *ff2["video_args"],
         "-c:a", "copy",
+        *ff2["container_args"],
         str(out_path),
-    ], check=True, capture_output=True)
+    ], input_path=str(tmp_path))
+    if res2.returncode != 0:
+        raise subprocess.CalledProcessError(res2.returncode, "ffmpeg pase2", res2.stdout, res2.stderr)
 
     # Cleanup tmp
     try:

@@ -39,7 +39,8 @@ from config import (
     LF_TRANSCRIPTS,
     ensure_long_form_dirs,
 )
-from hw_profile import ffmpeg_video_args
+from hw_profile import ffmpeg_full_args
+from lib.ffmpeg_safe_run import safe_ffmpeg
 
 
 PYTHON_DIR = Path(__file__).resolve().parent
@@ -545,19 +546,28 @@ def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
                 # escaping del ":" de la unidad de Windows dentro del filtergraph.
                 # preset=fast (no medium): ~40% más rápido a crf 18 con calidad casi igual,
                 # clave porque un lote de largos re-encodea N clips × M estilos.
-                subprocess.run(
+                # Encoder adaptativo: NVENC en GPU NVIDIA (3-8x), libx264 si no.
+                # CONSERVADOR: lleva -vf lut3d (filtro CPU) → NO inyectamos decode
+                # hwaccel (input_path=None); solo adaptamos el ENCODER. safe_ffmpeg
+                # cae a libx264 si el NVENC falla en runtime.
+                ff = ffmpeg_full_args(input_path=None, quality="final")
+                _res = safe_ffmpeg(
                     [
                         str(FFMPEG_PATH), "-y",
                         "-i", str(rendered),
                         "-vf", f"lut3d=public/luts/{lut_name}",
                         "-c:a", "copy",
-                        # Encoder adaptativo: NVENC en GPU NVIDIA (3-8x), libx264 si no.
-                        *ffmpeg_video_args("final"),
+                        *ff["video_args"],
                         "-pix_fmt", "yuv420p",
                         str(graded),
                     ],
-                    check=True, cwd=REMOTION_DIR, timeout=240,
+                    input_path=str(rendered),
+                    cwd=REMOTION_DIR, timeout=240,
                 )
+                if _res.returncode != 0:
+                    raise subprocess.CalledProcessError(
+                        _res.returncode, "ffmpeg lut3d", _res.stdout, _res.stderr
+                    )
                 graded.replace(rendered)
                 print(f"[post-fx] LUT aplicado ({lut_name}): {rendered.name}", file=sys.stderr)
             else:

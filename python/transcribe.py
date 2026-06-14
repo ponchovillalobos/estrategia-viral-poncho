@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -22,6 +21,7 @@ from config import (
     RAW_DIR,
     TRANSCRIPTS_DIR,
     WHISPER_COMPUTE_TYPE,
+    WHISPER_DEVICE,
     WHISPER_LANGUAGE,
     WHISPER_MODEL,
     ensure_dirs,
@@ -78,13 +78,9 @@ def transcribe(video_path: Path, model_size: str = WHISPER_MODEL) -> dict[str, A
     """Transcribe + alinea palabras. Retorna dict con words[]."""
     import whisperx
 
-    from hw_profile import whisper_device
-
-    # GPU NVIDIA con torch CUDA → cuda+float16 (5-10x más rápido); si no, cpu+int8.
-    # El env VIRAL_WHISPER_COMPUTE_TYPE sigue ganando si el user lo setea.
-    device, compute_type = whisper_device()
-    if os.environ.get("VIRAL_WHISPER_COMPUTE_TYPE"):
-        compute_type = WHISPER_COMPUTE_TYPE
+    # Decisión de device/compute_type en UN solo lugar: config (autodetectado por
+    # hardware vía hw_profile, con override por env VIRAL_WHISPER_DEVICE/_COMPUTE_TYPE).
+    device, compute_type = WHISPER_DEVICE, WHISPER_COMPUTE_TYPE
     batch_size = 16 if device == "cuda" else 8
     print(f"[transcribe] device={device} compute={compute_type}", file=sys.stderr)
 
@@ -192,11 +188,7 @@ def transcribe_chunked(
 
     import whisperx
 
-    from hw_profile import whisper_device
-
-    device, compute_type = whisper_device()
-    if os.environ.get("VIRAL_WHISPER_COMPUTE_TYPE"):
-        compute_type = WHISPER_COMPUTE_TYPE
+    device, compute_type = WHISPER_DEVICE, WHISPER_COMPUTE_TYPE
     batch_size = 16 if device == "cuda" else 8
     print(f"[chunked] device={device} compute={compute_type}", file=sys.stderr)
 
@@ -313,11 +305,7 @@ def transcribe_batch(jobs: list[dict[str, str]], model_size: str = WHISPER_MODEL
     """
     import whisperx
 
-    from hw_profile import whisper_device
-
-    device, compute_type = whisper_device()
-    if os.environ.get("VIRAL_WHISPER_COMPUTE_TYPE"):
-        compute_type = WHISPER_COMPUTE_TYPE
+    device, compute_type = WHISPER_DEVICE, WHISPER_COMPUTE_TYPE
     batch_size = 16 if device == "cuda" else 8
     print(
         f"[batch] {len(jobs)} clips · device={device} · modelo se carga UNA sola vez",

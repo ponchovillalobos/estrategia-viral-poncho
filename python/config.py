@@ -67,11 +67,9 @@ LF_RENDERS = LONG_FORM_ROOT / "renders"
 LF_GRAPHICS = LONG_FORM_ROOT / "graphics"  # Modo Gráficos: specs dataViz/kineticHeadlines por clip
 
 OLLAMA_URL = os.environ.get("VIRAL_OLLAMA_URL", "http://localhost:11434")
-# Default: qwen3:1.7b. Es chico pero corre rápido en CPU.
-# Para mejor calidad necesitás un modelo más grande Y una GPU (gemma4:26b en CPU pura
-# tarda 30+ minutos por inferencia y es inviable). Override con env VIRAL_OLLAMA_MODEL
-# o el flag --model en CLI. El pipeline tiene fallback heurístico si Ollama falla.
-OLLAMA_MODEL = os.environ.get("VIRAL_OLLAMA_MODEL", "qwen3:1.7b")
+# OLLAMA_MODEL se define cerca del FINAL de este módulo (_ollama_model()), DESPUÉS de
+# que DATA_ROOT/FFMPEG_PATH existan, porque ahora se autodetecta según la VRAM vía
+# hw_profile.detect() (import LAZY para evitar el ciclo). Override: VIRAL_OLLAMA_MODEL.
 
 
 def _detect_ffmpeg(binary: str) -> Path:
@@ -114,9 +112,9 @@ _ffmpeg_dir = str(FFMPEG_PATH.parent)
 if _ffmpeg_dir and _ffmpeg_dir not in os.environ.get("PATH", "").split(os.pathsep):
     os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
 
-WHISPER_MODEL = os.environ.get("VIRAL_WHISPER_MODEL", "small")
 WHISPER_LANGUAGE = os.environ.get("VIRAL_WHISPER_LANGUAGE", "es")
-WHISPER_COMPUTE_TYPE = os.environ.get("VIRAL_WHISPER_COMPUTE_TYPE", "int8")
+# WHISPER_MODEL / WHISPER_DEVICE / WHISPER_COMPUTE_TYPE se autodetectan según el
+# hardware (_whisper_defaults(), cerca del final del módulo).
 
 SILENCE_MIN_MS = int(os.environ.get("VIRAL_SILENCE_MIN_MS", "500"))
 SILENCE_PAD_MS = int(os.environ.get("VIRAL_SILENCE_PAD_MS", "100"))
@@ -133,3 +131,67 @@ def ensure_dirs() -> None:
 def ensure_long_form_dirs() -> None:
     for d in [LF_RAW, LF_TRANSCRIPTS, LF_CUTS, LF_CLEAN, LF_PROPOSALS, LF_CLIPS, LF_PROJECTS, LF_RENDERS, LF_GRAPHICS]:
         d.mkdir(parents=True, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Auto-config según HARDWARE (Whisper + Ollama)
+# ---------------------------------------------------------------------------
+# IMPORTANTE: estas funciones importan hw_profile de forma LAZY (dentro del cuerpo,
+# no al tope del módulo). hw_profile hace `from config import DATA_ROOT, FFMPEG_PATH`;
+# como las llamamos DESPUÉS de definir DATA_ROOT/FFMPEG_PATH (final del módulo),
+# esos nombres ya están enlazados cuando hw_profile se importa → no hay ciclo.
+def _whisper_defaults() -> tuple[str, str, str]:
+    """(model, device, compute_type) según el hardware, con override por env.
+
+    Lee hw_profile.detect()["recommend"]; el env VIRAL_WHISPER_MODEL/_DEVICE/
+    _COMPUTE_TYPE SIEMPRE gana sobre lo recomendado. Si detect() falla por lo que
+    sea, cae a defaults seguros y universales ("small"/"cpu"/"int8").
+
+    detect() corre probes reales la 1ª vez (luego cachea por fingerprint): correr
+    esto una vez al importar config está bien.
+    """
+    model = device = compute_type = None
+    try:
+        from hw_profile import detect  # LAZY: evita el ciclo (ver nota arriba)
+
+        rec = detect().get("recommend", {})
+        model = rec.get("whisper_model")
+        device = rec.get("whisper_device")
+        compute_type = rec.get("whisper_compute_type")
+    except Exception as e:  # noqa: BLE001 — sin hw_profile/torch/etc → defaults
+        print(f"[config] no se pudo autodetectar Whisper ({e}); uso defaults CPU.",
+              file=sys.stderr)
+
+    # Defaults seguros si detect() no dio nada.
+    model = model or "small"
+    device = device or "cpu"
+    compute_type = compute_type or "int8"
+
+    # Override por env (gana sobre la recomendación).
+    model = os.environ.get("VIRAL_WHISPER_MODEL", model)
+    device = os.environ.get("VIRAL_WHISPER_DEVICE", device)
+    compute_type = os.environ.get("VIRAL_WHISPER_COMPUTE_TYPE", compute_type)
+    return model, device, compute_type
+
+
+def _ollama_model() -> str:
+    """Modelo de Ollama según la VRAM (hw_profile), con override VIRAL_OLLAMA_MODEL.
+
+    Default seguro qwen3:1.7b (corre en CPU pura) si detect() falla."""
+    override = os.environ.get("VIRAL_OLLAMA_MODEL")
+    if override:
+        return override
+    try:
+        from hw_profile import detect  # LAZY: evita el ciclo
+
+        model = detect().get("recommend", {}).get("ollama_model")
+        if model:
+            return model
+    except Exception as e:  # noqa: BLE001
+        print(f"[config] no se pudo autodetectar Ollama ({e}); uso qwen3:1.7b.",
+              file=sys.stderr)
+    return "qwen3:1.7b"
+
+
+WHISPER_MODEL, WHISPER_DEVICE, WHISPER_COMPUTE_TYPE = _whisper_defaults()
+OLLAMA_MODEL = _ollama_model()

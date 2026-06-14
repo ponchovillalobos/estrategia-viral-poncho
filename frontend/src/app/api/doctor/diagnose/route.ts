@@ -11,7 +11,7 @@
  * (Promise.all) para mantener el total por debajo de ~10s.
  */
 import { NextResponse } from "next/server";
-import { existsSync, readdirSync, statSync, promises as fs } from "node:fs";
+import { existsSync, readdirSync, statSync, readFileSync, promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
@@ -318,6 +318,46 @@ async function checkTorch() {
   }
 }
 
+// ── NVENC / perfil de hardware (H6 + H7) ────────────────────────────────────────
+// Lee <DATA_ROOT>/cache/hw_profile.json (lo escribe python/hw_profile.py). Expone:
+//   - nvenc: informativo (¿el render usa GPU?, y si no, por qué). NUNCA baja el `ok`
+//     raíz — es un aviso, igual que ollama queda fuera del AND.
+//   - hardware + recommend: specs y la config que la app aplicó (panel Rendimiento).
+// Si el json no existe → no molestar: nvenc.ok:true, applicable:false, hardware/recommend null.
+function readHwProfile(): Record<string, unknown> | null {
+  try {
+    const file = path.join(DATA_ROOT, "cache", "hw_profile.json");
+    if (!existsSync(file)) return null;
+    const raw = readFileSync(file, "utf-8");
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function checkNvenc() {
+  const prof = readHwProfile();
+  if (!prof) {
+    // Sin perfil aún (no se corrió hw_profile.py): no es un problema, no avisar.
+    return { ok: true, applicable: false, unusableReason: null, fixUrl: null, gpuName: null };
+  }
+  const nv = (prof.gpu_nvidia as Record<string, unknown> | null) ?? null;
+  const gpuName = nv && typeof nv.name === "string" ? nv.name : "";
+  // Sin GPU NVIDIA (name vacío o sin bloque) → no aplica, no es problema.
+  if (!nv || !gpuName) {
+    return { ok: true, applicable: false, unusableReason: null, fixUrl: null, gpuName: null };
+  }
+  const usable = nv.nvenc_usable === true;
+  const reason = typeof nv.nvenc_unusable_reason === "string" ? nv.nvenc_unusable_reason : null;
+  return {
+    ok: usable,
+    applicable: true,
+    unusableReason: usable ? null : reason,
+    fixUrl: "https://www.nvidia.com/Download/index.aspx",
+    gpuName,
+  };
+}
+
 function checkAssets() {
   const out: Record<string, { ok: boolean; count: number; min: number; error?: string }> = {};
   for (const [key, spec] of Object.entries(ASSET_MIN)) {
@@ -353,6 +393,7 @@ export async function GET() {
   const whisperModel = checkWhisperModel();
   const alignmentModel = checkAlignmentModel();
   const assets = checkAssets();
+  const nvenc = checkNvenc();
 
   const checks = {
     dataRoot,
@@ -363,8 +404,40 @@ export async function GET() {
     alignmentModel,
     ollama,
     torch,
+    nvenc,
     assets,
   };
+
+  // Specs + config aplicada para el panel "Rendimiento" (H7). Derivado del mismo
+  // perfil que nvenc; null si hw_profile.py no se ha corrido todavía.
+  const prof = readHwProfile();
+  const nvProf = (prof?.gpu_nvidia as Record<string, unknown> | null) ?? null;
+  const hardware = prof
+    ? {
+        coresPhysical: typeof prof.cores_physical === "number" ? prof.cores_physical : null,
+        coresLogical: typeof prof.cores_logical === "number" ? prof.cores_logical : null,
+        ramGb: typeof prof.ram_gb === "number" ? prof.ram_gb : null,
+        gpuName: nvProf && typeof nvProf.name === "string" && nvProf.name ? nvProf.name : null,
+        driverVersion:
+          nvProf && typeof nvProf.driver_version === "string" ? nvProf.driver_version : null,
+        vramTotalMb: nvProf && typeof nvProf.vram_total_mb === "number" ? nvProf.vram_total_mb : null,
+        vramFreeMb: nvProf && typeof nvProf.vram_free_mb === "number" ? nvProf.vram_free_mb : null,
+      }
+    : null;
+  const rec = (prof?.recommend as Record<string, unknown> | null) ?? null;
+  const recommend = rec
+    ? {
+        whisperModel: typeof rec.whisper_model === "string" ? rec.whisper_model : null,
+        whisperDevice: typeof rec.whisper_device === "string" ? rec.whisper_device : null,
+        whisperComputeType:
+          typeof rec.whisper_compute_type === "string" ? rec.whisper_compute_type : null,
+        videoEncoder: typeof rec.video_encoder === "string" ? rec.video_encoder : null,
+        videoDecoderHwaccel:
+          typeof rec.video_decoder_hwaccel === "string" ? rec.video_decoder_hwaccel : null,
+        ollamaModel: typeof rec.ollama_model === "string" ? rec.ollama_model : null,
+        remotionWorkers: typeof rec.remotion_workers === "number" ? rec.remotion_workers : null,
+      }
+    : null;
 
   // Ollama queda FUERA del `ok` raíz a propósito: es OPCIONAL (solo el modo
   // inteligente de videos largos lo usa) y setup_all.py NO lo instala — incluirlo
@@ -385,5 +458,7 @@ export async function GET() {
     generatedAt: new Date().toISOString(),
     versionApp: APP_VERSION,
     checks,
+    hardware,
+    recommend,
   });
 }

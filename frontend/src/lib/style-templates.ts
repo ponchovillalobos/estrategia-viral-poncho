@@ -495,7 +495,7 @@ function commonBase(ctx: BuildContext, styleId: StyleId) {
     subtitleColor: "#ffffff",
     subtitleHighlight: ctx.accentColor,
     musicTrack: null,
-    musicVolume: 0.15,
+    musicVolume: 0.35,
     colorRotation: [],
     bRoll: [],
     animations: [],

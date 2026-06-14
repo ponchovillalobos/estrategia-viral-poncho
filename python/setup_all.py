@@ -62,6 +62,7 @@ APP_VERSION_FALLBACK = "0.3.4"
 TIMEOUTS = {
     "torch_install_cuda": 1800,
     "whisper_voice": 1200,
+    "ollama_model": 1800,
     "fonts": 300,
     "iconos_editoriales": 300,
     "lottie": 300,
@@ -278,11 +279,59 @@ def _torch_ya_es_cuda() -> bool:
         return False
 
 
+def _parse_driver_major(driver_version: str | None) -> int | None:
+    """Major del driver NVIDIA ('572.55' → 572). None si no se puede parsear."""
+    if not driver_version:
+        return None
+    try:
+        return int(str(driver_version).strip().split(".", 1)[0])
+    except (ValueError, AttributeError):
+        return None
+
+
+def _torch_cuda_index_tag(driver_version: str | None) -> str | None:
+    """Elige el tag del índice de wheels de PyTorch según el DRIVER NVIDIA.
+
+    cu121 (lo que usábamos fijo) YA NO tiene wheels para torch 2.8 — por eso ahora
+    elegimos el wheel según el driver instalado:
+
+      major >= 570 → cu128
+      major >= 560 → cu126
+      major >= 550 → cu124
+      major >= 525 → cu123
+      < 525 o None  → None (skip: la GPU/driver es muy viejo, se queda en CPU)
+    """
+    major = _parse_driver_major(driver_version)
+    if major is None:
+        return None
+    if major >= 570:
+        return "cu128"
+    if major >= 560:
+        return "cu126"
+    if major >= 550:
+        return "cu124"
+    if major >= 525:
+        return "cu123"
+    return None
+
+
+def _nvidia_driver_version() -> str | None:
+    """Driver version vía hw_profile.detect() (cacheado). None si no hay GPU."""
+    try:
+        from hw_profile import detect
+
+        nv = detect().get("gpu_nvidia") or {}
+        return nv.get("driver_version") or None
+    except Exception:
+        return None
+
+
 def _configurar_segun_equipo(state: dict) -> None:
     """Adapta la app al HARDWARE: si hay GPU NVIDIA, instala torch CUDA para que
     la transcripción corra en GPU (5-10x más rápido) en vez de CPU. El bundle trae
     torch CPU-only (chico y universal); esto lo actualiza SOLO en máquinas con GPU.
-    pip instala de forma atómica: si falla, el torch CPU sigue funcionando.
+    El wheel se elige según el DRIVER (cu128/cu126/cu124/cu123); pip instala de forma
+    atómica: si falla, el torch CPU sigue funcionando.
     """
     stage = "torch_install_cuda"
     if not _hay_gpu_nvidia():
@@ -295,20 +344,146 @@ def _configurar_segun_equipo(state: dict) -> None:
         _emit(stage, "skip", reason="ya_configurado")
         state[stage] = {"status": "skip", "ms": 0, "at": _now_iso()}
         return
-    print("[setup] GPU NVIDIA detectada — instalando aceleración (torch CUDA, ~2.5 GB, una sola vez)...", flush=True)
+
+    driver = _nvidia_driver_version()
+    tag = _torch_cuda_index_tag(driver)
+    if tag is None:
+        # Driver demasiado viejo (o ilegible): no hay wheel CUDA compatible → CPU.
+        print(
+            f"[setup] Driver NVIDIA muy viejo (driver={driver or 'desconocido'}); "
+            "no hay wheel CUDA compatible. La app sigue en CPU (funciona, más lento).",
+            flush=True,
+        )
+        _emit(stage, "skip", reason="driver_viejo", driver=driver)
+        state[stage] = {"status": "skip", "ms": 0, "at": _now_iso()}
+        return
+
+    print(
+        f"[setup] GPU NVIDIA detectada (driver {driver} → {tag}) — instalando aceleración "
+        "(torch CUDA, ~2.5 GB, una sola vez)...",
+        flush=True,
+    )
+    _emit(stage, "torch_cuda", tag=tag, driver=driver)
+    index_url = f"https://download.pytorch.org/whl/{tag}"
     # No skippable por caché: si llegamos acá es porque torch CUDA NO está activo.
     _step(
         stage,
-        "aceleración GPU (torch CUDA)",
-        ["-m", "pip", "install", "--upgrade", "--no-cache-dir",
-         "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cu121"],
+        f"aceleración GPU (torch CUDA {tag})",
+        ["-m", "pip", "install", "--force-reinstall", "--no-deps", "--no-cache-dir",
+         "torch", "torchaudio", "--index-url", index_url],
         state,
         skippable=False,
     )
     if _torch_ya_es_cuda():
         print("[setup] Aceleración GPU lista: la transcripción ahora usa tu tarjeta.", flush=True)
+        # Tras activar la GPU, baja el modelo de Whisper recomendado para ESTA tarjeta
+        # (large-v3 / medium / small según VRAM) — el "small" inicial puede quedarse corto.
+        _download_recommended_whisper(state)
     else:
         print("[setup] No se pudo activar la GPU; la app sigue en CPU (funciona igual, más lento).", flush=True)
+
+
+def _recommended_whisper_model() -> str:
+    """Modelo de Whisper recomendado por hw_profile. 'small' si detect() falla."""
+    try:
+        from hw_profile import detect
+
+        return detect().get("recommend", {}).get("whisper_model") or "small"
+    except Exception:
+        return "small"
+
+
+def _download_recommended_whisper(state: dict) -> None:
+    """Descarga el modelo de Whisper RECOMENDADO para el hardware (no el fijo 'small').
+
+    Solo corre tras activar la GPU: en CPU el 'small' del paso crítico ya alcanza.
+    Reusa toda la resiliencia de _step (timeout/reintentos/estado/emit)."""
+    model = _recommended_whisper_model()
+    if model == "small":
+        # El paso crítico whisper_voice ya bajó 'small'; no repetir.
+        print("[setup] Modelo de voz recomendado es 'small' (ya descargado).", flush=True)
+        return
+    print(f"[setup] Descargando modelo de voz recomendado para tu GPU: '{model}'...", flush=True)
+    _step(
+        "whisper_voice",  # mismo stage: el validador no chequea archivos para voz
+        f"modelo de voz recomendado ({model})",
+        ["transcribe.py", "--download-model", model],
+        state,
+        critico=True,
+        skippable=False,
+    )
+
+
+def _ollama_disponible() -> bool:
+    """¿El binario `ollama` responde? (sin él no se puede hacer pull)."""
+    try:
+        r = subprocess.run(["ollama", "--version"], capture_output=True, timeout=15)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _ollama_pull(model: str, timeout: int) -> tuple[bool, str]:
+    """`ollama pull <model>` con un solo intento (timeout largo). (ok, error)."""
+    try:
+        r = subprocess.run(
+            ["ollama", "pull", model], capture_output=True, text=True, timeout=timeout
+        )
+        if r.returncode == 0:
+            return True, ""
+        return False, (r.stderr or r.stdout or "").strip()[-200:]
+    except subprocess.TimeoutExpired:
+        return False, f"timeout tras {timeout}s"
+    except Exception as e:  # noqa: BLE001
+        return False, str(e)[-200:]
+
+
+def _install_ollama_model(state: dict) -> None:
+    """Baja el modelo de Ollama RECOMENDADO según la VRAM (qwen3:14b/8b/4b/1.7b).
+
+    Fallback: si el grande falla, asegura que al menos qwen3:1.7b quede presente
+    (corre en CPU pura). Si Ollama no está instalado, se saltea sin abortar — el
+    pipeline tiene fallback heurístico si Ollama no está."""
+    stage = "ollama_model"
+    if not _ollama_disponible():
+        print("[setup] Ollama no está instalado; salto la descarga del modelo "
+              "(el análisis de clips usará fallback heurístico).", flush=True)
+        _emit(stage, "skip", reason="sin_ollama")
+        state[stage] = {"status": "skip", "ms": 0, "at": _now_iso()}
+        return
+
+    try:
+        from hw_profile import detect
+
+        model = detect().get("recommend", {}).get("ollama_model") or "qwen3:1.7b"
+    except Exception:
+        model = "qwen3:1.7b"
+
+    timeout = TIMEOUTS.get(stage, DEFAULT_TIMEOUT)
+    _emit(stage, "start", model=model)
+    t0 = time.time()
+    print(f"[setup] Descargando modelo de análisis recomendado: {model}...", flush=True)
+    ok, error = _ollama_pull(model, timeout)
+
+    if not ok and model != "qwen3:1.7b":
+        # Fallback: asegurar al menos el chico para que el análisis funcione.
+        print(f"[setup] No se pudo bajar {model} ({error}); aseguro qwen3:1.7b...", flush=True)
+        _emit(stage, "fail", attempt=1, error=error, model=model)
+        ok_fb, error_fb = _ollama_pull("qwen3:1.7b", timeout)
+        if ok_fb:
+            model, ok, error = "qwen3:1.7b", True, ""
+        else:
+            error = error_fb
+
+    ms = int((time.time() - t0) * 1000)
+    if ok:
+        print(f"[setup] OK: modelo de análisis {model}", flush=True)
+        _emit(stage, "ok", ms=ms, model=model)
+        state[stage] = {"status": "ok", "ms": ms, "model": model, "at": _now_iso()}
+    else:
+        print(f"[setup] mejora opcional omitida (no es grave): modelo de análisis ({error})", flush=True)
+        _emit(stage, "fail_final", ms=ms, error=error)
+        state[stage] = {"status": "fail", "ms": ms, "error": error, "at": _now_iso()}
 
 
 def main() -> int:
@@ -358,8 +533,13 @@ def main() -> int:
         state,
     )
 
-    # 3) SEGÚN EL EQUIPO — si hay GPU NVIDIA, baja la aceleración (torch CUDA).
+    # 3) SEGÚN EL EQUIPO — si hay GPU NVIDIA, baja la aceleración (torch CUDA) y,
+    #    una vez activa, el modelo de Whisper recomendado para esa tarjeta.
     _configurar_segun_equipo(state)
+
+    # 4) Modelo de Ollama recomendado por VRAM (qwen3:14b/8b/4b/1.7b). Al final de
+    #    la cadena: el análisis de clips lo usa; con fallback a qwen3:1.7b.
+    _install_ollama_model(state)
 
     # Persistir el estado final.
     state.pop("lastRunAt", None)  # se guarda como campo top-level, no como stage

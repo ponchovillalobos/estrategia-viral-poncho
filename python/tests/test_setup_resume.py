@@ -32,6 +32,25 @@ def setup_mod(tmp_path, monkeypatch):
     for name in ("setup_all", "config"):
         if name in sys.modules:
             del sys.modules[name]
+    # Mockear detect() ANTES de recargar config: config llama hw_profile.detect() al
+    # importar (auto-config de Whisper/Ollama). Sin esto correría probes REALES de
+    # hardware (spawns de ffmpeg) en cada reimport → lento. Este test es de la lógica
+    # de reanudación, no del hardware.
+    import hw_profile
+    monkeypatch.setattr(
+        hw_profile,
+        "detect",
+        lambda force=False: {
+            "recommend": {
+                "whisper_model": "small",
+                "whisper_device": "cpu",
+                "whisper_compute_type": "int8",
+                "ollama_model": "qwen3:1.7b",
+            },
+            "gpu_nvidia": {"driver_version": None},
+        },
+        raising=False,
+    )
     import config  # noqa: F401  (re-import con el env nuevo)
     importlib.reload(config)
     setup_all = importlib.import_module("setup_all")
@@ -43,6 +62,12 @@ def setup_mod(tmp_path, monkeypatch):
     monkeypatch.setattr(setup_all, "_hay_gpu_nvidia", lambda: False)
     # Validación post-paso: por defecto siempre OK (no dependemos de archivos reales).
     monkeypatch.setattr(setup_all, "_validate", lambda stage: (True, "ok-mock"))
+    # H4/H5: aislar las descargas reales NUEVAS. Un `ollama pull` real cuelga hasta
+    # 1800s (no pasa por el _run mockeado), y _download_recommended_whisper llamaría
+    # detect(). Los neutralizamos: este test mide la reanudación de stages, no esto.
+    monkeypatch.setattr(setup_all, "_ollama_disponible", lambda: False, raising=False)
+    monkeypatch.setattr(setup_all, "_install_ollama_model", lambda state: None, raising=False)
+    monkeypatch.setattr(setup_all, "_download_recommended_whisper", lambda state: None, raising=False)
     return setup_all
 
 

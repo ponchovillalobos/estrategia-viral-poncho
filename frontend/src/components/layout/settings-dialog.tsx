@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import {
   Music2,
   Camera,
@@ -22,6 +23,7 @@ import {
   Key,
   LogIn,
   AlertCircle,
+  AlertTriangle,
   Download,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -29,6 +31,7 @@ import { toastError } from "@/lib/toast-error";
 import { PUBLISHING_ENABLED } from "@/lib/app-mode";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LicensePanel } from "@/components/layout/license-panel";
+import { PerformancePanel } from "@/components/layout/performance-panel";
 
 interface Handles {
   tiktok: string;
@@ -81,6 +84,14 @@ interface DiagnoseResponse {
     alignmentModel: { ok: boolean; cached: boolean; path: string | null; error?: string };
     ollama: { ok: boolean; url: string; model: string | null; reachable: boolean; error?: string };
     torch: { ok: boolean; version: string | null; cuda: boolean; gpu: string | null; error?: string };
+    // H6 — informativo (NO baja el `ok` raíz). applicable:false = sin GPU NVIDIA o sin perfil aún.
+    nvenc?: {
+      ok: boolean;
+      applicable: boolean;
+      unusableReason: string | null;
+      fixUrl: string | null;
+      gpuName: string | null;
+    };
     assets: {
       music: DiagAssetCheck;
       sfx: DiagAssetCheck;
@@ -97,6 +108,11 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   onSaved?: (handles: Handles) => void;
 }
+
+// Volumen de música por defecto (0..1). Se guarda en localStorage (acceso rápido
+// para la UI) Y se persiste server-side vía POST /api/preferences (compartido por
+// el backend cuando arma props de un proyecto que no trae musicVolume propio).
+const DEFAULT_MUSIC_VOLUME_KEY = "viralito.defaults.musicVolume";
 
 /** Aplana los checks del diagnóstico a filas para la UI. `repair:true` =
  *  tiene botón "Reparar" (POST /api/setup/full vía configurarTodo). */
@@ -210,6 +226,22 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
   const [pixabayKey, setPixabayKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Volumen de música por defecto (0..1). Default 0.35 = ~35% bajo voz hablada.
+  const [defaultMusicVolume, setDefaultMusicVolume] = useState(0.35);
+
+  /** Persiste el volumen por defecto: localStorage (rápido) + POST /api/preferences
+   *  (compartido con el backend). Se llama en cada cambio del slider. */
+  function persistDefaultMusicVolume(v: number) {
+    setDefaultMusicVolume(v);
+    try {
+      localStorage.setItem(DEFAULT_MUSIC_VOLUME_KEY, String(v));
+    } catch {}
+    void fetch("/api/preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ musicVolume: v }),
+    }).catch(() => {});
+  }
   // Doctor: diagnóstico de la instalación (python, ffmpeg, modelos, carpeta).
   const [doctorChecks, setDoctorChecks] = useState<
     { id: string; label: string; ok: boolean; fix?: string }[] | null
@@ -233,6 +265,17 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
   // (GET /api/doctor/diagnose). Distinto de "Verificar instalación" (texto guiado).
   const [diag, setDiag] = useState<DiagnoseResponse | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  // Diagnóstico silencioso al abrir: solo para alimentar el banner H6 (driver viejo).
+  // No toca diagLoading ni muestra el listado — eso lo dispara el botón explícito.
+  async function diagnoseSilencioso() {
+    try {
+      const r = await fetch("/api/doctor/diagnose", { cache: "no-store" });
+      const d = (await r.json()) as DiagnoseResponse;
+      setDiag(d);
+    } catch {
+      /* silencioso: si falla, el banner simplemente no aparece */
+    }
+  }
   async function diagnosticarTodo() {
     setDiagLoading(true);
     try {
@@ -321,6 +364,26 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
   // `use(promise)` con Suspense; no migramos para no romper el flujo de error/finally.
   useEffect(() => {
     if (!open) return;
+    // Volumen de música por defecto: localStorage primero (instantáneo), luego
+    // confirma con el server. Si el server tiene un valor distinto, gana.
+    try {
+      const ls = localStorage.getItem(DEFAULT_MUSIC_VOLUME_KEY);
+      if (ls !== null) {
+        const v = Number(ls);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (Number.isFinite(v)) setDefaultMusicVolume(Math.min(1, Math.max(0, v)));
+      }
+    } catch {}
+    fetch("/api/preferences", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((p: { musicVolume?: number }) => {
+        if (typeof p.musicVolume === "number") {
+          setDefaultMusicVolume(Math.min(1, Math.max(0, p.musicVolume)));
+        }
+      })
+      .catch(() => {});
+    // Diagnóstico silencioso para el banner H6 (driver NVIDIA viejo → render en CPU).
+    void diagnoseSilencioso();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetch("/api/settings")
@@ -458,6 +521,9 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
               <TabsTrigger value="sistema" className="flex-1">
                 💻 Mi sistema
               </TabsTrigger>
+              <TabsTrigger value="rendimiento" className="flex-1">
+                ⚡ Rendimiento
+              </TabsTrigger>
               {PUBLISHING_ENABLED && (
                 <TabsTrigger value="redes" className="flex-1">
                   🔌 Redes
@@ -494,6 +560,33 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                   </div>
                 );
               })}
+            </section>
+
+            {/* ── PREFERENCIAS (defaults de la app) ─────── */}
+            <section className="space-y-3">
+              <h3 className="font-mono-tab text-xs uppercase tracking-wider text-muted-foreground">
+                Preferencias
+              </h3>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Volumen de música por defecto</Label>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {Math.round(defaultMusicVolume * 100)}%
+                  </span>
+                </div>
+                <Slider
+                  aria-label="Volumen de música por defecto"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={Math.round(defaultMusicVolume * 100)}
+                  onValueChange={(v) => persistDefaultMusicVolume(v / 100)}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Sugerido: 30-40% bajo voz hablada. El ducking automático la baja cuando hablas.
+                  Se aplica a los proyectos nuevos.
+                </p>
+              </div>
             </section>
             </TabsContent>
 
@@ -722,6 +815,40 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
 
             {/* ── 💻 MI SISTEMA: instalación + pack de audio ── */}
             <TabsContent value="sistema" className="mt-4 space-y-6">
+            {/* ── H6: AVISO DE DRIVER NVIDIA VIEJO ──────────────────────
+                Solo si el diagnóstico detectó que NVENC no se puede usar por driver
+                viejo → el render cayó a CPU (3-8× más lento). Informativo; no rompe nada. */}
+            {diag?.checks.nvenc &&
+              diag.checks.nvenc.ok === false &&
+              diag.checks.nvenc.applicable === true &&
+              (diag.checks.nvenc.unusableReason ?? "")
+                .toLowerCase()
+                .includes("driver") && (
+                <section className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <p className="text-xs text-amber-200">
+                      Tu driver NVIDIA es viejo. La app está usando el CPU para renderizar
+                      (3-8× más lento).
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-amber-500 text-black hover:bg-amber-400"
+                      onClick={() =>
+                        window.open(
+                          diag.checks.nvenc?.fixUrl ??
+                            "https://www.nvidia.com/Download/index.aspx",
+                          "_blank"
+                        )
+                      }
+                    >
+                      Actualizar driver
+                    </Button>
+                  </div>
+                </section>
+              )}
+
             {/* ── CONFIGURAR TODO ──────────────────── */}
             <section className="space-y-2 rounded-md border border-brand-pink/30 bg-brand-pink/5 p-3">
               <div className="flex items-center justify-between gap-2">
@@ -977,6 +1104,11 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: SettingsDialogPr
                 </Button>
               )}
             </section>
+            </TabsContent>
+
+            {/* ── ⚡ RENDIMIENTO: cómo la app se adaptó a este equipo (H7) ── */}
+            <TabsContent value="rendimiento" className="mt-4">
+              <PerformancePanel />
             </TabsContent>
           </Tabs>
         )}

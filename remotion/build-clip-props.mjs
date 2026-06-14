@@ -95,7 +95,7 @@ const props = {
     if (t.startsWith("/api/")) return `${HOST}${t}`;
     return `${HOST}/api/music/stream?file=${encodeURIComponent(t)}`;
   })(),
-  musicVolume: project.musicVolume ?? 0.15,
+  musicVolume: project.musicVolume ?? Number(process.env.VIRAL_MUSIC_VOLUME ?? 0.35),
   // F1 — Director emocional: curva de ducking de la música (pass-through; los clips
   // de largos no hacen jump cuts, no hay remap).
   musicVolumeCurve: project.musicVolumeCurve || [],

@@ -257,7 +257,7 @@ function buildProject(p) {
     subtitleColor: "#ffffff",
     subtitleHighlight: p.accent,
     musicTrack: null,
-    musicVolume: 0.15,
+    musicVolume: Number(process.env.VIRAL_MUSIC_VOLUME ?? 0.35),
     bRollMode: "pip",
     vignette: true,
     colorRotation: [],

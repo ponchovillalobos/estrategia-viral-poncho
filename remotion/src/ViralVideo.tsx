@@ -177,7 +177,7 @@ export const viralVideoSchema = z.object({
   words: z.array(wordSchema).default([]),
   bRoll: z.array(bRollSchema).default([]),
   musicUrl: z.string().nullable().default(null),
-  musicVolume: z.number().default(0.15),
+  musicVolume: z.number().default(0.35),
   // F1 — Director emocional: curva de DUCKING de la música. Puntos {t, v} donde v
   // multiplica musicVolume (0.35 = voz hablando, 1.0 = pausa larga → la música
   // respira). Vacía = volumen constante (render idéntico al de antes).
@@ -274,7 +274,7 @@ export const defaultProps: ViralVideoProps = {
   words: [],
   bRoll: [],
   musicUrl: null,
-  musicVolume: 0.15,
+  musicVolume: 0.35,
   musicVolumeCurve: [],
   subtitleStyle: "bebas",
   subtitleColor: "#ffffff",

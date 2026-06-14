@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { PROJECTS_DIR, RENDERS_DIR, LF_ROOT, LF_RENDERS } from "@/lib/paths";
+import { PROJECTS_DIR, RENDERS_DIR, LF_ROOT, LF_RENDERS, DATA_ROOT } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
 const LF_PROJECTS_DIR = path.join(LF_ROOT, "projects");
+
+/** Volumen de música por defecto del usuario (<DATA_ROOT>/preferences.json).
+ *  Solo se usa al CREAR un proyecto nuevo que no traiga musicVolume propio. */
+async function defaultMusicVolume(): Promise<number> {
+  try {
+    const raw = await fs.readFile(path.join(DATA_ROOT, "preferences.json"), "utf-8");
+    const v = Number((JSON.parse(raw) as { musicVolume?: number }).musicVolume);
+    if (Number.isFinite(v)) return Math.min(1, Math.max(0, v));
+  } catch {
+    /* sin preferencias → cae al default duro */
+  }
+  return 0.35;
+}
 
 interface ProjectPayload {
   id: string;
@@ -63,13 +76,19 @@ export async function PUT(
 ) {
   const { id } = await params;
   const body = (await req.json()) as Partial<ProjectPayload>;
-  const existing = (await loadProject(id)) ?? {
+  const loaded = await loadProject(id);
+  const existing = loaded ?? {
     id,
     videoId: id,
     platforms: [],
     status: "borrador" as const,
   };
   const merged: ProjectPayload = { ...existing, ...body, id, videoId: existing.videoId };
+  // Proyecto NUEVO sin musicVolume explícito → usa el default del usuario
+  // (preferences.json). Si ya existía o el body lo trae, se respeta tal cual.
+  if (!loaded && merged.musicVolume === undefined) {
+    merged.musicVolume = await defaultMusicVolume();
+  }
   await saveProject(id, merged);
   return NextResponse.json(merged);
 }
