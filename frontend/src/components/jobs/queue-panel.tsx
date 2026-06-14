@@ -16,6 +16,7 @@ import {
   Scissors,
   XCircle,
   X,
+  Minus,
 } from "lucide-react";
 
 /**
@@ -100,6 +101,9 @@ function humanJobName(e: { title?: string; videoId?: string; jobId: string }): s
 export function QueuePanel() {
   const [data, setData] = useState<QueueResponse | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  // Minimizado = pastilla chiquita en la esquina, para que NO tape botones como
+  // "Siguiente" del wizard (el panel fijo bottom-right los cubría).
+  const [minimized, setMinimized] = useState(false);
   const [showFinished, setShowFinished] = useState(true);
   const [dismissed, setDismissed] = useState<Record<string, number>>(() => loadDismissed());
   // Cuando llega un trabajo nuevo, re-abrir el panel
@@ -173,19 +177,54 @@ export function QueuePanel() {
       ? `Editando (${active.length} en curso · ${pending.length} en espera)`
       : `Videos terminados (${finished.length})`;
 
+  // MINIMIZADO: solo una pastilla chiquita en la esquina (no tapa nada). Click → restaura.
+  if (minimized) {
+    const enCurso = active.length + pending.length;
+    return (
+      <button
+        type="button"
+        onClick={() => setMinimized(false)}
+        title="Ver el progreso de tus videos"
+        className="fixed bottom-4 right-4 z-50 flex items-center gap-1.5 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs font-medium shadow-xl backdrop-blur hover:border-foreground/30"
+      >
+        {enCurso > 0 ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-pink" />
+        ) : (
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+        )}
+        <span>{enCurso > 0 ? `Editando (${enCurso})` : `Listos (${finished.length})`}</span>
+        <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+    );
+  }
+
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-96 max-w-[calc(100vw-32px)]">
+    <div
+      className={cn(
+        "fixed bottom-4 right-4 z-50 max-w-[calc(100vw-32px)]",
+        collapsed ? "w-auto" : "w-96"
+      )}
+    >
       <div className="rounded-lg border border-border bg-card shadow-xl backdrop-blur">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
           <button
             type="button"
             onClick={() => setCollapsed((c) => !c)}
-            className="flex items-center gap-2 text-sm font-medium hover:text-foreground/80"
+            className="flex min-w-0 items-center gap-2 text-sm font-medium hover:text-foreground/80"
           >
-            <Scissors className="h-3.5 w-3.5 text-brand-pink" />
-            <span>{headerLabel}</span>
-            {collapsed ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            <Scissors className="h-3.5 w-3.5 shrink-0 text-brand-pink" />
+            <span className="truncate">{headerLabel}</span>
+            {collapsed ? <ChevronUp className="h-3.5 w-3.5 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
+          </button>
+          {/* Minimizar a pastilla: para que el panel no tape el botón "Siguiente". */}
+          <button
+            type="button"
+            onClick={() => setMinimized(true)}
+            title="Minimizar (que no tape los botones)"
+            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Minus className="h-3.5 w-3.5" />
           </button>
         </div>
 
