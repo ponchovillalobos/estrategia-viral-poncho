@@ -18,6 +18,7 @@ import {
   type OverridableProject,
 } from "@/lib/apply-wizard-overrides";
 import { buildProjectForStyle, type BuildContext } from "@/lib/style-templates";
+import { offthreadCacheFlag } from "@/lib/render-utils";
 import { pickTopKeywords, type TranscriptWord } from "@/lib/content-title";
 import { runProcess } from "@/lib/run-process";
 import { writeJsonFileAtomic } from "@/lib/atomic-write";
@@ -159,6 +160,7 @@ export async function POST(req: NextRequest) {
           "remotion", "render", "src/index.ts", "ViralVideo",
           outArg, `--frames=${frame}-${frame + 89}`, `--props=${propsName}`,
           "--scale=0.4", "--concurrency=4", "--timeout=120000",
+          offthreadCacheFlag(),
         ]
       : [
           "remotion", "still", "src/index.ts", "ViralVideo",

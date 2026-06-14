@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveEditorialCardIcons } from "./editorial-icons.mjs";
+import { resolveEditorialCardIcons, resolveIconStickerSvg } from "./editorial-icons.mjs";
 import { needsTrialWatermark } from "./license-check.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -128,7 +128,8 @@ const proTransitionsRemapped = filterAndRemap(project.proTransitions || [], ["at
 const mirrorFxRemapped = filterAndRemap(project.mirrorFx || [], ["at"]);
 const trackPathRemapped = filterAndRemap(project.trackPath || [], ["t"]);
 const trackedItemsRemapped = filterAndRemap(project.trackedItems || [], ["at"]);
-const iconStickersRemapped = filterAndRemap(project.iconStickers || [], ["at"]);
+// Galería de stickers: embebe el SVG de los iconos "ph:"/"tb:" elegidos a mano.
+const iconStickersRemapped = resolveIconStickerSvg(filterAndRemap(project.iconStickers || [], ["at"]));
 const speedRampsRemapped = filterAndRemap(project.speedRamps || [], ["at"]);
 const lottieStickersRemapped = filterAndRemap(project.lottieStickers || [], ["at"]);
 // Modo Gráficos & Motion: charts + titulares animados. Tienen `at` → remapear igual

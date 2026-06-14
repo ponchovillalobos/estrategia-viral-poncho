@@ -129,6 +129,11 @@ export const iconStickerSchema = z.object({
   // animación de escena (dinero volando, reloj sonando, cohete…) EN LUGAR del
   // ícono estático. "" = ícono clásico (compat total con projects viejos).
   lottieSrc: z.string().default(""),
+  // ICONO SVG EXTERNO (Phosphor/Tabler): cuando el sticker viene de la galería con
+  // un icono "ph:<nombre>"/"tb:<nombre>", el build embebe el markup del SVG acá
+  // (resolveIconStickerSvg, igual que las tarjetas editoriales). Si está presente,
+  // se dibuja el SVG en vez del ícono Lucide del ICON_MAP. "" = ícono Lucide clásico.
+  iconSvg: z.string().default(""),
 });
 export type IconSticker = z.infer<typeof iconStickerSchema>;
 

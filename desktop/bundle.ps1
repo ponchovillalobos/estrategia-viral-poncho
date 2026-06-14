@@ -83,6 +83,12 @@ Copy-Item "$($ff.FullName)\bin\ffprobe.exe" "$out\tools\ffmpeg\bin\" -Force
 #         sirven para COMPILAR extensiones; nunca se cargan al correr.
 #       - tests/test de los paquetes Python: código de prueba, jamás corre.
 #       - remotion *.map (mapas de depuración) y *.md (docs).
+#       - remotion node_modules\.cache (caché de webpack, ~332 MB): se regenera
+#         solo; NO confundir con .remotion (Chromium headless ~270MB que SÍ se
+#         necesita para renderizar — ese NO se toca).
+#       - site-packages matplotlib/pandas/sklearn/mpl_toolkits (+sus .libs):
+#         ~150 MB, 0 imports en python\*.py del proyecto (verificado por grep).
+#         NO se podan numba/llvmlite/scipy: librosa/whisperx los requieren.
 Write-Host "[6/6] podando peso muerto (no-runtime)..."
 $emptyP = "$env:TEMP\__poda_vacia"
 New-Item -ItemType Directory -Force $emptyP | Out-Null
@@ -106,6 +112,27 @@ Get-ChildItem -LiteralPath $sp -Recurse -Directory -ErrorAction SilentlyContinue
   Where-Object { $_.Name -in 'tests', 'test' } | ForEach-Object { Remove-DirLong $_.FullName }
 Remove-FilesByPattern "$out\remotion" "*.map"
 Remove-FilesByPattern "$out\remotion" "*.md"
+
+# Caché de webpack de Remotion (~332 MB): peso muerto, se regenera solo. OJO:
+# solo .cache; .remotion (Chromium headless del render) NO se toca.
+$rcache = "$out\remotion\node_modules\.cache"
+if (Test-Path -LiteralPath $rcache) {
+  Write-Host "  - podando remotion\node_modules\.cache (webpack)"
+  Remove-DirLong $rcache
+}
+
+# Libs de data-science sin uso en runtime (0 imports en python\*.py): matplotlib,
+# pandas, sklearn, mpl_toolkits y sus .libs (DLLs satélite). ~150 MB.
+# NO se podan numba/llvmlite/scipy (librosa/whisperx los necesitan).
+foreach ($pkg in @('matplotlib', 'matplotlib.libs', 'pandas', 'pandas.libs', `
+                   'sklearn', 'scikit_learn.libs', 'mpl_toolkits')) {
+  $d = "$sp\$pkg"
+  if (Test-Path -LiteralPath $d) {
+    Write-Host "  - podando site-packages\$pkg"
+    Remove-DirLong $d
+  }
+}
+
 Remove-Item $emptyP -Force -ErrorAction SilentlyContinue
 
 $size = (Get-ChildItem $out -Recurse -File | Measure-Object Length -Sum).Sum / 1GB

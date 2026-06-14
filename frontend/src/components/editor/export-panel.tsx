@@ -42,6 +42,9 @@ export function ExportPanel({ project, videoDurationSec }: Props) {
         subtitleColor: project.subtitleColor,
         subtitleHighlight: project.subtitleHighlight,
         animations: project.animations,
+        // Ola 1 — Stickers de la galería (iconos SVG + ilustraciones Lottie). El
+        // server embebe el SVG de los "ph:"/"tb:" antes de renderizar.
+        iconStickers: project.iconStickers ?? [],
       };
 
       const res = await fetch("/api/videos/render", {
@@ -71,6 +74,7 @@ export function ExportPanel({ project, videoDurationSec }: Props) {
           <li>· B-roll: {project.bRoll.length} clip(s)</li>
           <li>· Música: {project.musicTrack ?? "sin track"}</li>
           <li>· Animaciones: {project.animations.length} marca(s)</li>
+          <li>· Stickers: {project.iconStickers?.length ?? 0}</li>
         </ul>
       </div>
 

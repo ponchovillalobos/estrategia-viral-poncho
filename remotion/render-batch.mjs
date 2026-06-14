@@ -1,9 +1,20 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// OffthreadVideo cache (PARTE B): ~35% de la RAM para que b-roll/mirror/clone NO
+// disparen "cache pruned" (Remotion descarta frames y re-decodea, lento). Tope
+// razonable de 6 GB para no comerse toda la memoria en equipos grandes.
+// OJO: el flag exacto es --offthreadvideo-cache-size-in-bytes (sin guion en "offthreadvideo").
+function offthreadCacheBytes() {
+  const thirtyFive = Math.floor(os.totalmem() * 0.35);
+  return Math.max(512 * 1024 * 1024, Math.min(thirtyFive, 6 * 1024 * 1024 * 1024));
+}
+const OFFTHREAD_CACHE_FLAG = `--offthreadvideo-cache-size-in-bytes=${offthreadCacheBytes()}`;
 
 const JOBS = [
   { videoId: "D02_3_errores_ventas", project: "D02_3_errores_ventas_hype" },
@@ -80,6 +91,7 @@ async function main() {
         outPath,
         "--props=props.json",
         `--codec=${REMOTION_CODEC}`,
+        OFFTHREAD_CACHE_FLAG,
       ]);
       const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
       summary.push({ project: job.project, status: "ok", elapsed, out: outPath });

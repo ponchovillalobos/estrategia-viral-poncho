@@ -41,6 +41,7 @@ from config import (
 )
 from hw_profile import ffmpeg_full_args
 from lib.ffmpeg_safe_run import safe_ffmpeg
+from postencode import post_encode
 
 
 PYTHON_DIR = Path(__file__).resolve().parent
@@ -57,6 +58,28 @@ def _render_workers() -> int:
     from hw_profile import render_workers
 
     return render_workers()
+
+
+def _offthread_cache_flag() -> str:
+    """Flag de caché de OffthreadVideo (PARTE B — OLA 1): ~35% de la RAM para que
+    el b-roll/mirror/clone NO dispare "cache pruned" (Remotion descarta frames
+    decodeados y re-decodea, lento). Tope 6 GB / piso 512 MB.
+    OJO: el flag exacto es --offthreadvideo-cache-size-in-bytes (sin guion en
+    "offthreadvideo")."""
+    try:
+        import psutil  # noqa: PLC0415
+
+        total = int(psutil.virtual_memory().total)
+    except Exception:  # noqa: BLE001
+        # Fallback: hw_profile ya calcula la RAM (psutil o GlobalMemoryStatusEx).
+        try:
+            from hw_profile import detect  # noqa: PLC0415
+
+            total = int(float(detect().get("ram_gb", 8.0)) * 1024**3)
+        except Exception:  # noqa: BLE001
+            total = 8 * 1024**3
+    bytes_ = max(512 * 1024**2, min(int(total * 0.35), 6 * 1024**3))
+    return f"--offthreadvideo-cache-size-in-bytes={bytes_}"
 
 
 def _remotion_concurrency(workers: int) -> int:
@@ -512,7 +535,7 @@ def _apply_emotion(clip_id: str, style_id: str) -> None:
         print(f"[emotion] skipped: {e}", file=sys.stderr)
 
 
-def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
+def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> bool:
     """Post-procesa el render con ffmpeg, en paridad con el pipeline de shorts:
 
       1. LUT 3D color grade — lee `lut` del project JSON (todos los estilos setean uno:
@@ -524,7 +547,14 @@ def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
 
     Best-effort: cada paso es try/except con timeout. Si ffmpeg falla o el .cube no
     existe, se conserva el render tal cual y el clip NO se da por fallido.
+
+    Devuelve True si el PASO DE LUT re-encodeó el video (con el encoder adaptativo
+    de hw_profile, NVENC cuando hay GPU). El caller usa esto para NO volver a
+    re-encodear el video en el post-encode NVENC (sería un re-encode redundante):
+    si ya hubo LUT, el video salió del encoder por hardware; si no, sigue siendo el
+    x264 de Remotion y el post-encode aporta la aceleración.
     """
+    video_reencoded = False
     # 1) LUT — leer el nombre del .cube del project JSON que escribió build-clip-supreme
     try:
         project_path = LF_PROJECTS / f"{clip_id}_{style_id}.json"
@@ -569,6 +599,7 @@ def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
                         _res.returncode, "ffmpeg lut3d", _res.stdout, _res.stderr
                     )
                 graded.replace(rendered)
+                video_reencoded = True
                 print(f"[post-fx] LUT aplicado ({lut_name}): {rendered.name}", file=sys.stderr)
             else:
                 print(f"[post-fx] LUT no encontrado, se salta: {lut_name}", file=sys.stderr)
@@ -600,6 +631,8 @@ def _apply_post_fx(rendered: Path, clip_id: str, style_id: str) -> None:
         print(f"[post-fx] audio mastered: {rendered.name}", file=sys.stderr)
     except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
         print(f"[post-fx] audio mastering skipped: {e}", file=sys.stderr)
+
+    return video_reencoded
 
 
 def step_render_clip(
@@ -667,6 +700,7 @@ def step_render_clip(
             # delayRender amplio: el dev server sirviendo el clip bajo carga puede
             # tardar >28s (default) en responder un seek de OffthreadVideo.
             "--timeout=120000",
+            _offthread_cache_flag(),
             f"--props={props_name}",
         ], cwd=REMOTION_DIR)
     finally:
@@ -676,7 +710,23 @@ def step_render_clip(
         except OSError:
             pass
     # 4) post-fx: LUT color grade + audio mastering (paridad con shorts). Best-effort.
-    _apply_post_fx(out, clip_id, style_id)
+    #    Devuelve si el paso de LUT ya re-encodeó el video con el encoder por hardware.
+    video_reencoded = _apply_post_fx(out, clip_id, style_id)
+    # 5) POST-ENCODE NVENC (OLA 1): Remotion encodea el MP4 en CPU x264 aunque haya
+    #    GPU ociosa. Si el estilo NO traía LUT, el video sigue siendo ese x264 → lo
+    #    re-encodeamos con NVENC (3-8× y calidad equivalente). Si SÍ hubo LUT, el
+    #    video ya salió del encoder por hardware: no re-encodear de nuevo.
+    #    post_encode es no-op (deja el archivo intacto) en máquinas sin GPU usable
+    #    (encoder recomendado == libx264), así que esto NUNCA degrada un equipo CPU-only.
+    if not video_reencoded:
+        try:
+            res = post_encode(out, quality="final")
+            if res.get("reencoded"):
+                print(f"[post-encode] {res.get('encoder')}: {out.name}", file=sys.stderr)
+            elif not res.get("ok"):
+                print(f"[post-encode] skipped: {res.get('error')}", file=sys.stderr)
+        except Exception as e:  # noqa: BLE001 — best-effort, nunca rompe el clip
+            print(f"[post-encode] skipped: {e}", file=sys.stderr)
     return out
 
 

@@ -29,6 +29,7 @@ import {
   remotionConcurrency,
   renameWithRetry,
   REMOTION_DELAY_TIMEOUT_MS,
+  offthreadCacheFlag,
 } from "@/lib/render-utils";
 import {
   pickTopKeywords,
@@ -353,6 +354,7 @@ async function processJob(job: Job, body: AutoBuildRequest) {
             "--concurrency",
             String(remotionConcurrency()),
             `--timeout=${REMOTION_DELAY_TIMEOUT_MS}`,
+            offthreadCacheFlag(),
             "--props=props.json",
           ],
           REMOTION_DIR,
@@ -529,6 +531,31 @@ async function processJob(job: Job, body: AutoBuildRequest) {
         } catch {
           // Ignorar: el caption se puede regenerar manualmente desde /produccion
         }
+      }
+
+      // POST-ENCODE NVENC (OLA 1) — Remotion encodea SIEMPRE en CPU x264 aunque la
+      // máquina tenga NVENC/QSV/AMF ocioso. postencode.py re-encodea el MP4 con el
+      // encoder por hardware recomendado por hw_profile (3-8× más rápido, calidad
+      // equivalente p5/cq19≈crf18), preservando el audio (-c:a copy). GATE: si el
+      // encoder recomendado es libx264 (sin GPU usable), el script es NO-OP y deja el
+      // archivo intacto — así NUNCA degrada un equipo CPU-only con un re-encode inútil.
+      // Best-effort: si falla, se conserva el render tal cual (no rompe el estilo).
+      updateStep(job.id, styleId, { progress: 98 });
+      try {
+        const pe = await runProcess(
+          PYTHON_EXE,
+          [path.join(PYTHON_DIR, "postencode.py"), outPath],
+          PYTHON_DIR,
+          undefined,
+          300_000 // 5 min — re-encode NVENC de un short es rápido, pero damos margen
+        );
+        if (pe.ok) {
+          console.log(`[auto-build] post-encode NVENC ok: ${path.basename(outPath)}`);
+        } else {
+          console.warn(`[auto-build] post-encode NVENC falló, manteniendo render x264`);
+        }
+      } catch (err) {
+        console.warn(`[auto-build] post-encode NVENC skipped:`, err);
       }
 
       // Publicar atómicamente: el .mp4 final aparece de una sola pieza recién acá.

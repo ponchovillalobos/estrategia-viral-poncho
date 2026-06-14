@@ -16,7 +16,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveEditorialCardIcons } from "./editorial-icons.mjs";
+import { resolveEditorialCardIcons, resolveIconStickerSvg } from "./editorial-icons.mjs";
 import { needsTrialWatermark } from "./license-check.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -201,6 +201,9 @@ if (_existsSync(graphicsPath)) {
     console.error(`[graphics] no pude leer ${graphicsPath}: ${e.message}`);
   }
 }
+
+// Galería de stickers: embebe el SVG de los iconos "ph:"/"tb:" (paridad con shorts).
+props.iconStickers = resolveIconStickerSvg(props.iconStickers || []);
 
 // PRUEBA GRATUITA — sin licencia activada, el clip sale con marca de agua.
 // (ver license-check.mjs: nunca rompe el build; en duda, sin marca.)

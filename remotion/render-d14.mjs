@@ -1,9 +1,18 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// OffthreadVideo cache (PARTE B): ~35% de la RAM para evitar "cache pruned" con
+// b-roll/mirror/clone. Flag exacto: --offthreadvideo-cache-size-in-bytes.
+function offthreadCacheBytes() {
+  const thirtyFive = Math.floor(os.totalmem() * 0.35);
+  return Math.max(512 * 1024 * 1024, Math.min(thirtyFive, 6 * 1024 * 1024 * 1024));
+}
+const OFFTHREAD_CACHE_FLAG = `--offthreadvideo-cache-size-in-bytes=${offthreadCacheBytes()}`;
 
 function pickDataRoot() {
   const o = process.env.VIRAL_DATA_ROOT;
@@ -39,7 +48,7 @@ async function main() {
     const t0 = Date.now();
     try {
       await run("node", ["build-props.mjs", job.videoId, projectPath]);
-      await run("npx.cmd", ["remotion", "render", "src/index.ts", "ViralVideo", outPath, "--props=props.json"]);
+      await run("npx.cmd", ["remotion", "render", "src/index.ts", "ViralVideo", outPath, "--props=props.json", OFFTHREAD_CACHE_FLAG]);
       summary.push({ project: job.project, status: "ok", elapsed: ((Date.now() - t0) / 1000).toFixed(1), out: outPath });
       console.log(`[ok] ${job.project}`);
     } catch (err) {

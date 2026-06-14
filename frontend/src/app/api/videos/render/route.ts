@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { REMOTION_DIR, RENDERS_DIR, RAW_DIR } from "@/lib/paths";
+import { REMOTION_DIR, RENDERS_DIR, RAW_DIR, PYTHON_EXE, PYTHON_DIR } from "@/lib/paths";
 import { humanizeError } from "@/lib/humanize-error";
 import { canRender, registerRender } from "@/lib/license";
+import { runProcess } from "@/lib/run-process";
 import {
   acquireRenderLock,
   releaseRenderLock,
@@ -12,7 +13,9 @@ import {
   remotionConcurrency,
   renameWithRetry,
   REMOTION_DELAY_TIMEOUT_MS,
+  offthreadCacheFlag,
 } from "@/lib/render-utils";
+import { embedIconStickerSvgs } from "@/lib/sticker-svg";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -100,6 +103,12 @@ export async function POST(req: NextRequest) {
       const apiHost = process.env.VIRAL_API_HOST ?? "http://localhost:3000";
       const rawUrl = `${apiHost}/api/videos/${encodeURIComponent(videoId)}/stream?source=raw`;
       const fullProps: Record<string, unknown> = { ...props, rawVideoUrl: rawUrl };
+      // Galería de stickers (Ola 1): esta ruta NO pasa por build-props.mjs, así que
+      // embebemos acá el SVG de los icon-stickers "ph:"/"tb:" elegidos a mano (los
+      // Lottie ya traen lottieSrc y se cargan por URL en el render).
+      if (fullProps.iconStickers) {
+        fullProps.iconStickers = await embedIconStickerSvgs(fullProps.iconStickers);
+      }
       // La música llega como URL RELATIVA desde el editor (el cliente no sabe en
       // qué puerto corre el server: la app instalada usa 3100+, no 3000). Aquí la
       // absolutizamos con el mismo host que el video. Si llega absoluta (props
@@ -122,6 +131,7 @@ export async function POST(req: NextRequest) {
         "--concurrency",
         String(remotionConcurrency()),
         `--timeout=${REMOTION_DELAY_TIMEOUT_MS}`,
+        offthreadCacheFlag(),
         "--props",
         JSON.stringify(fullProps),
       ];
@@ -170,6 +180,28 @@ export async function POST(req: NextRequest) {
           { error: human.message, technical: human.technical },
           { status: 500 }
         );
+      }
+
+      // POST-ENCODE NVENC (OLA 1) — Remotion encodea SIEMPRE en CPU x264 aunque la
+      // máquina tenga NVENC/QSV/AMF ocioso. postencode.py re-encodea el MP4 con el
+      // encoder por hardware recomendado por hw_profile (3-8× más rápido, calidad
+      // equivalente), preservando el audio (-c:a copy). GATE: si el encoder
+      // recomendado es libx264 (sin GPU usable) es NO-OP y deja el archivo intacto —
+      // así NUNCA degrada un equipo CPU-only. Best-effort: si falla, se conserva el
+      // render tal cual y se publica igual.
+      try {
+        const pe = await runProcess(
+          PYTHON_EXE,
+          [path.join(PYTHON_DIR, "postencode.py"), outFile],
+          PYTHON_DIR,
+          undefined,
+          300_000
+        );
+        if (!pe.ok) {
+          console.warn("[videos/render] post-encode NVENC falló, manteniendo render x264");
+        }
+      } catch (err) {
+        console.warn("[videos/render] post-encode NVENC skipped:", err);
       }
 
       // Render OK → publicar atómicamente el archivo final (con retry ante locks

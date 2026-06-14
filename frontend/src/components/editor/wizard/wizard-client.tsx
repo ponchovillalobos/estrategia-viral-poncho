@@ -369,6 +369,10 @@ export function WizardClient() {
   const [transcribing, setTranscribing] = useState(false);
   const [generatingCaption, setGeneratingCaption] = useState(false);
   const [building, setBuilding] = useState(false);
+  // ✨ "Hazlo por mí": un clic que escucha el video y lo crea con un preset viral
+  // por defecto, sin que el usuario decida nada. Guarda la fase para el copy del
+  // botón ("Transcribiendo…" / "Generando…").
+  const [magicPhase, setMagicPhase] = useState<null | "transcribing" | "building">(null);
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   // Configuración del modo cinematográfico (opt-in). Cuando enabled=true, el sistema
@@ -976,8 +980,12 @@ export function WizardClient() {
     poll();
   }
 
-  async function handleBuild() {
-    if (selectedVideos.size === 0 || selectedStyles.length === 0) return;
+  // Dispara la creación. `stylesOverride` permite arrancar con estilos explícitos
+  // (lo usa "Hazlo por mí", que setea el preset y crea en el mismo tick: el estado
+  // selectedStyles aún no se actualizó, así que NO se puede leer del closure).
+  async function handleBuild(stylesOverride?: StyleId[]) {
+    const styles = stylesOverride ?? selectedStyles;
+    if (selectedVideos.size === 0 || styles.length === 0) return;
     setBuilding(true);
     setResults([]);
     setJobProgress(null);
@@ -986,12 +994,12 @@ export function WizardClient() {
       const res = await fetch("/api/editor/auto-build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildRequestBody(videoIds, selectedStyles)),
+        body: JSON.stringify(buildRequestBody(videoIds, styles)),
       });
       const data = await res.json();
       if (!res.ok || !data.jobIds || data.jobIds.length === 0) {
         toastError(data.error ?? "no se pudo poner en fila", "No se pudo arrancar la creación", {
-          action: { label: "Reintentar", onClick: handleBuild },
+          action: { label: "Reintentar", onClick: () => handleBuild(stylesOverride) },
         });
         setBuilding(false);
         return;
@@ -1004,7 +1012,7 @@ export function WizardClient() {
       try {
         window.localStorage.setItem(
           ACTIVE_JOB_KEY,
-          JSON.stringify({ jobIds, videoIds, styles: selectedStyles, ts: Date.now() })
+          JSON.stringify({ jobIds, videoIds, styles, ts: Date.now() })
         );
       } catch {
         /* sin almacenamiento — la creación sigue igual, solo no sobrevive al refresh */
@@ -1012,10 +1020,45 @@ export function WizardClient() {
       startPolling(jobIds, videoIds);
     } catch (err) {
       toastError(err, "No se pudo arrancar la creación", {
-        action: { label: "Reintentar", onClick: handleBuild },
+        action: { label: "Reintentar", onClick: () => handleBuild(stylesOverride) },
       });
       setBuilding(false);
     }
+  }
+
+  // ✨ "Hazlo por mí": el camino de un clic para el 80% que no quiere configurar.
+  // Setea un preset viral por defecto, ESCUCHA el video (la transcripción debe
+  // correr ANTES del build o este falla en un video recién importado) y SOLO
+  // cuando termina, dispara la creación — saltando directo al paso 4.
+  async function handleMagicBuild() {
+    if (selectedVideos.size === 0 || magicPhase || transcribing || building) return;
+
+    // Preset viral por defecto: "motion_beat" lleva música (está en MUSIC_STYLES:
+    // su plantilla setea musicTrack) y el fondo late al ritmo — energía con música,
+    // justo lo que pide un video viral sin que el usuario elija nada.
+    const MAGIC_STYLE: StyleId = "motion_beat";
+    setSelectedStyles([MAGIC_STYLE]); // refleja la elección en la UI por si vuelve atrás
+    setAspectRatio("9:16"); // vertical para TikTok/Reels (el default, lo fijamos explícito)
+    setMusic("auto"); // el sistema elige y rota la pista de fondo
+
+    // 1) Transcribir lo que falte ANTES de crear (build sin subtítulos falla).
+    setMagicPhase("transcribing");
+    const needsTranscribe = selectedVideoList.filter((v) => !v.status.transcribed);
+    if (needsTranscribe.length > 0) {
+      const allOk = await runTranscription(needsTranscribe);
+      if (!allOk) {
+        // runTranscription ya mostró el error y dejó los fallidos en el paso 1
+        // con su botón Reintentar; abortamos el modo mágico sin disparar el build.
+        setMagicPhase(null);
+        return;
+      }
+    }
+
+    // 2) Transcripción lista → crear. handleBuild salta al paso 4 y hace polling.
+    setMagicPhase("building");
+    setStep(4);
+    await handleBuild([MAGIC_STYLE]);
+    setMagicPhase(null);
   }
 
   // Re-encola SOLO un combo "videoId::estilo" que falló (botón del paso final).
@@ -1511,6 +1554,40 @@ export function WizardClient() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* ✨ HAZLO POR MÍ: el camino de un clic para quien no quiere
+                  configurar nada. Escucha el video y lo crea con un preset viral
+                  (motion_beat: con música y al ritmo), 9:16, sin tocar más pasos.
+                  Debajo, "o configúralo tú" deja claro que el wizard sigue ahí. */}
+              <div className="mt-4 rounded-xl border-2 border-brand-pink/40 bg-brand-pink/5 p-4 text-center">
+                <Button
+                  onClick={handleMagicBuild}
+                  disabled={selectedVideos.size === 0 || magicPhase !== null || transcribing || building}
+                  className="h-12 w-full bg-brand-gradient text-base font-semibold text-white shadow-[0_0_24px_rgba(250,60,141,0.45)] hover:opacity-95"
+                >
+                  {magicPhase ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      {magicPhase === "transcribing"
+                        ? "Preparando tu video… escuchando"
+                        : "Generando tu video…"}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-5 w-5" />
+                      ✨ Hazlo por mí
+                    </>
+                  )}
+                </Button>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {selectedVideos.size === 0
+                    ? "Elige al menos un video y lo hacemos todo por ti: subtítulos, estilo viral con música y formato vertical."
+                    : "Un clic y listo: escuchamos tu video y lo creamos con un estilo viral con música, en vertical. Tú no decides nada."}
+                </p>
+                <p className="mt-1 text-[10px] text-muted-foreground/70">
+                  ¿Prefieres elegir el estilo, el color y la música? Usa “Siguiente” abajo para configurarlo tú.
+                </p>
               </div>
             </>
           )}
@@ -2164,7 +2241,7 @@ export function WizardClient() {
             </ul>
           </div>
 
-          <Button onClick={handleBuild} disabled={building} className="mt-4 w-full">
+          <Button onClick={() => handleBuild()} disabled={building} className="mt-4 w-full">
             {building ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

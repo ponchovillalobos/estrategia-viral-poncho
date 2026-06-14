@@ -1,9 +1,18 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// OffthreadVideo cache (PARTE B): ~35% de la RAM para evitar "cache pruned" con
+// b-roll/mirror/clone. Flag exacto: --offthreadvideo-cache-size-in-bytes.
+function offthreadCacheBytes() {
+  const thirtyFive = Math.floor(os.totalmem() * 0.35);
+  return Math.max(512 * 1024 * 1024, Math.min(thirtyFive, 6 * 1024 * 1024 * 1024));
+}
+const OFFTHREAD_CACHE_FLAG = `--offthreadvideo-cache-size-in-bytes=${offthreadCacheBytes()}`;
 
 const JOBS = [
   "D06_vendedor_toxico",
@@ -58,6 +67,7 @@ async function main() {
         "ViralVideo",
         outPath,
         "--props=props.json",
+        OFFTHREAD_CACHE_FLAG,
       ]);
       const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
       summary.push({ project: job.project, status: "ok", elapsed });

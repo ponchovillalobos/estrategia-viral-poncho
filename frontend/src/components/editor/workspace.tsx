@@ -13,6 +13,7 @@ import { toastError } from "@/lib/toast-error";
 import { SubtitleEditor } from "@/components/editor/subtitle-editor";
 import { BrollPicker } from "@/components/editor/broll-picker";
 import { MusicPicker } from "@/components/editor/music-picker";
+import { StickerPicker, type IconStickerInput } from "@/components/editor/sticker-picker";
 import { AnimationsPanel } from "@/components/editor/animations-panel";
 import { ExportPanel } from "@/components/editor/export-panel";
 import { RenameDialog } from "@/components/editor/rename-dialog";
@@ -57,6 +58,10 @@ export interface Project {
   bRoll: BRollClip[];
   animations: AnimationMark[];
   manualSubtitles: Word[];
+  // Ola 1 — Stickers de la galería (iconos SVG + ilustraciones Lottie). El render
+  // los consume como IconSticker (icon "ph:"/"tb:" o lottieSrc). Opt-in: ausente =
+  // proyecto sin stickers (compat total con proyectos viejos).
+  iconStickers?: IconStickerInput[];
   updatedAt?: string;
 }
 
@@ -355,6 +360,9 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
               <TabsTrigger value="music" className="flex-1">
                 Música
               </TabsTrigger>
+              <TabsTrigger value="stickers" className="flex-1">
+                Stickers
+              </TabsTrigger>
               <TabsTrigger value="fx" className="flex-1">
                 Efectos
               </TabsTrigger>
@@ -396,6 +404,16 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
                 volume={project.musicVolume}
                 onSelect={(t) => updateProject({ musicTrack: t })}
                 onVolumeChange={(v) => updateProject({ musicVolume: v })}
+              />
+            </TabsContent>
+
+            <TabsContent value="stickers" className="mt-4">
+              <StickerPicker
+                currentTime={currentTime}
+                selectedCount={project.iconStickers?.length ?? 0}
+                onAdd={(s) =>
+                  updateProject({ iconStickers: [...(project.iconStickers ?? []), s] })
+                }
               />
             </TabsContent>
 

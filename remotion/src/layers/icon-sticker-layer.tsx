@@ -25,6 +25,15 @@ export const IconStickerLayer: React.FC<{
     extrapolateRight: "clamp",
   });
   const Icon = ICON_MAP[sticker.icon.toLowerCase()] ?? FallbackIcon;
+  // ICONO SVG EXTERNO (Phosphor/Tabler de la galería): el build embebió el markup
+  // en sticker.iconSvg. Usa currentColor → se pinta con el color del sticker.
+  const hasSvg = Boolean(sticker.iconSvg);
+  const SvgIcon: React.FC<{ size: number; color: string }> = ({ size, color }) => (
+    <div
+      style={{ width: size, height: size, color, display: "flex" }}
+      dangerouslySetInnerHTML={{ __html: sticker.iconSvg }}
+    />
+  );
 
   // ── Tarjeta de diseño FULLSCREEN: pantalla oscura + ícono gigante + palabra. ──
   if (sticker.fullscreen) {
@@ -88,7 +97,11 @@ export const IconStickerLayer: React.FC<{
                 boxShadow: `0 0 90px ${sticker.bg}aa, 0 24px 60px rgba(0,0,0,0.6)`,
               }}
             >
-              <Icon size={big * 0.55} color={sticker.color} strokeWidth={2.2} />
+              {hasSvg ? (
+                <SvgIcon size={big * 0.55} color={sticker.color} />
+              ) : (
+                <Icon size={big * 0.55} color={sticker.color} strokeWidth={2.2} />
+              )}
             </div>
           )}
         </div>
@@ -160,7 +173,11 @@ export const IconStickerLayer: React.FC<{
             transform: `translateY(${floatY}px) scale(${enter}) rotate(${wobbleRot}deg)`,
           }}
         >
-          <Icon size={sticker.size} color={sticker.color} strokeWidth={2.4} />
+          {hasSvg ? (
+            <SvgIcon size={sticker.size} color={sticker.color} />
+          ) : (
+            <Icon size={sticker.size} color={sticker.color} strokeWidth={2.4} />
+          )}
         </div>
       )}
     </AbsoluteFill>

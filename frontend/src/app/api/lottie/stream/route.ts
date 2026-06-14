@@ -28,15 +28,31 @@ export async function OPTIONS() {
 
 export async function GET(req: NextRequest) {
   const file = req.nextUrl.searchParams.get("file") ?? "";
-  if (!/^[a-z0-9_-]+\.json$/.test(file)) {
+  // Acepta RUTAS RELATIVAS dentro de assets/lottie/noto (incluido el subdirectorio
+  // `catalog/` donde viven las 609 ilustraciones del catálogo Noto) — igual que sfx,
+  // que sirve audios anidados. Sólo bloqueamos traversal (".." o ruta absoluta);
+  // el join + check de containment garantiza que no se escape de LOTTIE_DIR.
+  //   ✓ "money.json"  ✓ "catalog/1f4b0.json"   ✗ "../secret.json"  ✗ "/etc/x.json"
+  const normFile = file.split("\\").join("/").replace(/^\/+/, "");
+  if (
+    !normFile ||
+    normFile.includes("..") ||
+    !/^[a-z0-9_/-]+\.json$/i.test(normFile)
+  ) {
     return new Response("bad request", { status: 400, headers: CORS_HEADERS });
   }
   // Self-heal: contar las ilustraciones (recursivo sobre noto/). Si está corta,
   // disparar repair en background sin bloquear.
   const lottieCount = await countFiles(LOTTIE_DIR, true);
   if (lottieCount < LOTTIE_MIN_FILES) fireRepair("lottie");
+  // Defensa en profundidad: resolver y verificar que el resultado siga DENTRO de
+  // LOTTIE_DIR (por si alguna combinación rara de separadores burlara el regex).
+  const target = path.resolve(LOTTIE_DIR, normFile);
+  if (target !== LOTTIE_DIR && !target.startsWith(LOTTIE_DIR + path.sep)) {
+    return new Response("bad request", { status: 400, headers: CORS_HEADERS });
+  }
   try {
-    const buf = await fs.readFile(path.join(LOTTIE_DIR, file));
+    const buf = await fs.readFile(target);
     return new Response(new Uint8Array(buf), {
       headers: {
         ...CORS_HEADERS,

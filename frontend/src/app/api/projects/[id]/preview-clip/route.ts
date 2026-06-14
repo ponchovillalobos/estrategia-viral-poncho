@@ -10,6 +10,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { DATA_ROOT, PROJECTS_DIR, REMOTION_DIR } from "@/lib/paths";
 import { runProcess } from "@/lib/run-process";
+import { offthreadCacheFlag } from "@/lib/render-utils";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -75,6 +76,7 @@ export async function POST(
         "remotion", "render", "src/index.ts", "ViralVideo",
         outArg, `--frames=${frame}-${frame + 89}`, `--props=${propsName}`,
         "--scale=0.4", "--concurrency=4", "--timeout=120000",
+        offthreadCacheFlag(),
       ],
       REMOTION_DIR,
       undefined,

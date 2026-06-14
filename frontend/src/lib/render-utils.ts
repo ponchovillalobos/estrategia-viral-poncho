@@ -30,6 +30,20 @@ export function remotionConcurrency(): number {
  *  queda corto cuando el dev server sirve el video fuente bajo carga. */
 export const REMOTION_DELAY_TIMEOUT_MS = 120_000;
 
+/**
+ * Flag de caché de OffthreadVideo (PARTE B — OLA 1). Remotion mantiene en memoria
+ * los frames decodeados de los <OffthreadVideo> (b-roll, mirror, clone); con la caché
+ * default chica, bajo presión los descarta ("cache pruned") y re-decodea, lo que frena
+ * el render. Le damos ~35% de la RAM (tope 6 GB para no asfixiar equipos grandes,
+ * piso 512 MB). OJO: el nombre EXACTO del flag es `--offthreadvideo-cache-size-in-bytes`
+ * (sin guion interno en "offthreadvideo").
+ */
+export function offthreadCacheFlag(): string {
+  const thirtyFive = Math.floor(os.totalmem() * 0.35);
+  const bytes = Math.max(512 * 1024 * 1024, Math.min(thirtyFive, 6 * 1024 * 1024 * 1024));
+  return `--offthreadvideo-cache-size-in-bytes=${bytes}`;
+}
+
 function lockPath(videoId: string): string {
   return path.join(RENDERS_DIR, `${videoId}.__lock`);
 }
