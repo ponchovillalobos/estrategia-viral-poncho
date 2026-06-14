@@ -1560,34 +1560,38 @@ export function WizardClient() {
                   configurar nada. Escucha el video y lo crea con un preset viral
                   (motion_beat: con música y al ritmo), 9:16, sin tocar más pasos.
                   Debajo, "o configúralo tú" deja claro que el wizard sigue ahí. */}
-              <div className="mt-4 rounded-xl border-2 border-brand-pink/40 bg-brand-pink/5 p-4 text-center">
+              {/* El camino NORMAL es "Siguiente" (abajo) → elegir estilo, formato y
+                  colores. "Hazlo por mí" es solo un ATAJO OPCIONAL de un clic (auto-
+                  genera con un preset viral SIN que elijas nada). Antes era un botón
+                  gigante con glow y la gente lo tocaba creyendo que era "continuar", se
+                  saltaba la elección de estilos y se frustraba. Ahora es secundario. */}
+              <div className="mt-4 flex flex-col items-center gap-2 text-center">
+                <p className="text-sm">
+                  Toca <b className="text-foreground">«Siguiente»</b> (abajo) para elegir
+                  el <b className="text-foreground">estilo</b>, el{" "}
+                  <b className="text-foreground">formato</b> y los{" "}
+                  <b className="text-foreground">colores</b>.
+                </p>
+                <p className="text-[11px] text-muted-foreground">¿No quieres decidir nada?</p>
                 <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleMagicBuild}
                   disabled={selectedVideos.size === 0 || magicPhase !== null || transcribing || building}
-                  className="h-12 w-full bg-brand-gradient text-base font-semibold text-white shadow-[0_0_24px_rgba(250,60,141,0.45)] hover:opacity-95"
+                  className="h-9 border-brand-pink/40 text-brand-pink hover:bg-brand-pink/10"
                 >
                   {magicPhase ? (
                     <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      {magicPhase === "transcribing"
-                        ? "Preparando tu video… escuchando"
-                        : "Generando tu video…"}
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {magicPhase === "transcribing" ? "Preparando…" : "Generando…"}
                     </>
                   ) : (
                     <>
-                      <Sparkles className="mr-2 h-5 w-5" />
-                      ✨ Hazlo por mí
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      …o hazlo por mí (un clic, sin elegir)
                     </>
                   )}
                 </Button>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {selectedVideos.size === 0
-                    ? "Elige al menos un video y lo hacemos todo por ti: subtítulos, estilo viral con música y formato vertical."
-                    : "Un clic y listo: escuchamos tu video y lo creamos con un estilo viral con música, en vertical. Tú no decides nada."}
-                </p>
-                <p className="mt-1 text-[10px] text-muted-foreground/70">
-                  ¿Prefieres elegir el estilo, el color y la música? Usa “Siguiente” abajo para configurarlo tú.
-                </p>
               </div>
             </>
           )}
@@ -2461,7 +2465,7 @@ export function WizardClient() {
                 </>
               ) : (
                 <>
-                  Siguiente
+                  {step === 1 ? "Siguiente: elegir estilo" : "Siguiente"}
                   <ChevronRight className="ml-1.5 h-4 w-4" />
                 </>
               )}
