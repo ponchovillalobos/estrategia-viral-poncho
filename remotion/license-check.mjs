@@ -35,7 +35,12 @@ function pickDataRoot() {
  *    ese caso casi siempre es un bug/entorno raro, no piratería. Nunca debe
  *    romper el build.
  */
+// INTERRUPTOR (espejo de license.ts LICENSE_ENFORCED): con la licencia desactivada,
+// NUNCA se pone marca de agua — la app es de uso libre. Reactivar = poner true.
+const LICENSE_ENFORCED = false;
+
 export function needsTrialWatermark() {
+  if (!LICENSE_ENFORCED) return false;
   try {
     const licenseFile = path.join(path.dirname(pickDataRoot()), "license.json");
     if (!existsSync(licenseFile)) return true;

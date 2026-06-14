@@ -174,8 +174,15 @@ export function registerRender(): void {
   writeBoth(state);
 }
 
+/** INTERRUPTOR de licencia. Con `false`, la app es de USO LIBRE: cualquiera puede
+ *  generar videos sin prueba ni activación y SIN marca de agua — nada obstruye el
+ *  funcionamiento. Toda la lógica de prueba/licencia queda intacta debajo; para
+ *  reactivar el modelo comercial, pon esto en `true`. */
+export const LICENSE_ENFORCED = false;
+
 /** ¿Puede generar videos? (activa, o prueba con días Y videos restantes) */
 export function canRender(): { allowed: true; watermark: boolean } | { allowed: false; reason: string } {
+  if (!LICENSE_ENFORCED) return { allowed: true, watermark: false };
   const status = getLicenseStatus();
   if (status.status === "active") return { allowed: true, watermark: false };
   if (status.status === "trial") return { allowed: true, watermark: true };
