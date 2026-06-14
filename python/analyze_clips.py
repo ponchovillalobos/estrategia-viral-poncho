@@ -153,6 +153,18 @@ def _try_parse_clips(response_text: str) -> list[dict[str, Any]] | None:
     return rescued if rescued else None
 
 
+def _ollama_num_thread() -> int:
+    """Núcleos FÍSICOS para Ollama (num_thread), clamp >=4. Import lazy de hw_profile
+    para no pagar la detección si nunca se llama a Ollama. Si la detección falla por
+    cualquier motivo, caemos a 4 (no rompe el análisis)."""
+    try:
+        import hw_profile  # noqa: PLC0415
+        cores = int(hw_profile.detect().get("cores_physical") or 0)
+    except Exception:
+        cores = 0
+    return max(4, cores)
+
+
 def _ollama_request(prompt: str, model: str, temperature: float = 0.3) -> str:
     """Llamada HTTP raw a Ollama, devuelve el texto de respuesta (sin parsear)."""
     # Fallback para Ollama viejos que ignoran el campo think:false → qwen3 entiende el
@@ -170,7 +182,11 @@ def _ollama_request(prompt: str, model: str, temperature: float = 0.3) -> str:
         # keep_alive mantiene el modelo en RAM entre clips para no pagar la recarga (segundos).
         # 10m es moderado: en PC sin GPU/8GB no presiona la RAM mientras Remotion renderiza.
         "keep_alive": "10m",
-        "options": {"temperature": temperature, "num_ctx": 8192},
+        # num_thread = núcleos físicos (clamp >=4): cuando Ollama corre en CPU usa toda
+        # la CPU para el análisis. Si hay GPU, Ollama ya descarga en la GPU y este valor
+        # no estorba (sólo aplica a las capas que queden en CPU). Mantenemos num_ctx y
+        # temperature intactos; el prompt y el schema no se tocan.
+        "options": {"temperature": temperature, "num_ctx": 8192, "num_thread": _ollama_num_thread()},
     }
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(

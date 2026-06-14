@@ -9,7 +9,7 @@
 //   - applyTextBehind    → foregroundVideoId con texto detrás del sujeto (A3).
 //   - applyTranslate     → captionTranslated en otro idioma (C3).
 
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   PYTHON_DIR,
@@ -248,18 +248,55 @@ export async function applyEmotionDirector(
   }
 }
 
+/**
+ * Lee la recomendación de hw_profile para el tracking desde el cache JSON. Devuelve
+ * (sample_sec, downscale_w) adaptados al hardware. Si no hay perfil o los valores no
+ * son válidos, cae a defaults seguros (0.4s / 480px) — los mismos defaults que tiene
+ * track_subject.py, así nada rompe si el perfil aún no se detectó.
+ */
+function trackingParams(): { sampleSec: number; downscaleW: number } {
+  let sampleSec = 0.4;
+  let downscaleW = 480;
+  try {
+    const j = JSON.parse(
+      readFileSync(path.join(DATA_ROOT, "cache", "hw_profile.json"), "utf-8")
+    ) as { recommend?: { tracking_sample_sec?: number; tracking_downscale_w?: number } };
+    const rec = j?.recommend ?? {};
+    if (typeof rec.tracking_sample_sec === "number" && rec.tracking_sample_sec > 0) {
+      sampleSec = rec.tracking_sample_sec;
+    }
+    if (typeof rec.tracking_downscale_w === "number" && rec.tracking_downscale_w >= 0) {
+      downscaleW = rec.tracking_downscale_w;
+    }
+  } catch {
+    // sin perfil → defaults
+  }
+  return { sampleSec, downscaleW };
+}
+
 /** Motion tracking: detecta cara en el raw, llena project.trackPath. */
 export async function applyTracking(
   project: ResolvedProject,
   videoId: string
 ): Promise<void> {
+  // GATING: solo corre para estilos con tracking:true. Si no lo pide, no se
+  // spawnea nada (ni se lee hw_profile) — barato en equipos modestos.
   if (!project.tracking) return;
   try {
     const rawVideo = await findRawVideo(videoId);
     if (!rawVideo) return;
+    // Muestreo + downscale adaptativos al hardware (hw_profile.recommend). En
+    // equipos modestos: muestreo más espaciado. La trayectoria se interpola en
+    // track_subject.py → seguimiento fluido con MENOS trabajo. El video NO cambia.
+    const { sampleSec, downscaleW } = trackingParams();
     const trackRun = await runProcess(
       PYTHON_EXE,
-      [path.join(PYTHON_DIR, "track_subject.py"), rawVideo, "0.15"],
+      [
+        path.join(PYTHON_DIR, "track_subject.py"),
+        rawVideo,
+        String(sampleSec),
+        String(downscaleW),
+      ],
       PYTHON_DIR,
       undefined,
       180_000

@@ -369,6 +369,42 @@ def _recommend(prof: dict) -> dict:
     else:
         chromium_gl = None
 
+    # ------------------------------------------------------------------
+    # MOTION TRACKING (track_subject.py): cada cuánto muestrear la cara y a qué
+    # ancho reducir el frame ANTES de detectar. La cara se mueve lento, así que
+    # muestrear espaciado + interpolar da una trayectoria igual de fluida con
+    # MENOS trabajo. El video final NO se toca; esto solo acelera el cálculo de
+    # la trayectoria. SOLO corre para estilos con tracking:true.
+    #   - tracking_sample_sec: equipos potentes muestrean más fino (más preciso,
+    #     pueden pagarlo); modestos más espaciado; muy modestos aún más.
+    #   - tracking_downscale_w: detectMultiScale sobre 480px de ancho es varias
+    #     veces más rápido que sobre 1080p, sin diferencia visible al seguir.
+    cores_logical = int(prof.get("cores_logical") or cores_physical or 1)
+    if ram_gb < 8 or cores_physical < 4:
+        # Muy modesto: muestreo bien espaciado (la interpolación lo suaviza).
+        tracking_sample_sec = 0.8
+        tracking_downscale_w = 400
+    elif cores_logical >= 12 and ram_gb >= 16:
+        tracking_sample_sec = 0.33
+        tracking_downscale_w = 480
+    else:
+        # Modesto / medio.
+        tracking_sample_sec = 0.6
+        tracking_downscale_w = 480
+    # Overrides explícitos por env (debug / tuning).
+    try:
+        env_ts = os.environ.get("VIRAL_TRACK_SAMPLE_SEC")
+        if env_ts:
+            tracking_sample_sec = max(0.05, float(env_ts))
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        env_dw = os.environ.get("VIRAL_TRACK_DOWNSCALE_W")
+        if env_dw:
+            tracking_downscale_w = max(0, int(env_dw))
+    except Exception:  # noqa: BLE001
+        pass
+
     return {
         "whisper_device": whisper_device,
         "whisper_compute_type": whisper_compute_type,
@@ -380,6 +416,8 @@ def _recommend(prof: dict) -> dict:
         "x264_preset": x264_preset,
         "x264_crf": x264_crf,
         "chromium_gl": chromium_gl,
+        "tracking_sample_sec": tracking_sample_sec,
+        "tracking_downscale_w": tracking_downscale_w,
     }
 
 

@@ -79,6 +79,12 @@ def post_encode(path: Path, quality: str = "final") -> dict:
 
     cmd = [
         str(FFMPEG_PATH), "-y",
+        # -threads 0 = usar TODOS los núcleos en la parte de CPU (decode del input
+        # H.264 plano de Remotion + filtros/escala). Aunque el ENCODE va por NVENC
+        # (GPU), el decode y los filtros corren en CPU; sin esto ffmpeg puede limitar
+        # los hilos y dejar núcleos ociosos. Es seguro con NVENC (no afecta el encoder
+        # de hardware) y no cambia la calidad. Va antes de -i para cubrir el decode.
+        "-threads", "0",
         "-i", str(path),
         "-map", "0",
         *ff["video_args"],

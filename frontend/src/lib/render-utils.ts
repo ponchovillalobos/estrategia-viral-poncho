@@ -40,13 +40,34 @@ export const REMOTION_DELAY_TIMEOUT_MS = 120_000;
  * Flag de caché de OffthreadVideo (PARTE B — OLA 1). Remotion mantiene en memoria
  * los frames decodeados de los <OffthreadVideo> (b-roll, mirror, clone); con la caché
  * default chica, bajo presión los descarta ("cache pruned") y re-decodea, lo que frena
- * el render. Le damos ~35% de la RAM (tope 6 GB para no asfixiar equipos grandes,
- * piso 512 MB). OJO: el nombre EXACTO del flag es `--offthreadvideo-cache-size-in-bytes`
+ * el render. Cuantos MÁS frames quepan en cache, menos re-decodes y más rápido va.
+ *
+ * ADAPTATIVO a la RAM LIBRE: el cache se dimensiona como el MAYOR entre el 35% de la
+ * RAM TOTAL (piso histórico, sirve aunque el equipo esté presionado) y ~50% de la RAM
+ * LIBRE actual (aprovecha la memoria ociosa cuando la hay para cachear más). Se acota
+ * con piso 512 MB y tope 8 GB: el render corre con hasta 16 workers, así que se deja
+ * aire para esos workers y el resto del SO (no tomamos toda la RAM libre). Esto NO
+ * cambia la calidad — sólo evita re-decodes. Override fijo con env
+ * VIRAL_OFFTHREAD_CACHE_MB (en MB) si alguien quiere clavar un valor.
+ * OJO: el nombre EXACTO del flag es `--offthreadvideo-cache-size-in-bytes`
  * (sin guion interno en "offthreadvideo").
  */
 export function offthreadCacheFlag(): string {
-  const thirtyFive = Math.floor(os.totalmem() * 0.35);
-  const bytes = Math.max(512 * 1024 * 1024, Math.min(thirtyFive, 6 * 1024 * 1024 * 1024));
+  const FLOOR = 512 * 1024 * 1024; // 512 MB
+  const CEIL = 8 * 1024 * 1024 * 1024; // 8 GB (deja aire para 16 workers + SO)
+
+  // Override manual: VIRAL_OFFTHREAD_CACHE_MB en megabytes.
+  const fromEnvMb = Number(process.env.VIRAL_OFFTHREAD_CACHE_MB);
+  if (Number.isFinite(fromEnvMb) && fromEnvMb >= 1) {
+    const envBytes = Math.max(FLOOR, Math.min(Math.floor(fromEnvMb * 1024 * 1024), CEIL));
+    return `--offthreadvideo-cache-size-in-bytes=${envBytes}`;
+  }
+
+  const thirtyFiveOfTotal = Math.floor(os.totalmem() * 0.35);
+  const halfOfFree = Math.floor(os.freemem() * 0.5);
+  // El MAYOR de ambos: nunca por debajo del 35% del total, pero subimos si hay RAM libre.
+  const target = Math.max(thirtyFiveOfTotal, halfOfFree);
+  const bytes = Math.max(FLOOR, Math.min(target, CEIL));
   return `--offthreadvideo-cache-size-in-bytes=${bytes}`;
 }
 
