@@ -39,6 +39,12 @@ import { EmphasisCardLayer } from "./layers/emphasis-card-layer";
 import { SubtitleLayer } from "./layers/subtitle-layer";
 import { ParticleLayer, particleBurstSchema } from "./layers/particle-layer";
 import {
+  ProTransitionSeriesLayer,
+  proTransitionSeriesSchema,
+} from "./layers/pro-transition-series-layer";
+import { IllustrationStickerLayer } from "./layers/illustration-sticker-layer";
+import { OverlayTextureLayer } from "./layers/overlay-texture-layer";
+import {
   AnimatedBackgroundLayer,
   animatedBackgroundSchema,
 } from "./layers/animated-background-layer";
@@ -52,7 +58,10 @@ import {
 } from "./layers/editorial-layer";
 import { EditorialChartLayer } from "./layers/editorial-chart";
 import { EditorialCutoutLayer, editorialCutoutSchema } from "./layers/editorial-collage";
-import { EditorialGlobeLayer, editorialMapSchema } from "./layers/editorial-globe";
+// El globo (d3-geo + topojson + world-atlas ~8MB) se carga LAZY: el schema viene de un
+// archivo liviano y el componente se descarga sólo cuando hay un editorialMap activo.
+import { editorialMapSchema } from "./layers/editorial-globe-schema";
+import { EditorialGlobeLazy } from "./layers/editorial-globe-lazy";
 import {
   EditorialPaper,
   EditorialFinish,
@@ -101,6 +110,11 @@ TTF("Righteous-Regular.ttf", "Righteous");
 TTF("Montserrat-var.ttf", "Montserrat");
 TTF("Oswald-var.ttf", "Oswald");
 TTF("Teko-var.ttf", "Teko");
+// TikTok Sans — la grotesque NATIVA de los subtítulos virales de TikTok.
+// TTF directo de github.com/google/fonts (OFL 1.1, libre para uso comercial),
+// variable [opsz,slnt,wdth,wght] → UN .ttf cubre todos los pesos. Familia CSS
+// "TikTok Sans". La usa el preset "Pop Reels 2026" y el subtitleFont "tiktok".
+TTF("TikTokSans-var.ttf", "TikTok Sans");
 
 // Poppins es estática por peso en el repo de Google Fonts: se registran los
 // pesos que el editor usa bajo el MISMO family ("Poppins").
@@ -123,6 +137,7 @@ const FONT_MAP: Record<string, string> = {
   archivo: "Archivo Black",
   teko: "Teko",
   righteous: "Righteous",
+  tiktok: "TikTok Sans",
 };
 
 import {
@@ -143,10 +158,14 @@ import {
   dataVizSchema,
   kineticHeadlineSchema,
   lottieStickerSchema,
+  illustrationStickerSchema,
+  overlayTextureSchema,
+  textBehindSchema,
 } from "./schemas";
 import { DataVizLayer } from "./layers/data-viz-layer";
 import { KineticHeadlineLayer } from "./layers/kinetic-headline-layer";
 import { LottieStickerLayer } from "./layers/lottie-sticker-layer";
+import { TextBehindLayer } from "./layers/text-behind-layer";
 
 /**
  * A2 — Interpolación lineal de la posición X de la cara a un tiempo dado, en el espacio
@@ -190,7 +209,7 @@ export const viralVideoSchema = z.object({
   // Fuente del subtítulo. "auto" = la del estilo (bebas/anton). El resto son Google
   // Fonts gratis para variedad (montserrat, poppins, oswald, bangers, etc.).
   subtitleFont: z
-    .enum(["auto", "bebas", "anton", "montserrat", "poppins", "oswald", "bangers", "luckiest", "archivo", "teko", "righteous"])
+    .enum(["auto", "bebas", "anton", "montserrat", "poppins", "oswald", "bangers", "luckiest", "archivo", "teko", "righteous", "tiktok"])
     .default("auto"),
   // F2 — Posición vertical del subtítulo. "top" cuando la cara del speaker queda
   // abajo del frame (lo computa el tracking): el texto nunca tapa la cara.
@@ -260,6 +279,19 @@ export const viralVideoSchema = z.object({
   editorialCutout: editorialCutoutSchema.nullable().default(null),
   // Ola 7 — globo con zoom al lugar mencionado en el transcript.
   editorialMap: editorialMapSchema.nullable().default(null),
+  // PRO — transiciones oficiales de Remotion (@remotion/transitions): slide/wipe/
+  // flip/clockWipe/none como overlay en cortes. ADITIVO a las caseras. [] = idéntico.
+  proTransitionSeries: z.array(proTransitionSeriesSchema).default([]),
+  // ILUSTRACIONES CC0 multicolor (open-doodles/open-peeps) con duotono opcional al
+  // tema, usadas como overlay/sticker de personas. [] = render idéntico.
+  illustrationStickers: z.array(illustrationStickerSchema).default([]),
+  // OVERLAY de TEXTURA procedural (grano/polvo/scratches) con mixBlendMode opcional.
+  // null = sin textura (render idéntico al histórico).
+  overlayTexture: overlayTextureSchema.nullable().default(null),
+  // TEXTO DETRÁS DEL SUJETO (matte estático): video → texto grande → recorte del
+  // sujeto encima. null = sin efecto (render idéntico). El matte (PNG con alpha) lo
+  // produce Python a resolución completa del frame; ver text-behind-layer.tsx.
+  textBehind: textBehindSchema.nullable().default(null),
   // PRUEBA GRATUITA — pill discreto "PRUEBA GRATUITA · Viralito" encima de
   // todo. Lo inyectan los builders (.mjs) y /api/videos/render cuando NO hay
   // licencia activada. Opcional: props viejos sin el campo = render idéntico.
@@ -324,6 +356,10 @@ export const defaultProps: ViralVideoProps = {
   editorialCards: [],
   editorialCutout: null,
   editorialMap: null,
+  proTransitionSeries: [],
+  illustrationStickers: [],
+  overlayTexture: null,
+  textBehind: null,
   trialWatermark: false,
 };
 
@@ -381,6 +417,10 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
   editorialCards,
   editorialCutout,
   editorialMap,
+  proTransitionSeries,
+  illustrationStickers,
+  overlayTexture,
+  textBehind,
   trialWatermark,
 }) => {
   // Modo cinematic detection: se activa con CUALQUIERA de estas señales:
@@ -772,6 +812,17 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         />
       )}
 
+      {/* TEXTO DETRÁS DEL SUJETO (matte estático): el texto va sobre el video y el
+          recorte del sujeto encima → el texto queda "detrás" de la persona. Debajo de
+          subtítulos/stickers/vignette. null = no monta (render idéntico). */}
+      {textBehind && (
+        <TextBehindLayer
+          config={textBehind}
+          currentTime={currentTime}
+          fontFamily={fontFamily}
+        />
+      )}
+
       {vignette && (
         <AbsoluteFill
           style={{
@@ -913,7 +964,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
 
       {/* EDITORIAL — globo con zoom al lugar mencionado (Ola 7). */}
       {editorialLayout && editorialPanel && !editorialPanel.cardsHidden && mapActive && editorialMap && (
-        <EditorialGlobeLayer
+        <EditorialGlobeLazy
           map={editorialMap}
           currentTime={currentTime}
           layout={editorialLayout}
@@ -1081,6 +1132,29 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
         />
       )}
 
+      {/* PRO — transiciones oficiales de Remotion (@remotion/transitions): slide/
+          wipe/flip/clockWipe/none como overlay en los cortes. Aditivo a las caseras. */}
+      {proTransitionSeries.length > 0 && (
+        <ProTransitionSeriesLayer
+          transitions={proTransitionSeries}
+          currentTime={currentTime}
+        />
+      )}
+
+      {/* ILUSTRACIONES CC0 multicolor (open-doodles/open-peeps) como sticker de
+          personas, con duotono opcional al tema. Aditivo: [] = render idéntico. */}
+      {illustrationStickers
+        .map((s, i) => ({ s, i }))
+        .filter(({ s }) => currentTime >= s.at - 0.05 && currentTime <= s.at + s.duration)
+        .map(({ s, i }) => (
+          <IllustrationStickerLayer
+            key={`illus-${i}-${s.at}`}
+            sticker={s}
+            currentTime={currentTime}
+            index={i}
+          />
+        ))}
+
       {/* Motion tracking — label que sigue la cara. Encima de todo. Aditivo. */}
       {trackPath.length > 0 && trackedItems.length > 0 && (
         <TrackedLayer
@@ -1143,6 +1217,10 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
       {brandKit && (brandKit.handle || brandKit.logoUrl) && (
         <BrandWatermarkLayer config={brandKit} fontFamily={fontFamily} />
       )}
+
+      {/* OVERLAY de TEXTURA procedural (grano/polvo/scratches) compuesto sobre TODO
+          con mixBlendMode opcional. null = sin textura (render idéntico). */}
+      {overlayTexture && <OverlayTextureLayer overlay={overlayTexture} />}
 
       {/* PRUEBA GRATUITA — pill discreto encima de TODO. Estático a propósito
           (sin animación = barato de render). Posición relativa al AbsoluteFill

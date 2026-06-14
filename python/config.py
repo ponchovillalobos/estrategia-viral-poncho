@@ -53,6 +53,7 @@ ASSETS_SFX = DATA_ROOT / "assets" / "sfx"
 ASSETS_LOTTIE = DATA_ROOT / "assets" / "lottie" / "noto"
 ASSETS_ICONS = DATA_ROOT / "assets" / "icons"
 ASSETS_OVERLAYS = DATA_ROOT / "assets" / "overlays"
+ASSETS_ILLUSTRATIONS = DATA_ROOT / "assets" / "illustrations"
 
 LONG_FORM_ROOT = DATA_ROOT / "long_form"
 LF_ROOT = LONG_FORM_ROOT  # alias: varios scripts importan LF_ROOT
@@ -124,6 +125,7 @@ def ensure_dirs() -> None:
     for d in [
         RAW_DIR, TRANSCRIPTS_DIR, CUTS_DIR, RENDERS_DIR, PROJECTS_DIR,
         ASSETS_BROLL, ASSETS_MUSIC, ASSETS_SFX, ASSETS_LOTTIE, ASSETS_ICONS, ASSETS_OVERLAYS,
+        ASSETS_ILLUSTRATIONS,
     ]:
         d.mkdir(parents=True, exist_ok=True)
 

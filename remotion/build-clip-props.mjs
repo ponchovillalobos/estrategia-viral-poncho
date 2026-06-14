@@ -18,6 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveEditorialCardIcons, resolveIconStickerSvg } from "./editorial-icons.mjs";
 import { needsTrialWatermark } from "./license-check.mjs";
+import { applyHookTemplate } from "./hook-templates.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { existsSync as _existsSync } from "node:fs";
@@ -142,6 +143,38 @@ const props = {
   iconStickers: project.iconStickers || [],
   speedRamps: project.speedRamps || [],
   lottieStickers: project.lottieStickers || [],
+  // PRO — transiciones oficiales de Remotion + ilustraciones CC0 (duotono opcional)
+  // + overlay de textura. Pass-through (los clips no remapean). Defaults = idéntico.
+  proTransitionSeries: project.proTransitionSeries || [],
+  illustrationStickers: project.illustrationStickers || [],
+  overlayTexture: project.overlayTexture ?? null,
+  // TEXTO DETRÁS DEL SUJETO (matte estático, paridad con shorts). SOLO se activa con
+  // modo matte explícito (matteFile/matteUrl/useMatte) y sin foregroundVideoId (bake
+  // legacy). El matte se sirve por /api/cutouts/stream. null = sin efecto.
+  textBehind: (() => {
+    const tb = project.textBehind;
+    if (!tb || !tb.phrase) return null;
+    const matteMode = tb.matteFile || tb.matteUrl || tb.useMatte;
+    if (!matteMode || project.foregroundVideoId) return null;
+    const matteUrl = tb.matteUrl
+      ? tb.matteUrl
+      : tb.matteFile
+        ? `${HOST}/api/cutouts/stream?file=${encodeURIComponent(tb.matteFile)}`
+        : "";
+    return {
+      phrase: tb.phrase,
+      matteUrl,
+      color: tb.color ? (tb.color.startsWith("#") ? tb.color : `#${tb.color}`) : "#ffffff",
+      ...(tb.size ? { size: tb.size } : {}),
+      at: tb.at ?? 0,
+      duration: tb.duration ?? 0,
+      position: tb.position ?? "center",
+      shadow: tb.shadow ?? true,
+      outline: tb.outline ?? false,
+      outlineColor: tb.outlineColor ?? "#000000",
+      textOpacity: tb.textOpacity ?? 1,
+    };
+  })(),
   endScreen: project.endScreen ?? null,
   progressBar: project.progressBar ?? false,
   brandKit: project.brandKit ?? null,
@@ -204,6 +237,16 @@ if (_existsSync(graphicsPath)) {
 
 // Galería de stickers: embebe el SVG de los iconos "ph:"/"tb:" (paridad con shorts).
 props.iconStickers = resolveIconStickerSvg(props.iconStickers || []);
+
+// PLANTILLA DE HOOK (opt-in, paridad con shorts) — titular + sticker + whoosh + zoom
+// en los primeros ~2.5s del clip. ADITIVO: sin hookTemplate/hook = no-op.
+const hookId = project.hookTemplate ?? project.hook ?? null;
+Object.assign(
+  props,
+  applyHookTemplate(props, hookId, (sound) =>
+    `${HOST}/api/sfx/stream?file=${encodeURIComponent(sound)}`
+  )
+);
 
 // PRUEBA GRATUITA — sin licencia activada, el clip sale con marca de agua.
 // (ver license-check.mjs: nunca rompe el build; en duda, sin marca.)

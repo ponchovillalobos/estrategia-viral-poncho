@@ -24,19 +24,29 @@ import { DATA_ROOT } from "@/lib/paths";
 const ICONS_DIR = path.join(DATA_ROOT, "assets", "icons");
 const PHOSPHOR_DIR = path.join(ICONS_DIR, "phosphor-duotone");
 const TABLER_DIR = path.join(ICONS_DIR, "tabler");
+// Packs de iconos NUEVOS (download_more_icons.py): Material Symbols (Apache-2.0) y
+// Lucide (ISC). Viven en subcarpetas propias de assets/icons → se sirven por el
+// mismo /api/icons/stream (que resuelve cualquier ruta bajo assets/icons).
+const MATERIAL_DIR = path.join(ICONS_DIR, "material");
+const LUCIDE_DIR = path.join(ICONS_DIR, "lucide");
 const NOTO_DIR = path.join(DATA_ROOT, "assets", "lottie", "noto");
 const NOTO_CATALOG_DIR = path.join(NOTO_DIR, "catalog");
 const NOTO_INDEX = path.join(NOTO_DIR, "index.json");
+// Ilustraciones de PERSONAS (download_illustrations.py): assets/illustrations/<set>/*.svg.
+// Son MULTICOLOR (traen sus propios colores), a diferencia de los iconos currentColor.
+const ILLUSTRATIONS_DIR = path.join(DATA_ROOT, "assets", "illustrations");
 const CACHE_DIR = path.join(DATA_ROOT, "cache");
 const CACHE_FILE = path.join(CACHE_DIR, "sticker-index.json");
 
-/** Subir esto fuerza la regeneración del cache aunque los conteos no cambien. */
-const SCHEMA_VERSION = 1;
+/** Subir esto fuerza la regeneración del cache aunque los conteos no cambien.
+ *  v2: suma packs material/ + lucide/ y las ilustraciones multicolor. */
+const SCHEMA_VERSION = 2;
 
 export interface StickerEntry {
-  /** Id estable que el render entiende: "ph:rocket" / "tb:rocket" / "noto:1f680". */
+  /** Id estable que el render entiende: "ph:rocket" / "tb:rocket" / "noto:1f680" /
+   *  "ms:rocket" (material) / "lu:rocket" (lucide) / "ill:open-peeps/peep_felix". */
   id: string;
-  type: "icon" | "lottie";
+  type: "icon" | "lottie" | "illustration";
   /** Nombre legible (en inglés del archivo; los tags llevan el español). */
   name: string;
   /** Categoría para los chips de filtro (en español). */
@@ -45,12 +55,15 @@ export interface StickerEntry {
   tags: string[];
   /** URL para PREVISUALIZAR el sticker en la galería. */
   url: string;
+  /** Las ilustraciones traen sus PROPIOS colores → NO se tiñen como los iconos
+   *  currentColor; la galería/duotono usan esto para no aplicarles el acento. */
+  multicolor?: boolean;
 }
 
 interface StickerIndexFile {
   schemaVersion: number;
   builtAt: number;
-  counts: { icons: number; lottie: number };
+  counts: { icons: number; lottie: number; illustrations: number };
   stickers: StickerEntry[];
 }
 
@@ -243,6 +256,26 @@ async function countDir(dir: string, ext: string): Promise<number> {
   }
 }
 
+/** Lista las ilustraciones SVG en assets/illustrations/<set>/*.svg (un nivel de
+ *  subcarpeta por set). Devuelve {rel:"<set>/<file>", set, file}. */
+async function listIllustrations(
+  root: string
+): Promise<{ rel: string; set: string; file: string }[]> {
+  let sets: string[] = [];
+  try {
+    const entries = await fs.readdir(root, { withFileTypes: true });
+    sets = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return [];
+  }
+  const out: { rel: string; set: string; file: string }[] = [];
+  for (const set of sets) {
+    const svgs = await listSvgs(path.join(root, set));
+    for (const file of svgs) out.push({ rel: `${set}/${file}`, set, file });
+  }
+  return out;
+}
+
 /** Construye el índice escaneando el disco. Costoso → sólo se llama si el cache está frío. */
 async function buildIndex(): Promise<StickerIndexFile> {
   const stickers: StickerEntry[] = [];
@@ -274,6 +307,37 @@ async function buildIndex(): Promise<StickerIndexFile> {
       category: svgCategory(base),
       tags: [...base.split("-"), ...esTagsForName(base), "tabler"],
       url: `/api/icons/stream?file=tabler/${encodeURIComponent(file)}`,
+    });
+  }
+
+  // 2b) Material Symbols (Apache-2.0). Archivo: "<nombre>.svg" → id "ms:<nombre>".
+  //     currentColor → se pinta con el acento del tema (igual que phosphor/tabler).
+  const material = await listSvgs(MATERIAL_DIR);
+  for (const file of material) {
+    const base = file.replace(/\.svg$/, "");
+    const human = base.replace(/_/g, " ").replace(/-/g, " ");
+    stickers.push({
+      id: `ms:${base}`,
+      type: "icon",
+      name: human,
+      category: svgCategory(base),
+      tags: [...base.split(/[-_]/), ...esTagsForName(base), "material"],
+      url: `/api/icons/stream?file=material/${encodeURIComponent(file)}`,
+    });
+  }
+
+  // 2c) Lucide (ISC). Archivo: "<nombre>.svg" → id "lu:<nombre>".
+  const lucide = await listSvgs(LUCIDE_DIR);
+  for (const file of lucide) {
+    const base = file.replace(/\.svg$/, "");
+    const human = base.replace(/-/g, " ");
+    stickers.push({
+      id: `lu:${base}`,
+      type: "icon",
+      name: human,
+      category: svgCategory(base),
+      tags: [...base.split("-"), ...esTagsForName(base), "lucide"],
+      url: `/api/icons/stream?file=lucide/${encodeURIComponent(file)}`,
     });
   }
 
@@ -315,10 +379,40 @@ async function buildIndex(): Promise<StickerIndexFile> {
     });
   }
 
+  // 4) Ilustraciones de PERSONAS (open-doodles + open-peeps), MULTICOLOR. Viven en
+  //    assets/illustrations/<set>/*.svg. id "ill:<set>/<archivo-sin-ext>". Se sirven
+  //    por /api/illustrations/stream?file=<set>/<archivo> (mismo patrón que icons).
+  const illustrations = await listIllustrations(ILLUSTRATIONS_DIR);
+  for (const { rel, set, file } of illustrations) {
+    const base = file.replace(/\.svg$/, "");
+    const human = base.replace(/^peep[_-]/, "").replace(/[-_]/g, " ").trim();
+    stickers.push({
+      id: `ill:${set}/${base}`,
+      type: "illustration",
+      name: human || base,
+      category: "Ilustraciones",
+      tags: [
+        ...base.split(/[-_]/).filter(Boolean),
+        ...esTagsForName(base),
+        "ilustración",
+        "persona",
+        "gente",
+        set,
+      ],
+      url: `/api/illustrations/stream?file=${encodeURIComponent(rel)}`,
+      // MULTICOLOR: trae sus propios colores → la galería/duotono NO la tiñen.
+      multicolor: true,
+    });
+  }
+
   return {
     schemaVersion: SCHEMA_VERSION,
     builtAt: Date.now(),
-    counts: { icons: phosphor.length + tabler.length, lottie: ordered.length },
+    counts: {
+      icons: phosphor.length + tabler.length + material.length + lucide.length,
+      lottie: ordered.length,
+      illustrations: illustrations.length,
+    },
     stickers,
   };
 }
@@ -326,12 +420,19 @@ async function buildIndex(): Promise<StickerIndexFile> {
 /** ¿El cache en disco sigue siendo válido para los conteos actuales? */
 async function cacheIsFresh(cache: StickerIndexFile): Promise<boolean> {
   if (cache.schemaVersion !== SCHEMA_VERSION) return false;
-  const [ph, tb, noto] = await Promise.all([
+  const [ph, tb, ms, lu, noto, illus] = await Promise.all([
     countDir(PHOSPHOR_DIR, ".svg"),
     countDir(TABLER_DIR, ".svg"),
+    countDir(MATERIAL_DIR, ".svg"),
+    countDir(LUCIDE_DIR, ".svg"),
     countDir(NOTO_CATALOG_DIR, ".json"),
+    listIllustrations(ILLUSTRATIONS_DIR).then((l) => l.length),
   ]);
-  return cache.counts.icons === ph + tb && cache.counts.lottie === noto;
+  return (
+    cache.counts.icons === ph + tb + ms + lu &&
+    cache.counts.lottie === noto &&
+    cache.counts.illustrations === illus
+  );
 }
 
 let mem: StickerIndexFile | null = null;

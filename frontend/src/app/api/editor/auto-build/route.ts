@@ -31,6 +31,7 @@ import {
   REMOTION_DELAY_TIMEOUT_MS,
   offthreadCacheFlag,
 } from "@/lib/render-utils";
+import { renderWithServer, renderServerEnabled } from "@/lib/render-server-client";
 import {
   pickTopKeywords,
   sanitizeForFilename,
@@ -385,7 +386,40 @@ async function processJob(job: Job, body: AutoBuildRequest) {
           15 * 60 * 1000
         );
 
-      let renderRun = await doRender();
+      // ─── OLA 2 — RENDER-SERVER (optimización opt-in con FALLBACK) ───────────
+      // Intentamos primero el server de larga vida (bundle webpack 1 sola vez →
+      // ahorra 15-40s por render). build-props.mjs ya escribió props.json en
+      // REMOTION_DIR; el server lo lee de ahí y escribe el MISMO outPath temporal.
+      // Si el server falla por CUALQUIER motivo, caemos al `npx remotion render`
+      // de siempre (camino probado, red de seguridad). El post-encode NVENC, el
+      // mastering de audio y el LUT corren igual abajo sobre el .mp4 resultante.
+      let renderRun: { ok: boolean; stdout: string; stderr: string } | null = null;
+      if (renderServerEnabled()) {
+        try {
+          await renderWithServer({
+            propsPath: path.join(REMOTION_DIR, "props.json"),
+            outPath,
+            concurrency: remotionConcurrency(),
+            timeoutMs: REMOTION_DELAY_TIMEOUT_MS,
+            scale: 1,
+            onProgress: (current, total) => {
+              if (total > 0 && current <= total) {
+                const progress = Math.min(95, 10 + Math.floor((current / total) * 85));
+                updateStep(job.id, styleId, { progress, currentFrame: current, totalFrames: total });
+              }
+            },
+          });
+          renderRun = { ok: true, stdout: "", stderr: "" };
+          console.log(`[auto-build] render-server ok: ${projectId}`);
+        } catch (err) {
+          // Fallback: el camino viejo sigue intacto. Limpiamos el temporal parcial.
+          console.warn(`[auto-build] render-server falló (${String(err)}) — fallback a npx remotion render`);
+          await fs.rm(outPath, { force: true }).catch(() => {});
+          updateStep(job.id, styleId, { progress: 10, currentFrame: 0 });
+        }
+      }
+
+      if (!renderRun) renderRun = await doRender();
       if (!renderRun.ok) {
         // F4 — RETRY del render: los fallos por carga (delayRender timeout del stream
         // bajo presión sostenida, browser crash) suelen ser transitorios. Un reintento

@@ -675,6 +675,32 @@ export function buildProjectForStyle(ctx, styleId) {
     });
   }
 
+  // ─── POP REELS 2026 (paridad con shorts): caption nativo de TikTok — caja negra
+  //     semi-opaca + contorno grueso + palabra-por-palabra (kinetic "pop_reels"),
+  //     fuente TikTok Sans. Edición viral pero limpia. ───
+  if (styleId === "pop_reels") {
+    return applyCapcutFx(
+      {
+        ...base,
+        subtitleStyle: "anton",
+        subtitleFont: "tiktok",
+        vignette: false,
+        captionBounce: false,
+        wordStickers: buildStickers(ctx, 4),
+        floatingEmojis: buildFloatingEmojis(ctx, 3),
+        zoomMarks: pickKeywords(ctx, 4).map((kw) => ({ at: kw.start, duration: 0.6, scale: 1.12 })),
+      },
+      ctx,
+      {
+        lut: "teal_orange.cube",
+        kinetic: "pop_reels",
+        endScreen: true,
+        progressBar: true,
+        iconStickers: true,
+      }
+    );
+  }
+
   if (styleId === "text_behind") {
     const topKw = pickKeywords(ctx, 1)[0]?.word ?? ctx.videoId;
     const phrase = topKw.toUpperCase().replace(/[.,;:!?¿¡]/g, "").slice(0, 18);

@@ -74,15 +74,27 @@ def extract_audio(video_path: Path, out_wav: Path) -> None:
         raise RuntimeError("El video no produjo audio (¿pista de audio vacía?).")
 
 
-def transcribe(video_path: Path, model_size: str = WHISPER_MODEL) -> dict[str, Any]:
-    """Transcribe + alinea palabras. Retorna dict con words[]."""
+def transcribe(
+    video_path: Path, model_size: str = WHISPER_MODEL, align: bool = True
+) -> dict[str, Any]:
+    """Transcribe palabras. Retorna dict con words[].
+
+    align=True (DEFAULT): corre whisperx.align() → timestamps por PALABRA precisos,
+    necesarios para subtítulos karaoke (presets karaoke). Es la etapa CARA.
+
+    align=False: SALTA el align. Produce words[] a nivel FRASE interpolando los
+    timestamps de cada segmento (reusa _segments_to_words). Mucho más rápido y
+    suficiente para presets que NO usan karaoke (Limpio / Revista / Clips, que sólo
+    necesitan saber qué se dijo y aproximadamente cuándo). El caller lo pide con
+    --no-align en la CLI. NO cambia el camino karaoke (default sigue con align).
+    """
     import whisperx
 
     # Decisión de device/compute_type en UN solo lugar: config (autodetectado por
     # hardware vía hw_profile, con override por env VIRAL_WHISPER_DEVICE/_COMPUTE_TYPE).
     device, compute_type = WHISPER_DEVICE, WHISPER_COMPUTE_TYPE
     batch_size = 16 if device == "cuda" else 8
-    print(f"[transcribe] device={device} compute={compute_type}", file=sys.stderr)
+    print(f"[transcribe] device={device} compute={compute_type} align={align}", file=sys.stderr)
 
     with tempfile.TemporaryDirectory() as tmp:
         wav_path = Path(tmp) / "audio.wav"
@@ -99,6 +111,19 @@ def transcribe(video_path: Path, model_size: str = WHISPER_MODEL) -> dict[str, A
         print("[transcribe] transcribiendo...", file=sys.stderr)
         audio = whisperx.load_audio(str(wav_path))
         result = model.transcribe(audio, batch_size=batch_size, language=WHISPER_LANGUAGE)
+
+        if not align:
+            # Camino rápido: sin align, words[] a nivel frase (interpolado).
+            print("[transcribe] SIN align (nivel frase)...", file=sys.stderr)
+            words = _segments_to_words(result.get("segments", []), offset=0.0)
+            return {
+                "video": video_path.name,
+                "language": WHISPER_LANGUAGE,
+                "model": model_size,
+                "duration": round(len(audio) / 16000.0, 3),
+                "alignment": "segment",  # marca: timestamps por frase, no palabra
+                "words": words,
+            }
 
         print("[transcribe] cargando modelo de alineación...", file=sys.stderr)
         align_model, metadata = whisperx.load_align_model(language_code=WHISPER_LANGUAGE, device=device)
@@ -168,6 +193,66 @@ def _segments_to_words(
     return words
 
 
+def _try_batched_transcribe(
+    wav_path: Path,
+    model_size: str,
+    device: str,
+    compute_type: str,
+) -> list[dict[str, Any]] | None:
+    """Intenta transcribir TODO el audio de una vez con BatchedInferencePipeline.
+
+    faster-whisper (que whisperx usa por debajo) trae BatchedInferencePipeline:
+    hace VAD + batching de los segmentos de voz y los corre en paralelo, ~7-12x
+    más rápido que el loop secuencial por ventanas. La memoria queda acotada
+    porque procesa sólo segmentos de voz (no el audio crudo entero a la vez).
+
+    Devuelve un words[] a nivel FRASE (mismo formato/semántica que el loop por
+    ventanas: interpolado vía _segments_to_words con offset=0, porque cada
+    segmento ya trae sus start/end absolutos del audio completo).
+
+    Es CONSERVADOR: si la lib no está, el modelo/dispositivo no lo soporta, o algo
+    truena, devuelve None y el caller cae al método por ventanas (probado en prod).
+    """
+    try:
+        from faster_whisper import BatchedInferencePipeline, WhisperModel
+    except Exception as exc:  # faster_whisper viejo / sin la clase
+        print(f"[chunked] BatchedInferencePipeline no disponible ({exc}); uso ventanas", file=sys.stderr)
+        return None
+
+    try:
+        print(f"[chunked] probando BatchedInferencePipeline (VAD batching) '{model_size}'...", file=sys.stderr)
+        base = WhisperModel(model_size, device=device, compute_type=compute_type)
+        pipeline = BatchedInferencePipeline(model=base)
+        # batch_size alto en GPU, moderado en CPU. VAD recorta silencios.
+        batch_size = 16 if device == "cuda" else 8
+        seg_iter, _info = pipeline.transcribe(
+            str(wav_path),
+            batch_size=batch_size,
+            language=WHISPER_LANGUAGE,
+            vad_filter=True,
+        )
+        # faster_whisper devuelve Segment (objeto), no dict: normalizamos a dicts
+        # con text/start/end para reusar _segments_to_words tal cual.
+        segs: list[dict[str, Any]] = []
+        for s in seg_iter:
+            try:
+                segs.append({"text": s.text, "start": float(s.start), "end": float(s.end)})
+            except Exception:
+                continue
+        if not segs:
+            print("[chunked] BatchedInferencePipeline no devolvió segmentos; uso ventanas", file=sys.stderr)
+            return None
+        words = _segments_to_words(segs, offset=0.0)
+        print(
+            f"[chunked] BatchedInferencePipeline OK · {len(segs)} frases · {len(words)} palabras",
+            file=sys.stderr, flush=True,
+        )
+        return words
+    except Exception as exc:  # noqa: BLE001 — cualquier fallo → fallback seguro
+        print(f"[chunked] BatchedInferencePipeline falló ({exc}); caigo a ventanas", file=sys.stderr)
+        return None
+
+
 def transcribe_chunked(
     video_path: Path,
     model_size: str = WHISPER_MODEL,
@@ -195,6 +280,30 @@ def transcribe_chunked(
     with tempfile.TemporaryDirectory() as tmp:
         wav_path = Path(tmp) / "audio.wav"
         extract_audio(video_path, wav_path)
+
+        # CAMINO RÁPIDO (~7-12x): un solo pase con VAD batching si está disponible.
+        # Si no, cae al loop por ventanas de abajo (probado en prod). Necesitamos la
+        # duración total para el dict de salida; la sacamos del WAV sin cargar todo
+        # el audio en RAM dos veces.
+        try:
+            import wave
+
+            with wave.open(str(wav_path), "rb") as wf:
+                total_sec_hdr = wf.getnframes() / float(wf.getframerate() or 16000)
+        except Exception:
+            total_sec_hdr = 0.0
+
+        batched_words = _try_batched_transcribe(wav_path, model_size, device, compute_type)
+        if batched_words is not None:
+            return {
+                "video": video_path.name,
+                "language": WHISPER_LANGUAGE,
+                "model": model_size,
+                "duration": round(total_sec_hdr, 3),
+                "alignment": "segment",  # marca: timestamps por frase, no palabra
+                "method": "batched",
+                "words": batched_words,
+            }
 
         print(f"[chunked] cargando modelo whisperx '{model_size}'...", file=sys.stderr)
         model = whisperx.load_model(
@@ -374,6 +483,15 @@ def main() -> int:
         "--chunk-sec", type=int, default=900,
         help="Tamaño de ventana en seg para --chunked (default 900 = 15 min).",
     )
+    parser.add_argument(
+        "--no-align",
+        action="store_true",
+        help=(
+            "Saltar la alineación por palabra (whisperx.align). MÁS RÁPIDO; "
+            "produce words[] a nivel frase. Úsalo en presets SIN karaoke "
+            "(Limpio/Revista/Clips). El default (con align) se mantiene para karaoke."
+        ),
+    )
     args = parser.parse_args()
 
     ensure_dirs()
@@ -404,7 +522,7 @@ def main() -> int:
     if args.chunked:
         result = transcribe_chunked(video_path, chunk_sec=args.chunk_sec)
     else:
-        result = transcribe(video_path)
+        result = transcribe(video_path, align=not args.no_align)
     elapsed = time.time() - t0
 
     result["meta"] = {"elapsed_sec": round(elapsed, 1)}

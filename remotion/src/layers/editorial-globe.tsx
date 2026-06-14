@@ -1,6 +1,5 @@
 import { AbsoluteFill } from "remotion";
 import { useMemo } from "react";
-import { z } from "zod";
 import { geoOrthographic, geoPath, geoInterpolate, geoGraticule10 } from "d3-geo";
 import { feature } from "topojson-client";
 import type { FeatureCollection, Geometry } from "geojson";
@@ -18,14 +17,11 @@ import { editorialFontsFor } from "./editorial-layer";
  * BUNDLEADOS — cero red. Todo deriva del frame: determinista.
  */
 
-export const editorialMapSchema = z.object({
-  at: z.number(),
-  duration: z.number().default(5),
-  lat: z.number(),
-  lon: z.number(),
-  label: z.string().default(""),
-});
-export type EditorialMap = z.infer<typeof editorialMapSchema>;
+// El schema vive en editorial-globe-schema.ts (sin deps pesadas) para que ViralVideo
+// lo importe sin arrastrar d3/topojson/world-atlas. Se re-exporta acá por compat.
+import type { EditorialMap } from "./editorial-globe-schema";
+export { editorialMapSchema } from "./editorial-globe-schema";
+export type { EditorialMap } from "./editorial-globe-schema";
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const easeInOut = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);

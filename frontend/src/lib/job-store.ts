@@ -26,6 +26,7 @@ export type StyleId =
   | "broll_full"
   | "broll_pip"
   | "text_behind"
+  | "pop_reels"
   | "graphics_pro"
   | "graphics_max"
   | "motion_pro"

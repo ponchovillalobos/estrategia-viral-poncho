@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { AbsoluteFill, cancelRender, continueRender, delayRender } from "remotion";
-import { Lottie, type LottieAnimationData } from "@remotion/lottie";
+// `import type` NO arrastra lottie-web al bundle (sólo el tipo). El componente <Lottie>
+// se carga LAZY vía LottieLazy → su chunk (~24MB) sólo entra si el proyecto usa Lottie.
+import type { LottieAnimationData } from "@remotion/lottie";
+import { LottieLazy } from "./lottie-lazy";
 import type { LottieSticker } from "../schemas";
 
 /**
@@ -32,7 +35,7 @@ export const RemoteLottie: React.FC<{ src: string; loop?: boolean }> = ({
     };
   }, [src, handle]);
   if (!data) return null;
-  return <Lottie animationData={data} loop={loop} />;
+  return <LottieLazy animationData={data} loop={loop} />;
 };
 import pulseRing from "../lottie/pulse-ring.json";
 import sparkle from "../lottie/sparkle.json";
@@ -95,7 +98,7 @@ export const LottieStickerLayer: React.FC<{
           filter: `drop-shadow(0 0 16px ${sticker.color}) drop-shadow(0 0 6px ${sticker.color})`,
         }}
       >
-        <Lottie animationData={data} loop />
+        <LottieLazy animationData={data} loop />
       </div>
     </AbsoluteFill>
   );

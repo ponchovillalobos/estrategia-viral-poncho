@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveEditorialCardIcons, resolveIconStickerSvg } from "./editorial-icons.mjs";
 import { needsTrialWatermark } from "./license-check.mjs";
+import { applyHookTemplate } from "./hook-templates.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const VIDEO_ID = process.argv[2] || "D01_test_01";
@@ -132,6 +133,10 @@ const trackedItemsRemapped = filterAndRemap(project.trackedItems || [], ["at"]);
 const iconStickersRemapped = resolveIconStickerSvg(filterAndRemap(project.iconStickers || [], ["at"]));
 const speedRampsRemapped = filterAndRemap(project.speedRamps || [], ["at"]);
 const lottieStickersRemapped = filterAndRemap(project.lottieStickers || [], ["at"]);
+// PRO transiciones oficiales (@remotion/transitions) + ilustraciones CC0 — tienen
+// `at` → remapear igual con jump cuts. Aditivo: [] = render idéntico.
+const proTransitionSeriesRemapped = filterAndRemap(project.proTransitionSeries || [], ["at"]);
+const illustrationStickersRemapped = filterAndRemap(project.illustrationStickers || [], ["at"]);
 // Modo Gráficos & Motion: charts + titulares animados. Tienen `at` → remapear igual
 // que el resto si hay jump cuts (estilo graphics_max).
 const dataVizRemapped = filterAndRemap(project.dataViz || [], ["at"]);
@@ -243,6 +248,40 @@ const props = {
   speedRamps: speedRampsRemapped,
   // B4 — Stickers animados (Lottie) opt-in.
   lottieStickers: lottieStickersRemapped,
+  // PRO — transiciones oficiales de Remotion + ilustraciones CC0 (duotono opcional)
+  // + overlay de textura. Aditivo: defaults []/null = render idéntico.
+  proTransitionSeries: proTransitionSeriesRemapped,
+  illustrationStickers: illustrationStickersRemapped,
+  overlayTexture: project.overlayTexture ?? null,
+  // TEXTO DETRÁS DEL SUJETO (matte estático, NUEVO). Compone en Remotion: video →
+  // texto → matte del sujeto encima. SOLO se activa cuando el modo MATTE está elegido
+  // explícitamente (matteFile/matteUrl/useMatte), para NO chocar con el camino LEGACY
+  // del estilo text_behind (que BAKEA el texto en Python vía foregroundVideoId — ahí
+  // el texto ya está quemado en el video y no debe redibujarse). null = sin efecto.
+  textBehind: (() => {
+    const tb = project.textBehind;
+    if (!tb || !tb.phrase) return null;
+    const matteMode = tb.matteFile || tb.matteUrl || tb.useMatte;
+    if (!matteMode || project.foregroundVideoId) return null;
+    const matteUrl = tb.matteUrl
+      ? tb.matteUrl
+      : tb.matteFile
+        ? `${HOST}/api/cutouts/stream?file=${encodeURIComponent(tb.matteFile)}`
+        : "";
+    return {
+      phrase: tb.phrase,
+      matteUrl,
+      color: tb.color ? (tb.color.startsWith("#") ? tb.color : `#${tb.color}`) : "#ffffff",
+      ...(tb.size ? { size: tb.size } : {}),
+      at: tb.at ?? 0,
+      duration: tb.duration ?? 0,
+      position: tb.position ?? "center",
+      shadow: tb.shadow ?? true,
+      outline: tb.outline ?? false,
+      outlineColor: tb.outlineColor ?? "#000000",
+      textOpacity: tb.textOpacity ?? 1,
+    };
+  })(),
   // Modo Gráficos & Motion (estilos graphics_*): charts + titulares animados.
   dataViz: dataVizRemapped,
   kineticHeadlines: kineticHeadlinesRemapped,
@@ -253,6 +292,16 @@ const props = {
   autoReframe: project.autoReframe ?? false,
   sourceAspect: project.sourceAspect ?? 16 / 9,
 };
+
+// PLANTILLA DE HOOK (opt-in) — orquesta capas que ya existen (titular + sticker +
+// whoosh + zoom) en los primeros ~2.5s para clavar el gancho. ADITIVO: si el project
+// no trae hookTemplate/hook, applyHookTemplate es no-op (render idéntico). El whoosh
+// sale con su URL de /api/sfx ya resuelta, igual que el resto de sfxMarks.
+const hookId = project.hookTemplate ?? project.hook ?? null;
+const propsWithHook = applyHookTemplate(props, hookId, (sound) =>
+  `${HOST}/api/sfx/stream?file=${encodeURIComponent(sound)}`
+);
+Object.assign(props, propsWithHook);
 
 // PRUEBA GRATUITA — sin licencia activada, el video sale con marca de agua.
 // (ver license-check.mjs: nunca rompe el build; en duda, sin marca.)

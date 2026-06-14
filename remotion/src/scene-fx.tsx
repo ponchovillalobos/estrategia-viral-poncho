@@ -72,6 +72,11 @@ const KINETIC_PRESETS = [
   // (estilo CapCut "auto captions"). A diferencia de los otros, NO muestra 1 palabra
   // sola sino el grupo, con la activa en color highlight.
   "karaoke",
+  // Pop Reels 2026: caption nativo de TikTok — línea completa dentro de una caja
+  // negra semi-opaca con contorno grueso, palabra-por-palabra resaltada (reusa el
+  // mismo motor que "karaoke", no inventa resaltado por energía). Pensado con la
+  // fuente TikTok Sans (subtitleFont: "tiktok").
+  "pop_reels",
 ] as const;
 export const kineticPresetSchema = z.enum(KINETIC_PRESETS).default("none");
 export type KineticPreset = (typeof KINETIC_PRESETS)[number];
@@ -486,9 +491,12 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
   // PERF: agrupar palabras en líneas + mapa palabra→línea SOLO cuando cambia `words`,
   // no en cada frame. Sin esto, KineticSubtitleLayer en modo "karaoke" hacía
   // groupWordsIntoLines + lines.find() cada frame (~360k iteraciones de más a 30fps × 60s).
+  // "karaoke" y "pop_reels" comparten el motor de líneas (frase completa con la
+  // palabra activa resaltada). pop_reels solo cambia el LOOK (caja + contorno).
+  const isLineMode = preset === "karaoke" || preset === "pop_reels";
   const lines = useMemo(
-    () => (preset === "karaoke" ? groupWordsIntoLines(words) : null),
-    [words, preset]
+    () => (isLineMode ? groupWordsIntoLines(words) : null),
+    [words, isLineMode]
   );
   const wordToLine = useMemo(() => {
     const map: Record<number, number> = {};
@@ -507,8 +515,8 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
   }
   if (activeIndex === -1) return null;
 
-  // ── Modo KARAOKE: línea completa con la palabra activa resaltada ──
-  if (preset === "karaoke") {
+  // ── Modo KARAOKE / POP REELS 2026: línea completa con la palabra activa resaltada ──
+  if (isLineMode) {
     // `lines` y `wordToLine` se memoizan a nivel componente (ver useMemo arriba),
     // así no se recalculan en CADA frame (~360k iteraciones menos a 30fps × 60s × 200 words).
     const line = (lines && lines[wordToLine[activeIndex] ?? 0]) ?? [activeIndex];
@@ -521,6 +529,12 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
     });
     const lineOpacity = clamp01(lineEntry / 0.12);
     const lineY = (1 - sLine) * 40;
+
+    // POP REELS 2026 — look nativo de TikTok: caja negra semi-opaca + contorno
+    // grueso en cada palabra + la activa resaltada con caja del color highlight.
+    // Reusa EXACTAMENTE el motor de palabra activa de karaoke; solo cambia el CSS.
+    const popReels = preset === "pop_reels";
+
     return (
       <AbsoluteFill
         style={{
@@ -534,18 +548,26 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
             display: "flex",
             flexWrap: "wrap",
             justifyContent: "center",
-            gap: "0.28em",
+            gap: popReels ? "0.18em" : "0.28em",
             maxWidth: 980,
-            padding: "0 50px",
+            padding: popReels ? "18px 30px" : "0 50px",
             opacity: lineOpacity,
             transform: `translateY(${lineY}px)`,
             fontFamily,
-            fontSize: 96,
-            fontWeight: 800,
+            fontSize: popReels ? 88 : 96,
+            fontWeight: popReels ? 900 : 800,
             textTransform: "uppercase",
             letterSpacing: "0.02em",
-            lineHeight: 1.05,
+            lineHeight: popReels ? 1.12 : 1.05,
             textAlign: "center",
+            // La caja negra semi-opaca detrás de toda la línea (estilo TikTok nativo).
+            ...(popReels
+              ? {
+                  background: "rgba(0,0,0,0.62)",
+                  borderRadius: 18,
+                  boxShadow: "0 8px 30px rgba(0,0,0,0.55)",
+                }
+              : {}),
           }}
         >
           {line.map((j) => {
@@ -553,6 +575,38 @@ export const KineticSubtitleLayer: React.FC<KineticSubtitleLayerProps> = ({
             // Relleno progresivo (karaoke real): las palabras YA dichas se quedan
             // resaltadas (highlight), la activa con pop+glow, las que faltan atenuadas.
             const spoken = words[j].start <= currentTime + 0.05;
+
+            if (popReels) {
+              // Contorno grueso vía text-shadow multi-dirección (el "stroke" de TikTok)
+              // + la palabra activa dentro de una píldora del color highlight.
+              const stroke =
+                "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, " +
+                "0 -3px 0 #000, 0 3px 0 #000, -3px 0 0 #000, 3px 0 0 #000";
+              return (
+                <span
+                  key={j}
+                  style={{
+                    color: isActive ? "#0a0a0a" : "#ffffff",
+                    opacity: spoken || isActive ? 1 : 0.85,
+                    transform: isActive ? "scale(1.06)" : "scale(1)",
+                    display: "inline-block",
+                    transformOrigin: "center bottom",
+                    padding: isActive ? "2px 14px" : "2px 4px",
+                    borderRadius: 12,
+                    background: isActive ? highlight || "#34d399" : "transparent",
+                    boxShadow: isActive
+                      ? `0 4px 18px ${highlight || "#34d399"}aa`
+                      : "none",
+                    // El contorno solo aplica al texto blanco; en la activa la
+                    // píldora ya da contraste, así que el stroke se atenúa.
+                    textShadow: isActive ? "0 2px 6px rgba(0,0,0,0.45)" : stroke,
+                  }}
+                >
+                  {words[j].word}
+                </span>
+              );
+            }
+
             return (
               <span
                 key={j}

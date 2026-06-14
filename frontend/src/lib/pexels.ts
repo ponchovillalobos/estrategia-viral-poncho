@@ -5,8 +5,11 @@
  * Pexels Videos y devuelve clips temporizados listos para `project.bRoll`. Lo usa
  * auto-build para los estilos `broll_full` (fullscreen) y `broll_pip` (pequeñito).
  *
- * Server-only (usa PEXELS_API_KEY). Si no hay key o falla la red, devuelve [] →
- * el render sale sin b-roll (no rompe nada).
+ * Server-only (usa PEXELS_API_KEY). Cadena de fuentes:
+ *   - Con PEXELS_API_KEY → busca en Pexels (clips de alta calidad).
+ *   - Sin key (o si Pexels devuelve pocos) → cae a CC0 sin key (Internet Archive
+ *     video + Openverse fotos) vía `broll-cc0.ts`. Así una PC limpia SIN key ya
+ *     no sale con b-roll vacío. Si todo falla, devuelve [] (no rompe el render).
  */
 
 const PEXELS_API = "https://api.pexels.com";
@@ -104,14 +107,18 @@ export async function autoMatchBroll(
   duration: number,
   opts: { count?: number; clipDur?: number; orientation?: "portrait" | "landscape" } = {}
 ): Promise<BrollClip[]> {
-  const key = process.env.PEXELS_API_KEY;
-  if (!key) {
-    console.warn("[pexels] sin PEXELS_API_KEY → auto b-roll vacío");
-    return [];
-  }
   const count = opts.count ?? 5;
   const clipDur = opts.clipDur ?? 3;
   const orientation = opts.orientation ?? "portrait";
+
+  const key = process.env.PEXELS_API_KEY;
+  if (!key) {
+    // Sin key: NO devolvemos vacío. Usamos la fuente CC0 sin key (IA + Openverse).
+    console.warn("[pexels] sin PEXELS_API_KEY → fallback b-roll CC0 (Internet Archive + Openverse)");
+    const { autoMatchBrollCC0 } = await import("./broll-cc0");
+    return autoMatchBrollCC0(keywords, duration, { count, clipDur });
+  }
+
   const picks = selectVisualKeywords(keywords, count);
 
   const clips: BrollClip[] = [];
@@ -139,6 +146,25 @@ export async function autoMatchBroll(
       // saltear esta keyword
     }
   }
+  // Si Pexels nos dio MENOS de la mitad de lo pedido (rate limit, keywords sin
+  // match, etc.), rellenamos con CC0 sin key para no quedarnos cortos.
+  if (clips.length < Math.ceil(count / 2)) {
+    try {
+      const { autoMatchBrollCC0 } = await import("./broll-cc0");
+      const cc0 = await autoMatchBrollCC0(keywords, duration, {
+        count: count - clips.length,
+        clipDur,
+      });
+      // Evita duplicar timestamps que Pexels ya cubrió.
+      const used = new Set(clips.map((c) => Math.round(c.start)));
+      for (const c of cc0) {
+        if (!used.has(Math.round(c.start))) clips.push(c);
+      }
+    } catch {
+      // si CC0 falla, nos quedamos con lo de Pexels.
+    }
+  }
+
   clips.sort((a, b) => a.start - b.start);
   return dedupeOverlaps(clips);
 }

@@ -227,3 +227,80 @@ export const lottieStickerSchema = z.object({
   color: z.string().default("#fbbf24"),
 });
 export type LottieSticker = z.infer<typeof lottieStickerSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ILUSTRACIONES CC0 (open-doodles / open-peeps) — MULTICOLOR (no currentColor).
+// Overlay/sticker de "personas" que opcionalmente se TIÑE a duotono con los
+// colores del tema para combinar con la estética. Opt-in: [] = render idéntico.
+// ═══════════════════════════════════════════════════════════════════════════
+export const illustrationStickerSchema = z.object({
+  at: z.number(),
+  duration: z.number().default(2.5),
+  /** URL del SVG/PNG (las 73 ilustraciones viven en assets/illustrations). */
+  url: z.string(),
+  position: z
+    .enum(["top-left", "top-right", "bottom-left", "bottom-right", "top-center", "center", "left", "right"])
+    .default("bottom-right"),
+  size: z.number().default(420),
+  /** Ángulo de inclinación (estética sticker). */
+  rotation: z.number().default(0),
+  /**
+   * Duotono: 0 = ilustración MULTICOLOR original; 1 = teñida por completo a la
+   * pareja sombra/luz del tema. Valores intermedios mezclan. Default 0 (intacta).
+   */
+  duotone: z.number().default(0),
+  /** Tinta de las sombras (color oscuro del tema). */
+  duotoneShadow: z.string().default("#171310"),
+  /** Tinta de las luces (color claro/papel del tema). */
+  duotoneHighlight: z.string().default("#f3ede1"),
+  /** Sombra dura tipo "papel recortado" detrás de la ilustración. */
+  dropShadow: z.boolean().default(false),
+});
+export type IllustrationSticker = z.infer<typeof illustrationStickerSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OVERLAYS DE TEXTURA procedurales (assets/overlays/*.png — 7 texturas).
+// Se componen sobre TODO con mixBlendMode opcional por proyecto. Opt-in:
+// null = sin textura (render idéntico al histórico).
+// ═══════════════════════════════════════════════════════════════════════════
+export const overlayTextureSchema = z.object({
+  /** URL del PNG de textura (grano/polvo/scratches/light-leak…). */
+  url: z.string(),
+  /** Modo de mezcla — "screen" (aclara, light-leaks) u "overlay" (contraste, grano). */
+  blendMode: z.enum(["screen", "overlay", "soft-light", "multiply", "lighten"]).default("screen"),
+  opacity: z.number().default(0.35),
+  /** Si true, la textura cubre todo el video (object-fit:cover). */
+  cover: z.boolean().default(true),
+});
+export type OverlayTexture = z.infer<typeof overlayTextureSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TEXTO DETRÁS DEL SUJETO (matte estático) — opt-in, ADITIVO. null = sin efecto.
+// Compone: video → TEXTO grande → matte del sujeto (PNG con alpha) encima, de modo
+// que el texto se ve DETRÁS de la persona. El matte es de UN frame clave (estático,
+// barato) — lo produce Python (rembg) a resolución completa del frame, alineado al
+// encuadre del video. Si matteUrl="" el texto igual se dibuja (sin recorte encima).
+// ═══════════════════════════════════════════════════════════════════════════
+export const textBehindSchema = z.object({
+  /** La palabra/frase grande que va detrás. */
+  phrase: z.string(),
+  /** URL del PNG RGBA del sujeto recortado (frame completo, NO bbox). "" = sin matte. */
+  matteUrl: z.string().default(""),
+  /** Color del texto (acepta "#rrggbb" o "rrggbb"). */
+  color: z.string().default("#ffffff"),
+  /** Tamaño de fuente en px. Default ~34% del ancho (lo resuelve el layer). */
+  size: z.number().optional(),
+  /** Ventana del efecto. duration<=0 = persiste todo el video (default histórico). */
+  at: z.number().default(0),
+  duration: z.number().default(0),
+  /** Posición vertical del texto. */
+  position: z.enum(["center", "top", "bottom"]).default("center"),
+  /** Sombra dura para legibilidad. */
+  shadow: z.boolean().default(true),
+  /** Contorno tipo CapCut. */
+  outline: z.boolean().default(false),
+  outlineColor: z.string().default("#000000"),
+  /** Opacidad del texto (0..1). */
+  textOpacity: z.number().default(1),
+});
+export type TextBehind = z.infer<typeof textBehindSchema>;

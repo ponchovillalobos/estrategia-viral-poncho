@@ -2,24 +2,28 @@
 
 /**
  * GALERÍA DE STICKERS (Ola 1 — el diferenciador): destapa la biblioteca FANTASMA
- * de 6.605 iconos SVG (Phosphor + Tabler) + 609 ilustraciones Lottie (Noto), que
- * antes el usuario sólo "elegía" de un puñado curado.
+ * de 6.605 iconos SVG (Phosphor + Tabler) + 609 ilustraciones Lottie (Noto) +
+ * ilustraciones de personas CC0 multicolor (type:"illustration"), que antes el
+ * usuario sólo "elegía" de un puñado curado.
  *
- * Cómo evita traer TODO de golpe (clave del rendimiento con 6.6k assets):
+ * Cómo evita traer TODO de golpe (clave del rendimiento con 6.6k+ assets):
  *   1. /api/stickers/list devuelve sólo METADATA (id/name/category/tags/url) — el
  *      contenido pesado (SVG markup, JSON Lottie) NO viaja en esa respuesta.
  *   2. Grid VIRTUALIZADO (react-window v2): sólo se montan las celdas visibles
  *      (~30) de las miles que hay; el resto no existe en el DOM.
- *   3. SVG on-demand: cada celda visible carga su SVG con <img src> (lazy + cache
- *      del browser). Nunca se bajan 6.605 SVGs a la vez.
- *   4. Lottie SÓLO en hover: la celda muestra el preview estático del frame 0 (un
- *      <img> del JSON sería pesado, así que mostramos un placeholder) y recién al
+ *   3. SVG/PNG on-demand: cada celda visible carga su asset con <img src> (lazy +
+ *      cache del browser). Nunca se bajan miles de imágenes a la vez.
+ *   4. Lottie SÓLO en hover: la celda muestra un placeholder estático y recién al
  *      pasar el mouse hace fetch del JSON y lo anima. Nunca se traen 609 JSON juntos.
- *   5. Búsqueda fuzzy con Fuse.js OFFLINE (sin red, sin API key) sobre la metadata.
+ *   5. Búsqueda fuzzy con Fuse.js OFFLINE (sin red, sin API key) sobre la metadata,
+ *      DEBOUNCEADA (no re-filtra en cada tecla).
+ *
+ * UX (Ola 4): FAVORITOS ⭐ y RECIENTES 🕐 persistidos en localStorage; filtro por
+ * TIPO (Iconos / Animaciones / Personas); conteos como prueba de valor.
  *
  * Al hacer click, empuja el sticker a project.iconStickers con el shape que el
  * render consume (IconSticker): los SVG usan icon="ph:<n>"/"tb:<n>" (el build
- * embebe el markup), los Lottie usan lottieSrc=<url del stream>.
+ * embebe el markup), los Lottie e ilustraciones usan lottieSrc / imageSrc = url.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Fuse from "fuse.js";
@@ -27,7 +31,8 @@ import { Grid, type CellComponentProps } from "react-window";
 import Lottie, { type LottieRefCurrentProps } from "lottie-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, Sparkles } from "lucide-react";
+import { Loader2, Search, Sparkles, Star } from "lucide-react";
+import { useLocalStorageList } from "@/lib/use-local-storage-list";
 
 // ── Shape que el render consume (subset de IconSticker de remotion/src/schemas.ts).
 //    `at` lo fija el padre al insertar (currentTime); el resto trae defaults sanos.
@@ -38,17 +43,20 @@ export interface IconStickerInput {
   size: number;
   color: string;
   bg: string;
-  /** Para iconos SVG: "ph:<n>"/"tb:<n>" (el build embebe el SVG). "" para Lottie. */
+  /** Para iconos SVG: "ph:<n>"/"tb:<n>" (el build embebe el SVG). "" para los demás. */
   icon: string;
-  /** Para ilustraciones Lottie: URL del /api/lottie/stream. "" para iconos. */
+  /** Para ilustraciones Lottie: URL del /api/lottie/stream. "" para los demás. */
   lottieSrc: string;
   fullscreen: boolean;
   label: string;
 }
 
+/** El tipo del catálogo. "illustration" = personas CC0 multicolor (PNG/SVG a color). */
+type StickerType = "icon" | "lottie" | "illustration";
+
 interface StickerEntry {
   id: string;
-  type: "icon" | "lottie";
+  type: StickerType;
   name: string;
   category: string;
   tags: string[];
@@ -58,7 +66,8 @@ interface StickerEntry {
 interface ListResponse {
   stickers: StickerEntry[];
   categories: string[];
-  counts: { icons: number; lottie: number };
+  // `illustrations` puede no venir aún (el índice se está ampliando en paralelo).
+  counts: { icons: number; lottie: number; illustrations?: number };
   total: number;
 }
 
@@ -73,16 +82,29 @@ interface Props {
 
 const COLUMN_MIN = 88; // px por celda (icono + nombre)
 const ROW_HEIGHT = 104;
+const FAVORITES_KEY = "viralito.stickers.favorites";
+const RECENTS_KEY = "viralito.stickers.recents";
+const RECENTS_CAP = 24; // sólo recordamos los 24 stickers más recientes
+const DEBOUNCE_MS = 180;
+
+// Filtros virtuales por "tipo" en los chips. "fav"/"recent" son secciones especiales.
+type TypeFilter = "all" | "icon" | "lottie" | "illustration" | "fav" | "recent";
 
 export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) {
   const [data, setData] = useState<ListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [activeCat, setActiveCat] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<"all" | "icon" | "lottie">("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [gridWidth, setGridWidth] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // FAVORITOS y RECIENTES — persistidos en localStorage (sobreviven recargas).
+  const favorites = useLocalStorageList(FAVORITES_KEY);
+  const recents = useLocalStorageList(RECENTS_KEY, RECENTS_CAP);
+  const favSet = useMemo(() => new Set(favorites.list), [favorites.list]);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +126,12 @@ export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) 
     };
   }, []);
 
+  // Debounce de la búsqueda: no re-filtramos 6.6k entradas en cada tecla.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [query]);
+
   // Medir el ancho del contenedor para calcular columnas (responsive sin re-render loop).
   useEffect(() => {
     const el = containerRef.current;
@@ -116,7 +144,15 @@ export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) 
     return () => ro.disconnect();
   }, [data]);
 
+  // Índice por id — para resolver favoritos/recientes (que guardan sólo ids) → entries.
+  const byId = useMemo(() => {
+    const m = new Map<string, StickerEntry>();
+    data?.stickers.forEach((s) => m.set(s.id, s));
+    return m;
+  }, [data]);
+
   // Índice Fuse.js — se reconstruye sólo cuando llegan los datos (no por keystroke).
+  // Busca en nombre + tags (español) + categoría; tags pesan más (sinónimos).
   const fuse = useMemo(() => {
     if (!data) return null;
     return new Fuse(data.stickers, {
@@ -131,17 +167,26 @@ export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) 
     });
   }, [data]);
 
-  // Lista filtrada: búsqueda (Fuse) → tipo → categoría. Todo en memoria, sin red.
+  // Lista filtrada: sección (fav/recent) o búsqueda (Fuse) → tipo → categoría.
+  // Todo en memoria, sin red.
   const filtered = useMemo(() => {
     if (!data) return [];
-    let base: StickerEntry[] =
-      query.trim().length >= 2 && fuse
-        ? fuse.search(query.trim()).map((r) => r.item)
-        : data.stickers;
-    if (typeFilter !== "all") base = base.filter((s) => s.type === typeFilter);
+    let base: StickerEntry[];
+
+    if (typeFilter === "fav") {
+      // Favoritos en el orden guardado (más reciente primero); ignora los que ya no existen.
+      base = favorites.list.map((id) => byId.get(id)).filter((s): s is StickerEntry => !!s);
+    } else if (typeFilter === "recent") {
+      base = recents.list.map((id) => byId.get(id)).filter((s): s is StickerEntry => !!s);
+    } else {
+      const q = debouncedQuery.trim();
+      base = q.length >= 2 && fuse ? fuse.search(q).map((r) => r.item) : data.stickers;
+      if (typeFilter !== "all") base = base.filter((s) => s.type === typeFilter);
+    }
+
     if (activeCat) base = base.filter((s) => s.category === activeCat);
     return base;
-  }, [data, fuse, query, typeFilter, activeCat]);
+  }, [data, fuse, debouncedQuery, typeFilter, activeCat, favorites.list, recents.list, byId]);
 
   const columnCount = Math.max(1, Math.floor((gridWidth || 1) / COLUMN_MIN) || 1);
   const rowCount = Math.ceil(filtered.length / columnCount);
@@ -149,6 +194,8 @@ export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) 
 
   const handlePick = useCallback(
     (s: StickerEntry) => {
+      // Registrar como RECIENTE (se persiste solo).
+      recents.push(s.id);
       const base: IconStickerInput = {
         at: Math.round(currentTime * 10) / 10,
         duration: 2,
@@ -161,14 +208,21 @@ export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) 
         fullscreen: false,
         label: "",
       };
-      if (s.type === "lottie") {
+      if (s.type === "lottie" || s.type === "illustration") {
+        // Lottie e ilustraciones (PNG/SVG a color) viajan por lottieSrc=url del stream.
+        // El shape de inserción no cambia → el flujo click→iconStickers sigue intacto.
         onAdd({ ...base, lottieSrc: s.url });
       } else {
         // s.id ya viene como "ph:<n>"/"tb:<n>" — el build embebe el SVG.
         onAdd({ ...base, icon: s.id });
       }
     },
-    [currentTime, onAdd]
+    [currentTime, onAdd, recents]
+  );
+
+  const handleToggleFav = useCallback(
+    (s: StickerEntry) => favorites.toggle(s.id),
+    [favorites]
   );
 
   if (loading) {
@@ -187,21 +241,28 @@ export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) 
     );
   }
 
+  const illustrationsCount = data.counts.illustrations ?? 0;
+  const hasFav = favorites.list.length > 0;
+  const hasRecent = recents.list.length > 0;
+
   return (
     <div className="space-y-3">
       {/* PRUEBA DE VALOR: los conteos reales de la biblioteca destapada. */}
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         <Sparkles className="h-4 w-4 text-amber-400" />
         <span className="font-medium">
           {data.counts.icons.toLocaleString("es-MX")} iconos ·{" "}
           {data.counts.lottie.toLocaleString("es-MX")} animaciones
+          {illustrationsCount > 0 && (
+            <> · {illustrationsCount.toLocaleString("es-MX")} ilustraciones</>
+          )}
         </span>
         {selectedCount > 0 && (
           <span className="text-muted-foreground">· {selectedCount} en este video</span>
         )}
       </div>
 
-      {/* Buscador en español (Fuse.js offline). */}
+      {/* Buscador en español (Fuse.js offline, debounceado). Busca en nombre + tags. */}
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -213,25 +274,28 @@ export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) 
         />
       </div>
 
-      {/* Filtro de tipo. */}
-      <div className="flex gap-1.5">
+      {/* Filtro de tipo + secciones especiales (Favoritos / Recientes). */}
+      <div className="flex flex-wrap gap-1.5">
+        {hasFav && (
+          <TypeChip active={typeFilter === "fav"} onClick={() => setTypeFilter("fav")}>
+            ⭐ Favoritos
+          </TypeChip>
+        )}
+        {hasRecent && (
+          <TypeChip active={typeFilter === "recent"} onClick={() => setTypeFilter("recent")}>
+            🕐 Recientes
+          </TypeChip>
+        )}
+        {(hasFav || hasRecent) && <span className="mx-0.5 self-center text-border">|</span>}
         {([
-          ["all", "Todos"],
+          ["all", "Todo"],
           ["icon", "Iconos"],
-          ["lottie", "Animados"],
+          ["lottie", "Animaciones"],
+          ["illustration", "Personas"],
         ] as const).map(([val, lbl]) => (
-          <button
-            key={val}
-            type="button"
-            onClick={() => setTypeFilter(val)}
-            className={`rounded-md border px-2.5 py-1 text-xs ${
-              typeFilter === val
-                ? "border-foreground/40 bg-muted text-foreground"
-                : "border-border bg-card text-muted-foreground hover:text-foreground"
-            }`}
-          >
+          <TypeChip key={val} active={typeFilter === val} onClick={() => setTypeFilter(val)}>
             {lbl}
-          </button>
+          </TypeChip>
         ))}
       </div>
 
@@ -249,8 +313,12 @@ export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) 
       </div>
 
       <Label className="text-[10px] text-muted-foreground">
-        {filtered.length.toLocaleString("es-MX")} resultados · clic para agregar en{" "}
-        {currentTime.toFixed(1)}s
+        {typeFilter === "fav"
+          ? "Tus favoritos"
+          : typeFilter === "recent"
+            ? "Usados recientemente"
+            : `${filtered.length.toLocaleString("es-MX")} resultados`}{" "}
+        · clic para agregar en {currentTime.toFixed(1)}s
       </Label>
 
       {/* Grid VIRTUALIZADO: sólo se montan las celdas visibles. */}
@@ -258,7 +326,13 @@ export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) 
         {gridWidth > 0 && filtered.length > 0 ? (
           <Grid
             cellComponent={Cell}
-            cellProps={{ items: filtered, columnCount, onPick: handlePick }}
+            cellProps={{
+              items: filtered,
+              columnCount,
+              onPick: handlePick,
+              onToggleFav: handleToggleFav,
+              favSet,
+            }}
             columnCount={columnCount}
             columnWidth={columnWidth}
             rowCount={rowCount}
@@ -267,12 +341,40 @@ export function StickerPicker({ onAdd, currentTime, selectedCount = 0 }: Props) 
             style={{ height: 360, width: gridWidth }}
           />
         ) : (
-          <div className="flex h-full items-center justify-center p-4 text-xs text-muted-foreground">
-            Sin resultados para «{query}».
+          <div className="flex h-full items-center justify-center p-4 text-center text-xs text-muted-foreground">
+            {typeFilter === "fav"
+              ? "Aún no marcaste favoritos. Pasa el mouse sobre un sticker y toca la ⭐."
+              : typeFilter === "recent"
+                ? "Todavía no usaste ningún sticker."
+                : `Sin resultados para «${query}».`}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function TypeChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-md border px-2.5 py-1 text-xs ${
+        active
+          ? "border-foreground/40 bg-muted text-foreground"
+          : "border-border bg-card text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -305,21 +407,47 @@ interface CellProps {
   items: StickerEntry[];
   columnCount: number;
   onPick: (s: StickerEntry) => void;
+  onToggleFav: (s: StickerEntry) => void;
+  favSet: Set<string>;
 }
 
-function Cell({ columnIndex, rowIndex, style, items, columnCount, onPick }: CellComponentProps<CellProps>) {
+function Cell({
+  columnIndex,
+  rowIndex,
+  style,
+  items,
+  columnCount,
+  onPick,
+  onToggleFav,
+  favSet,
+}: CellComponentProps<CellProps>) {
   const index = rowIndex * columnCount + columnIndex;
   const item = items[index];
   if (!item) return <div style={style} />;
   return (
     <div style={style} className="p-1">
-      <StickerCell item={item} onPick={onPick} />
+      <StickerCell
+        item={item}
+        onPick={onPick}
+        onToggleFav={onToggleFav}
+        isFav={favSet.has(item.id)}
+      />
     </div>
   );
 }
 
-/** Celda individual: SVG vía <img> on-demand; Lottie animado SÓLO en hover. */
-function StickerCell({ item, onPick }: { item: StickerEntry; onPick: (s: StickerEntry) => void }) {
+/** Celda individual: SVG/PNG vía <img> on-demand; Lottie animado SÓLO en hover. */
+function StickerCell({
+  item,
+  onPick,
+  onToggleFav,
+  isFav,
+}: {
+  item: StickerEntry;
+  onPick: (s: StickerEntry) => void;
+  onToggleFav: (s: StickerEntry) => void;
+  isFav: boolean;
+}) {
   const [hover, setHover] = useState(false);
   const [lottieData, setLottieData] = useState<object | null>(null);
   const lottieRef = useRef<LottieRefCurrentProps | null>(null);
@@ -340,47 +468,78 @@ function StickerCell({ item, onPick }: { item: StickerEntry; onPick: (s: Sticker
     };
   }, [hover, item.type, item.url, lottieData]);
 
+  // Las ilustraciones (personas CC0) ya son a color → NO se tiñen (sin filtro invert).
+  const isIllustration = item.type === "illustration";
+
   return (
-    <button
-      type="button"
-      onClick={() => onPick(item)}
+    <div
+      className="group relative h-full w-full"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      title={`${item.name} · ${item.category}`}
-      className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-md border border-transparent bg-card/40 p-1.5 transition hover:border-brand-pink/40 hover:bg-muted"
     >
-      <div className="flex h-12 w-12 items-center justify-center">
-        {item.type === "lottie" ? (
-          hover && lottieData ? (
-            <Lottie
-              lottieRef={lottieRef}
-              animationData={lottieData}
-              loop
-              autoplay
-              style={{ width: 48, height: 48 }}
-            />
+      <button
+        type="button"
+        onClick={() => onPick(item)}
+        title={`${item.name} · ${item.category}`}
+        className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-md border border-transparent bg-card/40 p-1.5 transition hover:border-brand-pink/40 hover:bg-muted"
+      >
+        <div className="flex h-12 w-12 items-center justify-center">
+          {item.type === "lottie" ? (
+            hover && lottieData ? (
+              <Lottie
+                lottieRef={lottieRef}
+                animationData={lottieData}
+                loop
+                autoplay
+                style={{ width: 48, height: 48 }}
+              />
+            ) : (
+              // Placeholder estático hasta el hover — evita bajar 609 JSON de golpe.
+              <span className="text-2xl" aria-hidden>
+                ✨
+              </span>
+            )
           ) : (
-            // Placeholder estático hasta el hover — evita bajar 609 JSON de golpe.
-            <span className="text-2xl" aria-hidden>
-              ✨
-            </span>
-          )
-        ) : (
-          // Iconos SVG: <img> lazy → el browser sólo pide los visibles y los cachea.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.url}
-            alt={item.name}
-            loading="lazy"
-            width={40}
-            height={40}
-            className="h-10 w-10 object-contain opacity-80 [filter:invert(0.85)]"
-          />
-        )}
-      </div>
-      <span className="line-clamp-1 w-full text-center text-[9px] leading-tight text-muted-foreground">
-        {item.name}
-      </span>
-    </button>
+            // Iconos SVG y personas (PNG/SVG a color): <img> lazy → el browser sólo
+            // pide los visibles y los cachea. Las personas NO se tiñen (van a color).
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={item.url}
+              alt={item.name}
+              loading="lazy"
+              width={40}
+              height={40}
+              className={
+                isIllustration
+                  ? "h-11 w-11 object-contain"
+                  : "h-10 w-10 object-contain opacity-80 [filter:invert(0.85)]"
+              }
+            />
+          )}
+        </div>
+        <span className="line-clamp-1 w-full text-center text-[9px] leading-tight text-muted-foreground">
+          {item.name}
+        </span>
+      </button>
+
+      {/* Estrella de favorito: aparece en hover (o siempre si ya es favorito). */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleFav(item);
+        }}
+        aria-label={isFav ? "Quitar de favoritos" : "Marcar como favorito"}
+        aria-pressed={isFav}
+        title={isFav ? "Quitar de favoritos" : "Favorito"}
+        className={`absolute right-0.5 top-0.5 rounded-full p-0.5 transition ${
+          isFav
+            ? "text-amber-400 opacity-100"
+            : "text-muted-foreground opacity-0 hover:text-amber-400 group-hover:opacity-100"
+        }`}
+      >
+        <Star className="h-3.5 w-3.5" fill={isFav ? "currentColor" : "none"} />
+      </button>
+    </div>
   );
 }

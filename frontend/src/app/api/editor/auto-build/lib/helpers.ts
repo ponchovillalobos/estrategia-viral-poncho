@@ -21,6 +21,7 @@ export const STYLE_SHORT_LABEL: Record<StyleId, string> = {
   broll_full: "Broll",
   broll_pip: "BrollPIP",
   text_behind: "TextoDetras",
+  pop_reels: "PopReels",
   graphics_pro: "Graficos",
   graphics_max: "GraficosMax",
   motion_pro: "MotionPro",

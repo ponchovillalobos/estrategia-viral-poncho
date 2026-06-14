@@ -20,6 +20,9 @@ export type StyleId =
   | "broll_pip"
   // A3 — Estilo NUEVO: texto detrás del sujeto (bake con mediapipe + ffmpeg).
   | "text_behind"
+  // POP REELS 2026 — caption nativo de TikTok: caja negra semi-opaca + contorno
+  // grueso + palabra-por-palabra (kinetic "pop_reels"), fuente TikTok Sans.
+  | "pop_reels"
   // Modo Gráficos & Motion en shorts: gráficas animadas + titulares poderosos,
   // COMBINADO con la edición dinámica (zooms, transiciones, y en _max jump cuts).
   | "graphics_pro"
@@ -348,7 +351,7 @@ export function generateLottieStickers(ctx: BuildContext): Array<{
   }));
 }
 
-type KineticPresetName = "none" | "pop" | "slide_up" | "type_on" | "bounce" | "glow_pulse" | "karaoke";
+type KineticPresetName = "none" | "pop" | "slide_up" | "type_on" | "bounce" | "glow_pulse" | "karaoke" | "pop_reels";
 
 /**
  * Suma las "recetas CapCut" (LUT de color, scene-fx atmosféricos, transiciones pro y
@@ -948,6 +951,32 @@ export function buildProjectForStyle(ctx: BuildContext, styleId: StyleId) {
     });
   }
 
+  // POP REELS 2026 — caption nativo de TikTok: caja negra semi-opaca + contorno
+  // grueso + palabra-por-palabra (kinetic "pop_reels"), fuente TikTok Sans.
+  // Edición viral pero limpia. Paridad con remotion/style-templates.mjs.
+  if (styleId === "pop_reels") {
+    return applyCapcutFx(
+      {
+        ...base,
+        subtitleStyle: "anton",
+        subtitleFont: "tiktok",
+        vignette: false,
+        captionBounce: false,
+        wordStickers: buildStickers(ctx, 4),
+        floatingEmojis: buildFloatingEmojis(ctx, 3),
+        zoomMarks: pickKeywords(ctx, 4).map((kw) => ({ at: kw.start, duration: 0.6, scale: 1.12 })),
+      },
+      ctx,
+      {
+        lut: "teal_orange.cube",
+        kinetic: "pop_reels",
+        endScreen: true,
+        progressBar: true,
+        iconStickers: true,
+      }
+    );
+  }
+
   // A3 — Estilo NUEVO "text_behind": bake en Python del texto detrás del sujeto.
   // auto-build corre text_behind_subject.py y setea foregroundVideoId al mp4 procesado.
   // Por encima va el resto del FX premium normal (subtítulos karaoke, etc.).
@@ -1143,6 +1172,11 @@ export const STYLE_INFO: Record<StyleId, { name: string; tagline: string; emoji:
     name: "Texto detrás de ti",
     tagline: "El efecto CapCut clásico: la palabra clave queda detrás del sujeto",
     emoji: "🧍",
+  },
+  pop_reels: {
+    name: "Pop Reels 2026",
+    tagline: "Caption nativo de TikTok: caja negra + contorno + palabra por palabra",
+    emoji: "💬",
   },
   graphics_pro: {
     name: "Gráficos & Motion",

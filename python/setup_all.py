@@ -36,8 +36,10 @@ from pathlib import Path
 
 from config import (
     ASSETS_ICONS,
+    ASSETS_ILLUSTRATIONS,
     ASSETS_LOTTIE,
     ASSETS_MUSIC,
+    ASSETS_OVERLAYS,
     ASSETS_SFX,
     DATA_ROOT,
     ensure_dirs,
@@ -68,6 +70,12 @@ TIMEOUTS = {
     "lottie": 300,
     "musica": 900,
     "sfx": 600,
+    # MEJORAS extra (packs nuevos de assets). lofi grande (~554MB) → timeout amplio.
+    "iconos_extra": 600,
+    "musica_lofi": 1800,
+    "ilustraciones": 300,
+    "overlays": 120,
+    "sfx_extra": 900,
 }
 DEFAULT_TIMEOUT = 300
 
@@ -158,6 +166,21 @@ _VALIDATIONS: dict[str, tuple[Path, tuple[str, ...], int]] = {
     "lottie": (ASSETS_LOTTIE, (".json",), 30),
     "iconos_editoriales": (ASSETS_ICONS, (".svg",), 5000),
     "fonts": (FONTS_DIR, (".ttf", ".otf"), 6),
+    # MEJORAS extra. Validan la subcarpeta PROPIA del pack (no la compartida) para
+    # detectar de verdad si bajó el set nuevo.
+    # Material Symbols (~4,100) + Lucide (~1,700) → mín conservador por si una mitad
+    # quedó incompleta. material/ es el grueso (~3,800).
+    "iconos_extra": (ASSETS_ICONS / "material", (".svg",), 3000),
+    # open-lofi baja 166 mp3 FLAT en github/ (junto a los del paso 'musica'); un
+    # umbral alto detecta que el pack lofi cayó (base son ~30-50).
+    "musica_lofi": (ASSETS_MUSIC / "github", (".mp3",), 150),
+    # open-doodles (~33) + open-peeps (~40) = ~73 SVG repartidos en subcarpetas.
+    "ilustraciones": (ASSETS_ILLUSTRATIONS, (".svg",), 30),
+    # 7 overlays procedurales (PNG) + manifest.
+    "overlays": (ASSETS_OVERLAYS, (".png",), 5),
+    # 4 packs Kenney nuevos (flat en github/) + curated-viral/. github ya trae 200+
+    # del paso 'sfx'; con los packs extra sube bastante.
+    "sfx_extra": (ASSETS_SFX / "github", (".ogg", ".mp3", ".wav"), 250),
 }
 
 
@@ -530,6 +553,41 @@ def main() -> int:
         "sfx",
         "efectos de sonido",
         ["download_sfx_library.py", "download", "--out-dir", str(ASSETS_SFX / "github")],
+        state,
+    )
+
+    # 2b) MEJORAS EXTRA — packs nuevos de assets (iconos, lofi, ilustraciones,
+    #     overlays, sfx curado). Cada uno es opcional: si falla NO aborta el setup.
+    #     Van DESPUÉS de los críticos/base para que la app ya sea usable mientras
+    #     estos bajan. La música lofi pesa ~554 MB → tiene el timeout más largo.
+    _step(
+        "iconos_extra",
+        "iconos extra (Material Symbols + Lucide)",
+        ["download_more_icons.py"],
+        state,
+    )
+    _step(
+        "musica_lofi",
+        "música lo-fi (open-lofi CC0, ~554 MB)",
+        ["download_lofi_music.py", "download", "--out-dir", str(ASSETS_MUSIC / "github")],
+        state,
+    )
+    _step(
+        "ilustraciones",
+        "ilustraciones de personas (open-doodles + open-peeps)",
+        ["download_illustrations.py"],
+        state,
+    )
+    _step(
+        "overlays",
+        "overlays de textura (grano, light-leak, scanlines)",
+        ["download_overlays.py"],
+        state,
+    )
+    _step(
+        "sfx_extra",
+        "SFX extra + set viral curado",
+        ["download_more_sfx.py", "all", "--out-dir", str(ASSETS_SFX / "github")],
         state,
     )
 
