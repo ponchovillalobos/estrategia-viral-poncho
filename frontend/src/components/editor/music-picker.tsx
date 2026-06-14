@@ -42,12 +42,19 @@ export function MusicPicker({ selected, volume, onSelect, onVolumeChange }: Prop
     }
     audio?.pause();
     const a = new Audio(t.url);
-    a.volume = 0.6;
+    // El preview suena al VOLUMEN ELEGIDO (no a 0.6 fijo) para que escuches cómo va a
+    // quedar la música en el video. Se actualiza en vivo al mover el slider (useEffect).
+    a.volume = Math.max(0, Math.min(1, volume ?? 0.35));
     a.onended = () => setPlaying(null);
     a.play();
     setAudio(a);
     setPlaying(t.filename);
   }
+
+  // Mover el slider mientras un track suena baja/sube el preview en tiempo real.
+  useEffect(() => {
+    if (audio) audio.volume = Math.max(0, Math.min(1, volume ?? 0.35));
+  }, [volume, audio]);
 
   return (
     <div className="space-y-4">

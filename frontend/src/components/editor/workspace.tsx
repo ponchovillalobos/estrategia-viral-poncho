@@ -290,7 +290,9 @@ export function EditorWorkspace({ projectId }: WorkspaceProps) {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr]">
         <Card className="overflow-hidden border-border bg-card p-0">
-          <div className="aspect-[9/16] bg-black">
+          {/* Preview acotado: el video es vertical 9:16; sin tope ocupaba toda la
+              columna y se veía gigante. Lo limitamos a 300px de ancho y lo centramos. */}
+          <div className="mx-auto aspect-[9/16] w-full max-w-[300px] bg-black">
             <video
               ref={videoRef}
               src={`/api/videos/${encodeURIComponent(projectId)}/stream?source=raw`}

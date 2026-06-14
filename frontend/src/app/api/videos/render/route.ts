@@ -122,18 +122,33 @@ export async function POST(req: NextRequest) {
         fullProps.trialWatermark = true;
       }
 
+      // Props por ARCHIVO, no inline. En Windows el spawn con shell:true (necesario
+      // para los .cmd) concatena los args SIN quoting y destroza las comillas del JSON
+      // → Remotion recibe JSON inválido ("quotes very weirdly in the command line") y
+      // el render falla SIEMPRE. Por eso el wizard (que ya escribe props.json y pasa
+      // --props=archivo) funcionaba y el editor manual NO. Mismo patrón acá.
+      const propsFileName = `props-${videoId}.json`;
+      await fs.writeFile(
+        path.join(REMOTION_DIR, propsFileName),
+        JSON.stringify(fullProps),
+        "utf-8"
+      );
+      // outFile es absoluto: si la ruta tiene espacios (la app instalada usa
+      // C:\Users\<nombre con espacio>\ViralStudio\...), hay que quotearlo o shell:true
+      // lo parte en el primer espacio y el .mp4 sale truncado.
+      const needsQuote = process.platform === "win32" && /\s/.test(outFile);
+      const outArg = needsQuote ? `"${outFile}"` : outFile;
       const args = [
         "remotion",
         "render",
         "src/index.ts",
         "ViralVideo",
-        outFile,
+        outArg,
         "--concurrency",
         String(remotionConcurrency()),
         `--timeout=${REMOTION_DELAY_TIMEOUT_MS}`,
         offthreadCacheFlag(),
-        "--props",
-        JSON.stringify(fullProps),
+        `--props=${propsFileName}`,
       ];
       if (quality === "preview") {
         args.push("--scale", "0.5");
@@ -164,6 +179,7 @@ export async function POST(req: NextRequest) {
         proc.on("error", () => resolve(1));
       });
       clearTimeout(timer);
+      await fs.rm(path.join(REMOTION_DIR, propsFileName), { force: true }).catch(() => {});
 
       if (code !== 0 || timedOut) {
         await fs.rm(outFile, { force: true }).catch(() => {});
