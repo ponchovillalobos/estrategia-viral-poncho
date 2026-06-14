@@ -20,10 +20,16 @@ const STALE_LOCK_MS = 30 * 60 * 1000;
 export function remotionConcurrency(): number {
   const fromEnv = Number(process.env.VIRAL_REMOTION_CONCURRENCY);
   if (Number.isFinite(fromEnv) && fromEnv >= 1) return Math.floor(fromEnv);
-  // Tope en 8: con más workers, todos piden frames del stream HTTP del dev server
-  // a la vez y OffthreadVideo revienta el delayRender (timeout a los 28s). 8 da
-  // ~2x sobre el default de Remotion sin ahogar al server que sirve el video.
-  return Math.min(8, Math.max(1, os.cpus().length - 1));
+  // La rasterización de frames en CPU es EL cuello de botella del render. El tope
+  // anterior de 8 dejaba ociosa la mayoría de la CPU en equipos de muchos núcleos
+  // (20 núcleos → solo 8 usados = render lento). Era por miedo a que muchos workers
+  // pidiendo frames a la vez reventaran OffthreadVideo (timeout 28s). Pero ahora el
+  // render usa un cache grande de OffthreadVideo (--offthreadvideo-cache-size-in-bytes):
+  // tras el primer decode los frames quedan cacheados y no se re-piden al stream. Por
+  // eso subimos el tope a 16 para usar la CPU de verdad (20 núcleos: 8→16 ≈ 2x). El
+  // timeout también subió a 120s. Override con VIRAL_REMOTION_CONCURRENCY si una PC se
+  // queda corta de RAM o da timeouts.
+  return Math.min(16, Math.max(1, os.cpus().length - 2));
 }
 
 /** Timeout de delayRender para `remotion render/still` (ms). El default de 28s se

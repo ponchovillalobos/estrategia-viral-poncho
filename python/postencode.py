@@ -54,13 +54,18 @@ def post_encode(path: Path, quality: str = "final") -> dict:
         return {"ok": False, "reencoded": False, "error": f"no existe: {path}"}
 
     encoder = _recommended_encoder()
-    if encoder == "libx264":
-        # CPU-only: re-encodear sería CPU→CPU con pérdida y sin ganancia. No-op.
+    # Solo vale la pena el post-encode con NVENC REAL (NVIDIA): ahí el re-encode por
+    # hardware es 3-8x y compensa la pasada extra. Con QSV/AMF (iGPU) o CPU, RE-ENCODEAR
+    # es una SEGUNDA pasada completa que normalmente es MÁS LENTA que dejar el x264
+    # 'veryfast' de Remotion como entregable → no-op (una sola pasada). Esto arregla la
+    # regresión de velocidad en equipos sin GPU NVIDIA dedicada (antes QSV hacía doble
+    # encode). En NVENC sí re-encodea (el x264 de Remotion fue un intermedio 'ultrafast').
+    if encoder != "h264_nvenc":
         return {
             "ok": True,
             "reencoded": False,
-            "encoder": "libx264",
-            "reason": "cpu-only (no re-encode)",
+            "encoder": encoder,
+            "reason": "sin NVENC (una sola pasada, no re-encode)",
             "path": str(path),
         }
 

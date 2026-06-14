@@ -346,10 +346,11 @@ def _recommend(prof: dict) -> dict:
     #  - Con GPU (nvenc/qsv/amf) → el x264 de Remotion es un intermedio que el
     #    post-encode por hardware re-encodea y se TIRA, así que conviene que sea
     #    lo más rápido posible: "ultrafast".
-    if video_encoder == "libx264":
-        x264_preset = "veryfast"
-    else:
-        x264_preset = "ultrafast"
+    # "ultrafast" SOLO con NVENC real (ahí el x264 es un intermedio que el post-encode
+    # NVENC re-encodea y se tira). Con QSV/AMF/CPU el post-encode ahora se SALTA (era un
+    # doble-encode más lento en iGPU), así que el x264 es el ENTREGABLE final → "veryfast"
+    # (rápido y con buena calidad). Antes ponía ultrafast en QSV y dejaba el archivo feo.
+    x264_preset = "ultrafast" if nvenc_usable else "veryfast"
 
     # x264_crf: 24. NO se sube (mantener calidad). Solo se expone el valor que ya
     # se usa para que el render-server lo pase explícito.

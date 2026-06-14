@@ -116,7 +116,9 @@ function defaultOffthreadCacheBytes() {
 function defaultConcurrency() {
   const fromEnv = Number(process.env.VIRAL_REMOTION_CONCURRENCY);
   if (Number.isFinite(fromEnv) && fromEnv >= 1) return Math.floor(fromEnv);
-  return Math.min(8, Math.max(1, os.cpus().length - 1));
+  // Sube de 8 a 16: la rasterización en CPU es el cuello y con el cache grande de
+  // OffthreadVideo ya no se ahoga el stream. En PC de muchos núcleos ≈ 2x.
+  return Math.min(16, Math.max(1, os.cpus().length - 2));
 }
 
 // ── Hash barato del estado de src/ (mtime recursivo). Si cambia, re-bundleamos.
