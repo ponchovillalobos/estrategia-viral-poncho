@@ -1642,7 +1642,7 @@ export function WizardClient() {
       {/* STEP 2: estilos + aspect ratio */}
       {step === 2 && (
         <Card className="border-border bg-card p-6">
-          <h2 className="mb-2 text-lg font-medium">2. Elige estilo y formato</h2>
+          <h2 className="mb-2 text-lg font-medium">2. Elige formato y estilo(s)</h2>
 
           {/* Formato de salida: dos pills chicas SIEMPRE visibles arriba. */}
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -1676,9 +1676,12 @@ export function WizardClient() {
           </div>
 
           <p className="mb-4 text-sm text-muted-foreground">
-            Elige una familia de estilos — cada tarjeta trae sus variantes listas. Para tu primer
-            video, deja <strong className="text-foreground">Viral (Recomendado)</strong>. ¿Quieres
-            combinar varios estilos a la vez? Abre el ⚙️ Modo avanzado hasta abajo.
+            Más abajo tienes <strong className="text-foreground">todos los estilos</strong> con su
+            vista previa y descripción — toca para elegir{" "}
+            <strong className="text-foreground">uno o varios</strong> (se crea un video por cada uno
+            y los comparas). Las tarjetas de aquí abajo son <strong className="text-foreground">atajos
+            rápidos</strong> por familia (eligen un solo estilo). El color, la letra y la música se
+            ajustan en el paso siguiente y en los submenús de cada estilo.
           </p>
 
           {/* Estado "Personalizado": multi-selección o un estilo sin familia
@@ -1696,8 +1699,11 @@ export function WizardClient() {
             </div>
           )}
 
-          {/* 5 tarjetas-preset (selección ÚNICA): click en la tarjeta = la familia
-              con su variante default; click en un chip = esa variante exacta. */}
+          {/* 5 tarjetas-preset (selección ÚNICA): atajos por familia. El selector
+              COMPLETO (todos los estilos, multi-selección) está abierto más abajo. */}
+          <p className="mb-2 font-mono-tab text-[10px] uppercase tracking-wider text-muted-foreground">
+            Atajos rápidos (eligen un estilo) · o usa «Todos los estilos» abajo
+          </p>
           <div className="space-y-3">
             {PRESETS.map((p) => {
               const isActive = activePreset?.id === p.id;
@@ -1815,17 +1821,20 @@ export function WizardClient() {
               : `${selectedStyles.length} estilo${selectedStyles.length === 1 ? "" : "s"} elegido${selectedStyles.length === 1 ? "" : "s"}`}
           </p>
 
-          {/* MODO AVANZADO: la cuadrícula completa de siempre, con multi-selección
-              para comparar — se crea un video por cada estilo (cada uno tarda unos
-              minutos). Incluye text_behind, que no entra en ninguna familia. */}
-          <details className="mt-5 rounded-lg border border-border bg-muted/20">
-            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground">
-              ⚙️ Modo avanzado: los 15 estilos y combinaciones
+          {/* TODOS LOS ESTILOS, visibles por defecto y como selector PRINCIPAL:
+              multi-selección (prende/apaga varios → se crea un video por cada uno).
+              Antes estaba colapsado en "modo avanzado" y la gente no veía los 15-18
+              estilos ni podía elegir varios (las 5 tarjetas-preset de arriba son de
+              selección única). Incluye text_behind, que no entra en ninguna familia. */}
+          <details open className="mt-5 rounded-lg border-2 border-primary/30 bg-card">
+            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold hover:text-foreground">
+              🎨 Todos los estilos — elige uno o VARIOS (cada uno con su vista previa)
             </summary>
             <div className="border-t border-border p-4">
               <p className="mb-3 text-xs text-muted-foreground">
-                Aquí puedes prender y apagar estilos sueltos, y elegir varios a la vez para
-                comparar — se crea un video por cada estilo.
+                Toca para prender/apagar cada estilo. Puedes elegir <b>varios a la vez</b> para
+                comparar — se crea un video por cada estilo. El color, la tipografía y la música
+                se ajustan en el siguiente paso y en los submenús de cada estilo.
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {STYLES.map((s) => {
