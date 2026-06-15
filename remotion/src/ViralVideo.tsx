@@ -51,6 +51,7 @@ import {
 import {
   EditorialCardLayer,
   EditorialAmbient,
+  EditorialSubtitleBaseline,
   editorialCardSchema,
   editorialLayoutSchema,
   editorialPanelAt,
@@ -909,6 +910,21 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
           position={subtitlePosition}
         />
       ))}
+
+      {/* EDITORIAL — BASELINE DE TEXTO: subtítulo editorial SIEMPRE presente
+          (frase activa según la voz, look del tema). Va por DEBAJO de las
+          tarjetas/charts y NO se oculta en "big"/"full": así nunca hay pantalla
+          sin texto, ni siquiera cuando las tarjetas ceden el cuadro al video. */}
+      {editorialLayout && editorialPanel && words.length > 0 && (
+        <EditorialSubtitleBaseline
+          words={words}
+          currentTime={currentTime}
+          layout={editorialLayout}
+          width={compWidth}
+          height={compHeight}
+          panel={editorialPanel}
+        />
+      )}
 
       {/* EDITORIAL — tarjetas tipográficas (kicker + titular serif + stat + line-art).
           Cuando el panel está en "big"/"full", se ocultan: el video respira. */}

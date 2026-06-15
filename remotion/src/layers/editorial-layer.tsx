@@ -437,6 +437,133 @@ export const EditorialAmbient: React.FC<{
   );
 };
 
+// ─── BASELINE DE TEXTO: subtítulo editorial SIEMPRE presente ──────────────────
+// Garantiza que NUNCA haya pantalla sin texto en modo editorial: agrupa las
+// palabras del transcript en frases cortas (frase activa según el timestamp) y
+// las muestra en una banda inferior con el LOOK del tema (serif + acento). Va por
+// DEBAJO de las tarjetas/charts (es la base constante); cuando el panel está en
+// "big"/"full" y las tarjetas se ocultan, este baseline sigue en pantalla → cero
+// "aire muerto". Pasivo y discreto: no compite con el titular, solo evita el vacío.
+interface BaselineWord { word: string; start: number; end: number }
+
+/** Agrupa words en líneas de ~3-7 palabras cortando por pausa/puntuación. */
+function baselineLines(words: BaselineWord[]): { text: string; start: number; end: number }[] {
+  const out: { text: string; start: number; end: number }[] = [];
+  let cur: BaselineWord[] = [];
+  const flush = () => {
+    if (!cur.length) return;
+    const text = cur.map((w) => w.word).join(" ").replace(/\s+/g, " ").trim();
+    if (text) out.push({ text, start: cur[0].start, end: cur[cur.length - 1].end });
+    cur = [];
+  };
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (!w || typeof w.start !== "number") continue;
+    cur.push(w);
+    const txt = (w.word ?? "").trim();
+    const next = words[i + 1];
+    const gap = next ? next.start - (w.end ?? w.start) : 99;
+    const hardStop = /[.!?…]$/.test(txt);
+    // Corta por puntuación, pausa > 0.45s, o al juntar ~7 palabras (línea legible).
+    if (hardStop || gap > 0.45 || cur.length >= 7) flush();
+  }
+  flush();
+  return out;
+}
+
+export const EditorialSubtitleBaseline: React.FC<{
+  words: BaselineWord[];
+  currentTime: number;
+  layout: EditorialLayout;
+  width: number;
+  height: number;
+  panel?: PanelRect;
+}> = ({ words, currentTime, layout, width, height, panel }) => {
+  if (!words || words.length === 0) return null;
+  const look = resolveEditorialLook(layout);
+  const GOLD = layout.accent ?? look.themeAccent ?? "#f0b429";
+  const [, FONT_I] =
+    look.fontTitle ?? FONT_THEMES[layout.font ?? "playfair"] ?? FONT_THEMES.playfair;
+  const FONT_BODY = look.fontBody ?? FONT_I;
+  const theme = look.canvas;
+  const now = currentTime; // baseline al ritmo real de la voz (no 12fps).
+  const lines = baselineLines(words);
+  if (lines.length === 0) return null;
+  // Línea activa: la última cuyo inicio ya pasó (se mantiene hasta la próxima).
+  let idx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].start <= now + 0.04) idx = i;
+    else break;
+  }
+  if (idx < 0) idx = 0;
+  // Antes de que arranque la voz no mostramos baseline (el arranque del clip lo
+  // cubren las tarjetas/visuales); de ahí en adelante SIEMPRE hay una línea
+  // activa (la última dicha se sostiene hasta la próxima → cero vacío).
+  if (now < lines[0].start - 0.05) return null;
+  const line = lines[idx];
+  const intro = clamp01((now - line.start) / 0.28);
+  // Palabras de la línea entran al ritmo de la voz (sutil, no kinético agresivo).
+  const lineWords = line.text.split(/\s+/).filter(Boolean);
+  const span = Math.max(0.4, line.end - line.start);
+  // Posición: si hay panel con texto DEBAJO, la banda va más arriba para no
+  // chocar; si no, banda inferior centrada clásica.
+  const bottom = panel?.textBelow ? height * 0.05 : height * 0.06;
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none" }}>
+      <div
+        style={{
+          position: "absolute",
+          left: width * 0.07,
+          right: width * 0.07,
+          bottom,
+          display: "flex",
+          justifyContent: "center",
+          opacity: intro,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: FONT_BODY,
+            fontStyle: "italic",
+            fontWeight: 500,
+            fontSize: height * 0.026,
+            lineHeight: 1.3,
+            color: theme.text,
+            textAlign: "center",
+            maxWidth: "100%",
+            // Caja sutil para legibilidad sobre el video del panel sin tapar el look.
+            background: `${theme.bg}c2`,
+            padding: `${height * 0.008}px ${width * 0.02}px`,
+            borderRadius: height * 0.01,
+            backdropFilter: "blur(2px)",
+            boxShadow: `0 2px 16px ${theme.bg}55`,
+          }}
+        >
+          {lineWords.map((w, i) => {
+            const wt = lineWords.length > 1 ? i / (lineWords.length - 1) : 0;
+            const wStart = line.start + wt * span * 0.85;
+            const lit = now >= wStart - 0.02;
+            return (
+              <span
+                key={i}
+                style={{
+                  color: lit ? theme.text : theme.muted,
+                  transition: "none",
+                  // La última palabra dicha toma el acento (guía la lectura).
+                  ...(lit && now < wStart + 0.32 ? { color: GOLD } : null),
+                }}
+              >
+                {w}
+                {i < lineWords.length - 1 ? " " : ""}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 /** Entrada por líneas: slide-up con máscara (el look "editorial" clásico). */
 const Reveal: React.FC<{ t: number; delay: number; children: React.ReactNode }> = ({
   t,

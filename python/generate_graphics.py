@@ -161,6 +161,30 @@ def concept_icons(words: list[dict], duration: float, target: int) -> list[dict]
         hits.append((float(w.get("start", 0)), _ICON_ALIAS.get(icon, icon)))
 
     hits.sort(key=lambda h: h[0])
+
+    # FALLBACK AMBIENTAL: si el transcript no menciona casi conceptos (clip pobre
+    # en keywords), igual repartimos ilustraciones genéricas a lo largo del clip
+    # para que SIEMPRE haya una ilustración animada en pantalla. Rota entre íconos
+    # neutros (idea/chispa/foco/cohete…) en intervalos parejos. Aditivo: solo
+    # entra cuando los matches reales no alcanzan para cubrir el clip.
+    _GENERIC_ROTATION = ["lightbulb", "zap", "star", "target", "rocket", "brain", "trending", "eye"]
+    span = max(1.0, (duration / max(1, target)) * 1.0)
+    expected = int(duration // span) if duration > 0 else 0
+    if len(hits) < expected:
+        have_t = sorted(t for t, _ in hits)
+        gi = 0
+        t = round(span * 0.5, 2)
+        while t < max(0.3, duration - 1.0) and (len(hits) + 0) < max(target, expected):
+            # ¿ya hay un match real cerca de este instante? entonces no rellenamos.
+            if all(abs(t - ht) > span * 0.55 for ht in have_t):
+                ic = _GENERIC_ROTATION[gi % len(_GENERIC_ROTATION)]
+                hits.append((round(t, 2), _ICON_ALIAS.get(ic, ic)))
+                have_t.append(round(t, 2))
+                have_t.sort()
+                gi += 1
+            t += span
+        hits.sort(key=lambda h: h[0])
+
     out: list[dict] = []
     min_gap = max(2.5, (duration / max(1, target)) * 0.6)
     last_t = -99.0
@@ -984,6 +1008,13 @@ def _fill_card_gaps(cards: list[dict], duration: float, seed: int = 0) -> list[d
     cursor = 0.3
     for c in sorted(cards, key=lambda x: x["at"]):
         gap = c["at"] - cursor
+        # ARRANQUE: si la PRIMERA tarjeta no entra hasta pasado >1.2s, el lienzo
+        # quedaría sin nada al abrir → metemos una visual de apertura (cubre el
+        # hueco inicial entero, sin esperar al umbral grande de 2.6s).
+        if not out and gap > 1.2:
+            out.append(_visual(cursor + 0.1, c["at"] - cursor - 0.3))
+            cursor = c["at"]
+            gap = 0.0
         # Huecos GRANDES (>2.6s): entran visuales de ~5.5s (ritmo). Con menos de
         # 2.6s una visual no llega a su mínimo de 2s y PISABA la siguiente
         # tarjeta (encime visto en prod).
