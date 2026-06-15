@@ -61,9 +61,11 @@ def _render_workers() -> int:
 
 
 def _offthread_cache_flag() -> str:
-    """Flag de caché de OffthreadVideo (PARTE B — OLA 1): ~35% de la RAM para que
-    el b-roll/mirror/clone NO dispare "cache pruned" (Remotion descarta frames
-    decodeados y re-decodea, lento). Tope 6 GB / piso 512 MB.
+    """Flag de caché de OffthreadVideo para CADA clip de largos. El b-roll/mirror/clone
+    se cachea para no dispararse "cache pruned" (re-decode lento). CLAVE en largos: se
+    renderizan VARIOS clips EN PARALELO (render_workers); si cada uno tomara 35% de la
+    RAM, N clips = N×35% → swap y TODO más lento. Por eso repartimos un presupuesto
+    total (~45% de la RAM) ENTRE los clips paralelos. Tope por-clip 4 GB / piso 512 MB.
     OJO: el flag exacto es --offthreadvideo-cache-size-in-bytes (sin guion en
     "offthreadvideo")."""
     try:
@@ -78,7 +80,9 @@ def _offthread_cache_flag() -> str:
             total = int(float(detect().get("ram_gb", 8.0)) * 1024**3)
         except Exception:  # noqa: BLE001
             total = 8 * 1024**3
-    bytes_ = max(512 * 1024**2, min(int(total * 0.35), 6 * 1024**3))
+    workers = max(1, _render_workers())  # clips en paralelo
+    per_clip = int(total * 0.45 / workers)
+    bytes_ = max(512 * 1024**2, min(per_clip, 4 * 1024**3))
     return f"--offthreadvideo-cache-size-in-bytes={bytes_}"
 
 
