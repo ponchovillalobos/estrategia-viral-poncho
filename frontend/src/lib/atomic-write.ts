@@ -14,6 +14,29 @@ export async function writeJsonFileAtomic(filePath: string, data: unknown): Prom
   const dir = path.dirname(filePath);
   await fs.mkdir(dir, { recursive: true });
   const tmp = `${filePath}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(data, null, 2) + "\n", "utf-8");
-  await fs.rename(tmp, filePath);
+  const payload = JSON.stringify(data, null, 2) + "\n";
+  await fs.writeFile(tmp, payload, "utf-8");
+
+  // En Windows el rename sobre un archivo existente puede fallar con EPERM/EACCES/EBUSY de
+  // forma transitoria (antivirus o un lector que tiene el destino abierto un instante).
+  // Reintentamos con backoff corto; si sigue bloqueado, escribimos directo sobre el destino.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      await fs.rename(tmp, filePath);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      const transient = code === "EPERM" || code === "EACCES" || code === "EBUSY";
+      if (!transient) {
+        await fs.rm(tmp, { force: true }).catch(() => {});
+        throw err;
+      }
+      if (attempt === 5) {
+        await fs.writeFile(filePath, payload, "utf-8");
+        await fs.rm(tmp, { force: true }).catch(() => {});
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 20 * (attempt + 1)));
+    }
+  }
 }
