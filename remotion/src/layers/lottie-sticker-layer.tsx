@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { AbsoluteFill, cancelRender, continueRender, delayRender } from "remotion";
-// `import type` NO arrastra lottie-web al bundle (sólo el tipo). El componente <Lottie>
-// se carga LAZY vía LottieLazy → su chunk (~24MB) sólo entra si el proyecto usa Lottie.
-import type { LottieAnimationData } from "@remotion/lottie";
-import { LottieLazy } from "./lottie-lazy";
+// IMPORT DIRECTO del componente <Lottie> de Remotion. Es el que sincroniza la animación
+// con el frame determinista del render (useCurrentFrame). El lazy-load (React.lazy +
+// Suspense) rompía la animación: el frame se capturaba antes de que el chunk montara, así
+// que las animaciones salían estáticas/en blanco. Bundle un poco más pesado, pero ANIMA.
+import { Lottie, type LottieAnimationData } from "@remotion/lottie";
 import type { LottieSticker } from "../schemas";
 
 /**
@@ -35,7 +36,7 @@ export const RemoteLottie: React.FC<{ src: string; loop?: boolean }> = ({
     };
   }, [src, handle]);
   if (!data) return null;
-  return <LottieLazy animationData={data} loop={loop} />;
+  return <Lottie animationData={data} loop={loop} />;
 };
 import pulseRing from "../lottie/pulse-ring.json";
 import sparkle from "../lottie/sparkle.json";
@@ -98,7 +99,7 @@ export const LottieStickerLayer: React.FC<{
           filter: `drop-shadow(0 0 16px ${sticker.color}) drop-shadow(0 0 6px ${sticker.color})`,
         }}
       >
-        <LottieLazy animationData={data} loop />
+        <Lottie animationData={data} loop />
       </div>
     </AbsoluteFill>
   );

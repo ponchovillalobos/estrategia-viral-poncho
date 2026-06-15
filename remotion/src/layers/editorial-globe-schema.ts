@@ -8,8 +8,8 @@ import { z } from "zod";
  * validar props, pero importarlo desde editorial-globe.tsx arrastraba TODO ese peso al
  * bundle inicial de CADA render/preview — aunque el proyecto no use el globo.
  *
- * Ahora el schema vive acá (cero deps) y el COMPONENTE se carga lazy
- * (editorial-globe-lazy.tsx) sólo cuando hay un editorialMap activo.
+ * Ahora el schema vive acá (cero deps) y el COMPONENTE (editorial-globe.tsx) se
+ * importa directo donde se usa — el lazy-load rompía la animación del globo.
  */
 export const editorialMapSchema = z.object({
   at: z.number(),

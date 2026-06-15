@@ -59,10 +59,10 @@ import {
 } from "./layers/editorial-layer";
 import { EditorialChartLayer } from "./layers/editorial-chart";
 import { EditorialCutoutLayer, editorialCutoutSchema } from "./layers/editorial-collage";
-// El globo (d3-geo + topojson + world-atlas ~8MB) se carga LAZY: el schema viene de un
-// archivo liviano y el componente se descarga sólo cuando hay un editorialMap activo.
-import { editorialMapSchema } from "./layers/editorial-globe-schema";
-import { EditorialGlobeLazy } from "./layers/editorial-globe-lazy";
+// IMPORT DIRECTO del globo. El lazy-load (React.lazy + Suspense) rompía la animación del
+// globo (zoom/rotación) porque el frame determinista se capturaba antes de que montara el
+// chunk. El schema vive en un archivo liviano y se re-exporta desde editorial-globe.
+import { EditorialGlobeLayer, editorialMapSchema } from "./layers/editorial-globe";
 import {
   EditorialPaper,
   EditorialFinish,
@@ -980,7 +980,7 @@ export const ViralVideo: React.FC<ViralVideoProps> = ({
 
       {/* EDITORIAL — globo con zoom al lugar mencionado (Ola 7). */}
       {editorialLayout && editorialPanel && !editorialPanel.cardsHidden && mapActive && editorialMap && (
-        <EditorialGlobeLazy
+        <EditorialGlobeLayer
           map={editorialMap}
           currentTime={currentTime}
           layout={editorialLayout}
